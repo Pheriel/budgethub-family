@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="BudgetHub Family aide les familles a gerer budget, dettes, objectifs et transactions dans une experience simple et collaborative."
+    />
+    <title>BudgetHub Family - Budget familial moderne</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#home" aria-label="BudgetHub Family">
+          <span class="brand-mark">BH</span>
+          <span>
+            <strong>BudgetHub</strong>
+            <small>Family</small>
+          </span>
+        </a>
+
+        <nav class="landing-nav" aria-label="Navigation principale">
+          <a href="#features" data-i18n="navFeatures">Fonctions</a>
+          <a href="#pricing" data-i18n="navPricing">Tarifs</a>
+          <a href="#security" data-i18n="navSecurity">Sécurité</a>
+        </nav>
+
+        <div class="top-actions">
+          <select id="languageSelect" aria-label="Langue">
+            <option value="fr">FR</option>
+            <option value="en">EN</option>
+          </select>
+          <select id="currencySelect" aria-label="Devise">
+            <option value="CAD">CAD</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+          <button class="icon-button" id="themeToggle" type="button" aria-label="Changer le thème">☾</button>
+          <button class="ghost-button" id="openLogin" type="button" data-i18n="login">Connexion</button>
+          <button class="primary-button" id="startDemo" type="button" data-i18n="freeDemo">Démo gratuite</button>
+        </div>
+
+        <button class="menu-button" id="menuToggle" type="button" aria-label="Ouvrir le menu">☰</button>
+      </header>
+
+      <main id="landingView">
+        <section class="hero" id="home">
+          <div class="hero-content">
+            <p class="eyebrow" data-i18n="heroEyebrow">Prototype SaaS financier familial</p>
+            <h1 data-i18n="heroTitle">Le cockpit moderne pour reprendre le contrôle des finances familiales.</h1>
+            <p class="hero-copy" data-i18n="heroCopy">
+              BudgetHub Family réunit dettes, budget, transactions, objectifs et membres de la famille dans un tableau de bord clair, collaboratif et prêt pour la croissance.
+            </p>
+            <div class="hero-actions">
+              <button class="primary-button large" id="heroDemo" type="button" data-i18n="tryDemo">Tester la démo</button>
+              <a class="secondary-link" href="#pricing" data-i18n="seePricing">Voir les tarifs</a>
+            </div>
+            <div class="trust-row" aria-label="Indicateurs">
+              <span data-i18n="trustNoCard">Sans carte</span>
+              <span data-i18n="trustMock">Données mockées</span>
+              <span data-i18n="trustReady">Prêt API plus tard</span>
+            </div>
+          </div>
+          <div class="hero-product" aria-label="Aperçu du tableau de bord">
+            <div class="product-frame">
+              <div class="mini-toolbar">
+                <span></span><span></span><span></span>
+                <strong>BudgetHub</strong>
+              </div>
+              <div class="product-grid">
+                <div class="metric-card accent">
+                  <small data-i18n="heroDebtFree">Date sans dette</small>
+                  <strong>Nov 2028</strong>
+                  <div class="progress"><span style="width: 67%"></span></div>
+                </div>
+                <div class="metric-card">
+                  <small data-i18n="heroMonthlyBudget">Budget mensuel</small>
+                  <strong data-money="6240">6 240 $</strong>
+                </div>
+                <div class="metric-card">
+                  <small data-i18n="heroGoals">Objectifs actifs</small>
+                  <strong>4</strong>
+                </div>
+                <div class="chart-card">
+                  <div class="bar" style="height: 48%"></div>
+                  <div class="bar" style="height: 72%"></div>
+                  <div class="bar" style="height: 38%"></div>
+                  <div class="bar active" style="height: 86%"></div>
+                  <div class="bar" style="height: 58%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="features">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="featuresEyebrow">Tout au même endroit</p>
+            <h2 data-i18n="featuresTitle">Conçu pour les décisions d’argent en famille.</h2>
+          </div>
+          <div class="feature-grid">
+            <article><span>01</span><h3 data-i18n="featureDebtTitle">Dettes intelligentes</h3><p data-i18n="featureDebtCopy">Comparez snowball et avalanche avec un calendrier de remboursement lisible.</p></article>
+            <article><span>02</span><h3 data-i18n="featureBudgetTitle">Budget vivant</h3><p data-i18n="featureBudgetCopy">Suivez les catégories clés, les écarts et les dépenses récurrentes.</p></article>
+            <article><span>03</span><h3 data-i18n="featureFamilyTitle">Famille organisée</h3><p data-i18n="featureFamilyCopy">Gérez les rôles, membres et objectifs communs selon votre plan.</p></article>
+            <article><span>04</span><h3 data-i18n="featureMockTitle">Prêt à brancher</h3><p data-i18n="featureMockCopy">Architecture front simple, sans clé réelle, pensée pour Node.js, Supabase et Stripe.</p></article>
+          </div>
+        </section>
+
+        <section class="section pricing-section" id="pricing">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="pricingEyebrow">Plans simples</p>
+            <h2 data-i18n="pricingTitle">Commencez gratuitement, grandissez avec votre famille.</h2>
+          </div>
+          <div class="pricing-grid" id="pricingGrid"></div>
+        </section>
+
+        <section class="section security-band" id="security">
+          <div>
+            <p class="eyebrow" data-i18n="securityEyebrow">Fondations propres</p>
+            <h2 data-i18n="securityTitle">Aucune vraie intégration payante ou base de données dans cette phase.</h2>
+          </div>
+          <p data-i18n="securityCopy">
+            Ce prototype utilise uniquement le navigateur et des données fictives. Les fichiers de documentation inclus préparent les prochaines étapes sans créer de tables ni exposer de clés.
+          </p>
+        </section>
+      </main>
+
+      <main id="appView" class="dashboard-layout" hidden>
+        <aside class="sidebar">
+          <div class="sidebar-head">
+            <span class="brand-mark">BH</span>
+            <div><strong>BudgetHub</strong><small id="activePlanLabel">Free</small></div>
+          </div>
+          <nav class="app-nav" id="appNav" aria-label="Application">
+            <button class="active" data-view="dashboard" data-i18n="appDashboard">Tableau</button>
+            <button data-view="debts" data-i18n="appDebts">Dettes</button>
+            <button data-view="strategy" data-i18n="appStrategy">Snowball/Avalanche</button>
+            <button data-view="budget" data-i18n="appBudget">Budget</button>
+            <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
+            <button data-view="goals" data-i18n="appGoals">Objectifs</button>
+            <button data-view="family" data-i18n="appFamily">Famille</button>
+            <button data-view="settings" data-i18n="appSettings">Paramètres</button>
+          </nav>
+          <button class="ghost-button full" id="backToLanding" type="button" data-i18n="backLanding">Retour accueil</button>
+        </aside>
+
+        <section class="workspace">
+          <div class="workspace-head">
+            <div>
+              <p class="eyebrow" id="workspaceEyebrow">Demo</p>
+              <h2 id="workspaceTitle">Tableau de bord</h2>
+            </div>
+            <div class="workspace-actions">
+              <button class="ghost-button" id="openRegister" type="button" data-i18n="createAccount">Créer un compte</button>
+              <button class="primary-button" id="upgradeButton" type="button" data-i18n="upgrade">Passer Pro</button>
+            </div>
+          </div>
+          <div class="notice" id="demoNotice" data-i18n="demoNotice">
+            Démo gratuite: 2 dettes maximum et 1 membre famille maximum. Les données restent dans le navigateur.
+          </div>
+          <div id="viewContainer"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="auth-modal" id="authModal">
+      <form method="dialog" class="modal-card">
+        <button class="modal-close" value="cancel" aria-label="Fermer">×</button>
+        <p class="eyebrow" id="authModeLabel">Connexion</p>
+        <h2 id="authTitle">Accéder à BudgetHub Family</h2>
+        <label>
+          <span data-i18n="email">Courriel</span>
+          <input type="email" placeholder="alex@example.com" autocomplete="email" />
+        </label>
+        <label>
+          <span data-i18n="password">Mot de passe</span>
+          <input type="password" placeholder="••••••••" autocomplete="current-password" />
+        </label>
+        <button class="primary-button full" id="mockAuthButton" value="default" type="submit" data-i18n="continueMock">Continuer en mock</button>
+        <p class="form-note" data-i18n="authNote">Aucune authentification réelle pour cette phase frontend.</p>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
