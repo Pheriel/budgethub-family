@@ -45,6 +45,7 @@
           </select>
           <button class="icon-button" id="themeToggle" type="button" aria-label="Changer le thème">☾</button>
           <button class="ghost-button" id="openLogin" type="button" data-i18n="login">Connexion</button>
+          <button class="ghost-button" id="topRegister" type="button" data-i18n="createAccount">Créer un compte</button>
           <button class="primary-button" id="startDemo" type="button" data-i18n="freeDemo">Démo gratuite</button>
         </div>
 
@@ -152,6 +153,7 @@
             </label>
             <button class="primary-button full" type="submit" data-i18n="continue">Continuer</button>
             <p class="form-note" id="authMessage" hidden></p>
+            <button class="secondary-link" id="authSwitch" type="button"></button>
             <p class="form-note" data-i18n="authNote">Accédez à votre espace BudgetHub Family et retrouvez vos finances au même endroit.</p>
           </form>
         </section>
@@ -183,7 +185,9 @@
               <h2 id="workspaceTitle">Tableau de bord</h2>
             </div>
             <div class="workspace-actions">
+              <span class="chip" id="userEmailChip" hidden></span>
               <button class="ghost-button" id="openRegister" type="button" data-i18n="createAccount">Créer un compte</button>
+              <button class="ghost-button" id="logoutButton" type="button" hidden></button>
               <button class="primary-button" id="upgradeButton" type="button" data-i18n="upgrade">Passer Pro</button>
             </div>
           </div>
@@ -196,6 +200,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=3"></script>
   </body>
 </html>

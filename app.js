@@ -209,6 +209,7 @@ const stripePaymentLinks = {
 const state = {
   lang: localStorage.getItem("bh_lang") || "fr",
   authMode: "login",
+  user: null,
   currency: localStorage.getItem("bh_currency") || "CAD",
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
@@ -372,10 +373,56 @@ function renderPricing() {
   $$("[data-plan]").forEach((button) => button.addEventListener("click", () => selectPlan(button.dataset.plan)));
 }
 
+function setSessionUser(user) {
+  state.user = user;
+  const chip = $("#userEmailChip");
+  const logoutButton = $("#logoutButton");
+  const registerButton = $("#openRegister");
+  if (user) {
+    chip.textContent = user.email;
+    chip.hidden = false;
+    logoutButton.textContent = state.lang === "fr" ? "Déconnexion" : "Sign out";
+    logoutButton.hidden = false;
+    registerButton.hidden = true;
+  } else {
+    chip.hidden = true;
+    logoutButton.hidden = true;
+    registerButton.hidden = false;
+  }
+}
+
+async function loadProfilePlan() {
+  if (!supabaseClient || !state.user) return;
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("plan")
+    .eq("id", state.user.id)
+    .single();
+  if (!error && data && data.plan) {
+    state.plan = data.plan;
+    $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan)?.name || data.plan;
+    renderPricing();
+    renderView();
+  }
+}
+
 function selectPlan(planId) {
   const paymentLink = stripePaymentLinks[planId];
   if (paymentLink) {
-    window.open(paymentLink, "_blank", "noopener");
+    if (!state.user) {
+      openAuth("register");
+      const message = $("#authMessage");
+      message.textContent = state.lang === "fr"
+        ? "Créez un compte ou connectez-vous avant de choisir un plan payant."
+        : "Create an account or sign in before choosing a paid plan.";
+      message.hidden = false;
+      return;
+    }
+    const url = new URL(paymentLink);
+    url.searchParams.set("client_reference_id", state.user.id);
+    url.searchParams.set("prefilled_email", state.user.email);
+    window.open(url.toString(), "_blank", "noopener");
+    return;
   }
   state.plan = planId;
   $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan).name;
@@ -686,6 +733,9 @@ function openAuth(mode) {
   const message = $("#authMessage");
   message.hidden = true;
   message.textContent = "";
+  $("#authSwitch").textContent = mode === "register"
+    ? (state.lang === "fr" ? "Déjà un compte ? Se connecter" : "Already have an account? Sign in")
+    : (state.lang === "fr" ? "Pas de compte ? Créer un compte" : "No account? Create one");
   $(".topbar").classList.remove("menu-open");
   $("#authModeLabel").textContent = mode === "register" ? t("createAccount") : t("login");
   $("#authTitle").textContent = mode === "register"
@@ -728,7 +778,27 @@ function boot() {
     $("#landingView").hidden = false;
   });
   $("#openLogin").addEventListener("click", () => openAuth("login"));
+  $("#topRegister").addEventListener("click", () => openAuth("register"));
   $("#openRegister").addEventListener("click", () => openAuth("register"));
+  $("#authSwitch").addEventListener("click", () => openAuth(state.authMode === "register" ? "login" : "register"));
+  $("#logoutButton").addEventListener("click", async () => {
+    if (supabaseClient) await supabaseClient.auth.signOut();
+    setSessionUser(null);
+    state.plan = "free";
+    $("#appView").hidden = true;
+    $("#authView").hidden = true;
+    $("#landingView").hidden = false;
+  });
+
+  if (supabaseClient) {
+    supabaseClient.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        setSessionUser(data.session.user);
+        loadProfilePlan();
+        openApp();
+      }
+    });
+  }
   $("#upgradeButton").addEventListener("click", () => {
     $(".topbar").classList.remove("menu-open");
     $("#appView").hidden = true;
@@ -767,8 +837,10 @@ function boot() {
           return;
         }
       } else {
-        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        setSessionUser(data.user);
+        loadProfilePlan();
       }
       openApp();
     } catch (error) {

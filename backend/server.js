@@ -20,6 +20,8 @@ const port = process.env.PORT || 3000;
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL || true }));
+// Le webhook Stripe doit recevoir le corps brut, avant express.json()
+app.use("/api/billing", billingRoutes);
 app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
@@ -34,7 +36,6 @@ app.use("/api/debts", debtRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/goals", goalRoutes);
-app.use("/api/billing", billingRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
 
 app.use((_req, res) => {
