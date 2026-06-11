@@ -214,6 +214,15 @@ const state = {
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
   currentView: "dashboard",
+  debts: [],
+  budget: [],
+  transactions: [],
+  goals: [],
+  members: []
+};
+
+// Données fictives affichées uniquement en mode démo (sans compte)
+const demoData = {
   debts: [
     { name: "Carte Visa", balance: 4850, rate: 19.99, minPayment: 145 },
     { name: "Prêt auto", balance: 12800, rate: 7.49, minPayment: 410 }
@@ -237,6 +246,16 @@ const state = {
   ],
   members: [{ name: "Alex", role: "Admin" }]
 };
+
+function loadDemoData() {
+  state.debts = demoData.debts.map((item) => ({ ...item }));
+  state.budget = demoData.budget.map((item) => ({ ...item }));
+  state.transactions = demoData.transactions.map((item) => ({ ...item }));
+  state.goals = demoData.goals.map((item) => ({ ...item }));
+  state.members = demoData.members.map((item) => ({ ...item }));
+}
+
+loadDemoData();
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -384,10 +403,12 @@ function setSessionUser(user) {
     logoutButton.textContent = state.lang === "fr" ? "Déconnexion" : "Sign out";
     logoutButton.hidden = false;
     registerButton.hidden = true;
+    $("#demoNotice").hidden = true;
   } else {
     chip.hidden = true;
     logoutButton.hidden = true;
     registerButton.hidden = false;
+    $("#demoNotice").hidden = false;
   }
 }
 
@@ -404,6 +425,51 @@ async function loadProfilePlan() {
     renderPricing();
     renderView();
   }
+}
+
+async function loadUserData() {
+  if (!supabaseClient || !state.user) return;
+  const [debts, budget, transactions, goals, members] = await Promise.all([
+    supabaseClient.from("debts").select("id,name,balance,rate,min_payment").order("created_at"),
+    supabaseClient.from("budget_categories").select("id,category,planned,spent").order("created_at"),
+    supabaseClient.from("transactions").select("id,date,name,category,amount").order("date", { ascending: false }),
+    supabaseClient.from("goals").select("id,name,target,saved").order("created_at"),
+    supabaseClient.from("family_members").select("id,name,role").order("created_at")
+  ]);
+  state.debts = (debts.data || []).map((row) => ({
+    id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment)
+  }));
+  state.budget = (budget.data || []).map((row) => ({
+    id: row.id, category: row.category, planned: Number(row.planned), spent: Number(row.spent)
+  }));
+  state.transactions = (transactions.data || []).map((row) => ({
+    id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount)
+  }));
+  state.goals = (goals.data || []).map((row) => ({
+    id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved)
+  }));
+  state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role }));
+  renderView();
+}
+
+async function dbInsert(table, payload) {
+  if (!supabaseClient || !state.user) return null;
+  const { data, error } = await supabaseClient
+    .from(table)
+    .insert({ ...payload, user_id: state.user.id })
+    .select()
+    .single();
+  if (error) {
+    console.error(`Insert into ${table} failed:`, error.message);
+    return null;
+  }
+  return data;
+}
+
+async function dbDelete(table, id) {
+  if (!supabaseClient || !state.user || !id) return;
+  const { error } = await supabaseClient.from(table).delete().eq("id", id);
+  if (error) console.error(`Delete from ${table} failed:`, error.message);
 }
 
 function selectPlan(planId) {
@@ -576,18 +642,28 @@ function strategyList(items) {
 }
 
 function renderBudget() {
-  return `<section class="panel">${budgetTable(true)}</section>`;
+  return `
+    <section class="panel">
+      <form class="form-grid" id="budgetForm">
+        <label><span>${t("category")}</span><input name="category" required placeholder="${state.lang === "fr" ? "Logement" : "Housing"}" /></label>
+        <label><span>${t("planned")}</span><input name="planned" required type="number" min="0" step="0.01" placeholder="1500" /></label>
+        <label><span>${t("spent")}</span><input name="spent" type="number" min="0" step="0.01" placeholder="0" /></label>
+        <button class="primary-button" type="submit">${state.lang === "fr" ? "Ajouter" : "Add"}</button>
+      </form>
+      ${budgetTable(true)}
+    </section>
+  `;
 }
 
-function budgetTable() {
+function budgetTable(actions) {
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>${t("category")}</th><th>${t("planned")}</th><th>${t("spent")}</th><th>${t("progress")}</th></tr></thead>
+        <thead><tr><th>${t("category")}</th><th>${t("planned")}</th><th>${t("spent")}</th><th>${t("progress")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
-          ${state.budget.map((item) => {
-            const pct = Math.min(100, Math.round((item.spent / item.planned) * 100));
-            return `<tr><td>${item.category}</td><td>${money(item.planned)}</td><td>${money(item.spent)}</td><td><div class="progress"><span style="width:${pct}%"></span></div></td></tr>`;
+          ${state.budget.map((item, index) => {
+            const pct = item.planned > 0 ? Math.min(100, Math.round((item.spent / item.planned) * 100)) : 0;
+            return `<tr><td>${item.category}</td><td>${money(item.planned)}</td><td>${money(item.spent)}</td><td><div class="progress"><span style="width:${pct}%"></span></div></td>${actions ? `<td><button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
@@ -596,16 +672,27 @@ function budgetTable() {
 }
 
 function renderTransactions() {
-  return `<section class="panel">${transactionTable(true)}</section>`;
+  return `
+    <section class="panel">
+      <form class="form-grid" id="transactionForm">
+        <label><span>${t("date")}</span><input name="date" required type="date" value="${new Date().toISOString().slice(0, 10)}" /></label>
+        <label><span>${t("name")}</span><input name="name" required placeholder="${state.lang === "fr" ? "Épicerie" : "Groceries"}" /></label>
+        <label><span>${t("category")}</span><input name="category" required placeholder="${state.lang === "fr" ? "Épicerie" : "Groceries"}" /></label>
+        <label><span>${t("amount")}</span><input name="amount" required type="number" step="0.01" placeholder="-50.00" /></label>
+        <button class="primary-button" type="submit">${state.lang === "fr" ? "Ajouter" : "Add"}</button>
+      </form>
+      ${transactionTable(true)}
+    </section>
+  `;
 }
 
-function transactionTable() {
+function transactionTable(actions) {
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th></tr></thead>
+        <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
-          ${state.transactions.map((item) => `<tr><td>${item.date}</td><td>${item.name}</td><td>${item.category}</td><td>${money(item.amount)}</td></tr>`).join("")}
+          ${state.transactions.map((item, index) => `<tr><td>${item.date}</td><td>${item.name}</td><td>${item.category}</td><td>${money(item.amount)}</td>${actions ? `<td><button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -613,16 +700,29 @@ function transactionTable() {
 }
 
 function renderGoals() {
-  return `<section class="panel">${goalsList()}</section>`;
+  return `
+    <section class="panel">
+      <form class="form-grid" id="goalForm">
+        <label><span>${t("name")}</span><input name="name" required placeholder="${state.lang === "fr" ? "Fonds urgence" : "Emergency fund"}" /></label>
+        <label><span>${state.lang === "fr" ? "Cible" : "Target"}</span><input name="target" required type="number" min="1" placeholder="10000" /></label>
+        <label><span>${state.lang === "fr" ? "Épargné" : "Saved"}</span><input name="saved" type="number" min="0" placeholder="0" /></label>
+        <button class="primary-button" type="submit">${state.lang === "fr" ? "Ajouter" : "Add"}</button>
+      </form>
+      ${goalsList(true)}
+    </section>
+  `;
 }
 
-function goalsList() {
-  return state.goals.map((goal) => {
+function goalsList(actions) {
+  if (!state.goals.length) {
+    return `<p class="form-note">${state.lang === "fr" ? "Aucun objectif pour le moment." : "No goals yet."}</p>`;
+  }
+  return state.goals.map((goal, index) => {
     const pct = Math.round((goal.saved / goal.target) * 100);
     return `
       <div>
         <strong>${goal.name}</strong>
-        <p>${money(goal.saved)} / ${money(goal.target)} · ${pct}%</p>
+        <p>${money(goal.saved)} / ${money(goal.target)} · ${pct}% ${actions ? `<button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button>` : ""}</p>
         <div class="progress"><span style="width:${pct}%"></span></div>
       </div>
     `;
@@ -651,6 +751,16 @@ function renderFamily() {
 }
 
 function renderSettings() {
+  const passwordSection = state.user ? `
+    <section class="panel">
+      <h3>${state.lang === "fr" ? "Changer le mot de passe" : "Change password"}</h3>
+      <form class="form-grid" id="passwordForm">
+        <label><span>${state.lang === "fr" ? "Nouveau mot de passe" : "New password"}</span><input name="newPassword" type="password" minlength="6" required autocomplete="new-password" /></label>
+        <button class="primary-button" type="submit">${state.lang === "fr" ? "Mettre à jour" : "Update"}</button>
+      </form>
+      <p class="form-note" id="passwordNote" hidden></p>
+    </section>
+  ` : "";
   return `
     <section class="panel">
       <p>${t("settingsCopy")}</p>
@@ -660,49 +770,143 @@ function renderSettings() {
         <label><span>${t("darkMode")}</span><select id="settingsTheme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
       </div>
     </section>
+    ${passwordSection}
   `;
 }
 
 function bindViewActions() {
   const debtForm = $("#debtForm");
   if (debtForm) {
-    debtForm.addEventListener("submit", (event) => {
+    debtForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const plan = planDefinitions.find((item) => item.id === state.plan);
       if (state.debts.length >= plan.debts) return showLimit(t("demoLimitDebt"));
       const form = new FormData(debtForm);
       const balance = Number(form.get("balance"));
-      state.debts.push({
+      const debt = {
         name: form.get("name"),
         balance,
         rate: Number(form.get("rate")),
         minPayment: Math.max(35, Math.round(balance * 0.03))
-      });
+      };
+      if (state.user) {
+        const row = await dbInsert("debts", {
+          name: debt.name, balance: debt.balance, rate: debt.rate, min_payment: debt.minPayment
+        });
+        if (row) debt.id = row.id;
+      }
+      state.debts.push(debt);
       renderView();
     });
   }
 
   const memberForm = $("#memberForm");
   if (memberForm) {
-    memberForm.addEventListener("submit", (event) => {
+    memberForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const plan = planDefinitions.find((item) => item.id === state.plan);
       if (state.members.length >= plan.members) return showLimit(t("demoLimitMember"));
       const form = new FormData(memberForm);
-      state.members.push({ name: form.get("name"), role: form.get("role") });
+      const member = { name: form.get("name"), role: form.get("role") };
+      if (state.user) {
+        const row = await dbInsert("family_members", member);
+        if (row) member.id = row.id;
+      }
+      state.members.push(member);
       renderView();
     });
   }
 
-  $$("[data-remove-debt]").forEach((button) => button.addEventListener("click", () => {
-    state.debts.splice(Number(button.dataset.removeDebt), 1);
-    renderView();
-  }));
+  const transactionForm = $("#transactionForm");
+  if (transactionForm) {
+    transactionForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(transactionForm);
+      const transaction = {
+        date: form.get("date"),
+        name: form.get("name"),
+        category: form.get("category"),
+        amount: Number(form.get("amount"))
+      };
+      if (state.user) {
+        const row = await dbInsert("transactions", transaction);
+        if (row) transaction.id = row.id;
+      }
+      state.transactions.unshift(transaction);
+      renderView();
+    });
+  }
 
-  $$("[data-remove-member]").forEach((button) => button.addEventListener("click", () => {
-    state.members.splice(Number(button.dataset.removeMember), 1);
-    renderView();
-  }));
+  const goalForm = $("#goalForm");
+  if (goalForm) {
+    goalForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(goalForm);
+      const goal = {
+        name: form.get("name"),
+        target: Number(form.get("target")),
+        saved: Number(form.get("saved") || 0)
+      };
+      if (state.user) {
+        const row = await dbInsert("goals", goal);
+        if (row) goal.id = row.id;
+      }
+      state.goals.push(goal);
+      renderView();
+    });
+  }
+
+  const budgetForm = $("#budgetForm");
+  if (budgetForm) {
+    budgetForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(budgetForm);
+      const item = {
+        category: form.get("category"),
+        planned: Number(form.get("planned")),
+        spent: Number(form.get("spent") || 0)
+      };
+      if (state.user) {
+        const row = await dbInsert("budget_categories", item);
+        if (row) item.id = row.id;
+      }
+      state.budget.push(item);
+      renderView();
+    });
+  }
+
+  const removeBindings = [
+    ["data-remove-debt", "debts", "debts"],
+    ["data-remove-member", "family_members", "members"],
+    ["data-remove-transaction", "transactions", "transactions"],
+    ["data-remove-goal", "goals", "goals"],
+    ["data-remove-budget", "budget_categories", "budget"]
+  ];
+  removeBindings.forEach(([attr, table, key]) => {
+    $$(`[${attr}]`).forEach((button) => button.addEventListener("click", async () => {
+      const index = Number(button.getAttribute(attr));
+      const item = state[key][index];
+      if (state.user && item && item.id) await dbDelete(table, item.id);
+      state[key].splice(index, 1);
+      renderView();
+    }));
+  });
+
+  const passwordForm = $("#passwordForm");
+  if (passwordForm) {
+    passwordForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(passwordForm);
+      const newPassword = form.get("newPassword");
+      const note = $("#passwordNote");
+      const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+      note.textContent = error
+        ? (state.lang === "fr" ? "Impossible de changer le mot de passe: " : "Could not change password: ") + error.message
+        : (state.lang === "fr" ? "Mot de passe mis à jour." : "Password updated.");
+      note.hidden = false;
+      if (!error) passwordForm.reset();
+    });
+  }
 
   const settingsLang = $("#settingsLang");
   if (settingsLang) {
@@ -736,6 +940,9 @@ function openAuth(mode) {
   $("#authSwitch").textContent = mode === "register"
     ? (state.lang === "fr" ? "Déjà un compte ? Se connecter" : "Already have an account? Sign in")
     : (state.lang === "fr" ? "Pas de compte ? Créer un compte" : "No account? Create one");
+  const forgot = $("#forgotPassword");
+  forgot.hidden = mode === "register";
+  forgot.textContent = state.lang === "fr" ? "Mot de passe oublié ?" : "Forgot password?";
   $(".topbar").classList.remove("menu-open");
   $("#authModeLabel").textContent = mode === "register" ? t("createAccount") : t("login");
   $("#authTitle").textContent = mode === "register"
@@ -785,9 +992,29 @@ function boot() {
     if (supabaseClient) await supabaseClient.auth.signOut();
     setSessionUser(null);
     state.plan = "free";
+    loadDemoData();
     $("#appView").hidden = true;
     $("#authView").hidden = true;
     $("#landingView").hidden = false;
+  });
+
+  $("#forgotPassword").addEventListener("click", async () => {
+    const email = $("#authForm").elements.email.value.trim();
+    const message = $("#authMessage");
+    if (!email) {
+      message.textContent = state.lang === "fr"
+        ? "Entrez votre courriel ci-dessus, puis cliquez de nouveau."
+        : "Enter your email above, then click again.";
+      message.hidden = false;
+      return;
+    }
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+    message.textContent = error
+      ? (state.lang === "fr" ? "Impossible d'envoyer le courriel de réinitialisation." : "Could not send the reset email.")
+      : (state.lang === "fr" ? "Courriel de réinitialisation envoyé. Vérifiez votre boîte." : "Reset email sent. Check your inbox.");
+    message.hidden = false;
   });
 
   if (supabaseClient) {
@@ -795,6 +1022,24 @@ function boot() {
       if (data.session) {
         setSessionUser(data.session.user);
         loadProfilePlan();
+        loadUserData();
+        openApp();
+      }
+    });
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        // L'utilisateur arrive depuis le lien de réinitialisation: ouvrir les paramètres
+        setSessionUser(session.user);
+        state.currentView = "settings";
+        openApp();
+        renderView();
+      }
+      if (event === "SIGNED_IN" && session && !state.user) {
+        // Connexion via lien de confirmation courriel
+        setSessionUser(session.user);
+        loadProfilePlan();
+        loadUserData();
         openApp();
       }
     });
@@ -827,7 +1072,11 @@ function boot() {
 
     try {
       if (state.authMode === "register") {
-        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin + window.location.pathname }
+        });
         if (error) throw error;
         if (data.user && !data.session) {
           message.textContent = state.lang === "fr"
@@ -841,6 +1090,7 @@ function boot() {
         if (error) throw error;
         setSessionUser(data.user);
         loadProfilePlan();
+        loadUserData();
       }
       openApp();
     } catch (error) {

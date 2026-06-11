@@ -90,9 +90,13 @@ curl http://localhost:3000/api/diagnostics/stripe
 
 ## Authentification et paiements (mode test)
 
-Le frontend est connecté à Supabase Auth: la création de compte et la connexion utilisent la clé publishable (sûre côté client). Les nouveaux comptes reçoivent un courriel de confirmation.
+Le frontend est connecté à Supabase Auth: la création de compte et la connexion utilisent la clé publishable (sûre côté client). Les nouveaux comptes reçoivent un courriel de confirmation et un lien « Mot de passe oublié » permet la réinitialisation. Le changement de mot de passe se fait dans Paramètres une fois connecté.
 
-Les boutons de plans ouvrent des Stripe Payment Links en mode test. Aucun vrai paiement n'est possible. Pour tester un paiement, utiliser la carte de test Stripe `4242 4242 4242 4242` avec une date future et un CVC quelconque.
+Les boutons de plans ouvrent des Stripe Payment Links en mode test, avec l'identifiant utilisateur (`client_reference_id`). Aucun vrai paiement n'est possible. Pour tester un paiement, utiliser la carte de test Stripe `4242 4242 4242 4242` avec une date future et un CVC quelconque. Le webhook `POST /api/billing/webhook` enregistre le plan acheté dans la table `profiles`.
+
+## Données utilisateur
+
+Les visiteurs sans compte voient des données de démonstration locales. Les utilisateurs connectés démarrent avec un espace vide; leurs dettes, budget, transactions, objectifs et membres de famille sont enregistrés dans Supabase (tables `debts`, `budget_categories`, `transactions`, `goals`, `family_members`) protégés par Row Level Security: chaque utilisateur ne voit que ses propres données.
 
 ## Structure
 
