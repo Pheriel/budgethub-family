@@ -52,6 +52,16 @@ http://localhost:5173
 
 `.env.example` fournit un modèle de configuration locale. Le fichier `.env` est ignoré par Git et ne doit pas être commité.
 
+## Remplir le fichier .env
+
+Pour préparer le backend, copier `backend/.env.example` vers `backend/.env`, puis remplir les valeurs nécessaires sur le serveur:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Le fichier `backend/.env` doit rester local au serveur et ne doit jamais être poussé dans Git.
+
 ## Structure
 
 ```text
@@ -59,6 +69,14 @@ http://localhost:5173
 ├── index.html
 ├── styles.css
 ├── app.js
+├── backend
+│   ├── config
+│   ├── controllers
+│   ├── middleware
+│   ├── routes
+│   ├── services
+│   ├── package.json
+│   └── server.js
 ├── package.json
 ├── .gitignore
 ├── .env.example
