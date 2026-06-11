@@ -194,8 +194,21 @@ const currencyMeta = {
   EUR: { rate: 0.68, locale: "fr-FR" }
 };
 
+const SUPABASE_URL = "https://nxlmgbrqzugjemhutfkd.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_KJre7SX4n5YYfZ4HBvZNig_s5y0hcCe";
+const supabaseClient = window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  : null;
+
+const stripePaymentLinks = {
+  solo: "https://buy.stripe.com/test_7sYeVedo8gUwaU89Kr9Ve00",
+  family: "https://buy.stripe.com/test_4gM28sdo847KbYc5ub9Ve01",
+  familyPlus: "https://buy.stripe.com/test_14A9AU6ZK1ZC8M04q79Ve02"
+};
+
 const state = {
   lang: localStorage.getItem("bh_lang") || "fr",
+  authMode: "login",
   currency: localStorage.getItem("bh_currency") || "CAD",
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
@@ -360,6 +373,10 @@ function renderPricing() {
 }
 
 function selectPlan(planId) {
+  const paymentLink = stripePaymentLinks[planId];
+  if (paymentLink) {
+    window.open(paymentLink, "_blank", "noopener");
+  }
   state.plan = planId;
   $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan).name;
   renderPricing();
@@ -665,6 +682,10 @@ function updatePreference(key, value) {
 }
 
 function openAuth(mode) {
+  state.authMode = mode;
+  const message = $("#authMessage");
+  message.hidden = true;
+  message.textContent = "";
   $(".topbar").classList.remove("menu-open");
   $("#authModeLabel").textContent = mode === "register" ? t("createAccount") : t("login");
   $("#authTitle").textContent = mode === "register"
@@ -715,9 +736,54 @@ function boot() {
     $("#landingView").hidden = false;
     document.querySelector("#pricing").scrollIntoView({ behavior: "smooth" });
   });
-  $("#authForm").addEventListener("submit", (event) => {
+  $("#authForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    openApp();
+    const form = event.target;
+    const email = form.elements.email.value.trim();
+    const password = form.elements.password.value;
+    const message = $("#authMessage");
+    const submitButton = form.querySelector("button[type=submit]");
+
+    if (!supabaseClient) {
+      message.textContent = state.lang === "fr"
+        ? "Service d'authentification indisponible. Réessayez plus tard."
+        : "Authentication service unavailable. Please try again later.";
+      message.hidden = false;
+      return;
+    }
+
+    submitButton.disabled = true;
+    message.hidden = true;
+
+    try {
+      if (state.authMode === "register") {
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.user && !data.session) {
+          message.textContent = state.lang === "fr"
+            ? "Compte créé. Vérifiez votre courriel pour confirmer votre adresse."
+            : "Account created. Check your email to confirm your address.";
+          message.hidden = false;
+          return;
+        }
+      } else {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+      openApp();
+    } catch (error) {
+      const friendly = {
+        "Invalid login credentials": state.lang === "fr" ? "Courriel ou mot de passe invalide." : "Invalid email or password.",
+        "User already registered": state.lang === "fr" ? "Un compte existe déjà avec ce courriel." : "An account already exists with this email.",
+        "Email not confirmed": state.lang === "fr" ? "Confirmez votre courriel avant de vous connecter." : "Please confirm your email before signing in."
+      };
+      message.textContent = friendly[error.message] || (state.lang === "fr"
+        ? "Une erreur est survenue. Réessayez."
+        : "Something went wrong. Please try again.");
+      message.hidden = false;
+    } finally {
+      submitButton.disabled = false;
+    }
   });
   $$("#appNav button").forEach((button) => button.addEventListener("click", () => {
     state.currentView = button.dataset.view;

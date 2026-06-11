@@ -144,13 +144,14 @@
           <form class="auth-card" id="authForm">
             <label>
               <span data-i18n="email">Courriel</span>
-              <input type="email" placeholder="alex@example.com" autocomplete="email" required />
+              <input type="email" name="email" placeholder="alex@example.com" autocomplete="email" required />
             </label>
             <label>
               <span data-i18n="password">Mot de passe</span>
-              <input type="password" placeholder="••••••••" autocomplete="current-password" required />
+              <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" minlength="6" required />
             </label>
             <button class="primary-button full" type="submit" data-i18n="continue">Continuer</button>
+            <p class="form-note" id="authMessage" hidden></p>
             <p class="form-note" data-i18n="authNote">Accédez à votre espace BudgetHub Family et retrouvez vos finances au même endroit.</p>
           </form>
         </section>
@@ -194,6 +195,7 @@
       </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="app.js?v=2"></script>
   </body>
 </html>

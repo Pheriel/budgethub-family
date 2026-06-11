@@ -88,6 +88,12 @@ Tester la clé Stripe test sans créer de paiement, customer, checkout session o
 curl http://localhost:3000/api/diagnostics/stripe
 ```
 
+## Authentification et paiements (mode test)
+
+Le frontend est connecté à Supabase Auth: la création de compte et la connexion utilisent la clé publishable (sûre côté client). Les nouveaux comptes reçoivent un courriel de confirmation.
+
+Les boutons de plans ouvrent des Stripe Payment Links en mode test. Aucun vrai paiement n'est possible. Pour tester un paiement, utiliser la carte de test Stripe `4242 4242 4242 4242` avec une date future et un CVC quelconque.
+
 ## Structure
 
 ```text
