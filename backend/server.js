@@ -13,6 +13,7 @@ const budgetRoutes = require("./routes/budgets.routes");
 const transactionRoutes = require("./routes/transactions.routes");
 const goalRoutes = require("./routes/goals.routes");
 const billingRoutes = require("./routes/billing.routes");
+const diagnosticsRoutes = require("./routes/diagnostics.routes");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -34,6 +35,7 @@ app.use("/api/budgets", budgetRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/goals", goalRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/diagnostics", diagnosticsRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route not found" });

@@ -7,7 +7,12 @@ function createSupabaseClient() {
     return null;
   }
 
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
 }
 
 function createSupabaseAdminClient() {
@@ -17,7 +22,12 @@ function createSupabaseAdminClient() {
     return null;
   }
 
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
 }
 
 module.exports = {

@@ -62,6 +62,32 @@ cp backend/.env.example backend/.env
 
 Le fichier `backend/.env` doit rester local au serveur et ne doit jamais être poussé dans Git.
 
+## Diagnostics backend
+
+Quand le backend est démarré, vérifier la santé du service:
+
+```bash
+curl http://localhost:3000/health
+```
+
+Vérifier que les variables obligatoires sont présentes, sans afficher leurs valeurs:
+
+```bash
+curl http://localhost:3000/api/diagnostics/config
+```
+
+Tester la connexion Supabase admin sans créer de table et sans modifier de données:
+
+```bash
+curl http://localhost:3000/api/diagnostics/supabase
+```
+
+Tester la clé Stripe test sans créer de paiement, customer, checkout session ou webhook:
+
+```bash
+curl http://localhost:3000/api/diagnostics/stripe
+```
+
 ## Structure
 
 ```text
