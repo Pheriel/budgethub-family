@@ -444,6 +444,43 @@ h3 {
   border-top: 1px solid var(--line);
 }
 
+.auth-page {
+  min-height: calc(100vh - 4.75rem);
+  padding: clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 4rem);
+}
+
+.auth-panel {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
+  gap: clamp(2rem, 6vw, 4rem);
+  align-items: center;
+}
+
+.auth-panel h1 {
+  max-width: 12ch;
+}
+
+.auth-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.back-link {
+  display: inline-flex;
+  margin-bottom: 1.5rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
 .dashboard-layout {
   display: grid;
   grid-template-columns: 17rem minmax(0, 1fr);
@@ -727,7 +764,8 @@ label select {
 
   .form-grid,
   .card-grid,
-  .split {
+  .split,
+  .auth-panel {
     grid-template-columns: 1fr;
   }
 }

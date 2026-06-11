@@ -54,7 +54,7 @@
       <main id="landingView">
         <section class="hero" id="home">
           <div class="hero-content">
-            <p class="eyebrow" data-i18n="heroEyebrow">Prototype SaaS financier familial</p>
+            <p class="eyebrow" data-i18n="heroEyebrow">Plateforme de budget familial</p>
             <h1 data-i18n="heroTitle">Le cockpit moderne pour reprendre le contrôle des finances familiales.</h1>
             <p class="hero-copy" data-i18n="heroCopy">
               BudgetHub Family réunit dettes, budget, transactions, objectifs et membres de la famille dans un tableau de bord clair, collaboratif et prêt pour la croissance.
@@ -65,8 +65,8 @@
             </div>
             <div class="trust-row" aria-label="Indicateurs">
               <span data-i18n="trustNoCard">Sans carte</span>
-              <span data-i18n="trustMock">Données mockées</span>
-              <span data-i18n="trustReady">Prêt API plus tard</span>
+              <span data-i18n="trustTrial">Essai sans engagement</span>
+              <span data-i18n="trustFamily">Pensé pour les familles</span>
             </div>
           </div>
           <div class="hero-product" aria-label="Aperçu du tableau de bord">
@@ -110,7 +110,7 @@
             <article><span>01</span><h3 data-i18n="featureDebtTitle">Dettes intelligentes</h3><p data-i18n="featureDebtCopy">Comparez snowball et avalanche avec un calendrier de remboursement lisible.</p></article>
             <article><span>02</span><h3 data-i18n="featureBudgetTitle">Budget vivant</h3><p data-i18n="featureBudgetCopy">Suivez les catégories clés, les écarts et les dépenses récurrentes.</p></article>
             <article><span>03</span><h3 data-i18n="featureFamilyTitle">Famille organisée</h3><p data-i18n="featureFamilyCopy">Gérez les rôles, membres et objectifs communs selon votre plan.</p></article>
-            <article><span>04</span><h3 data-i18n="featureMockTitle">Prêt à brancher</h3><p data-i18n="featureMockCopy">Architecture front simple, sans clé réelle, pensée pour Node.js, Supabase et Stripe.</p></article>
+            <article><span>04</span><h3 data-i18n="featureClarityTitle">Vision claire</h3><p data-i18n="featureClarityCopy">Des indicateurs simples pour décider quoi rembourser, où ajuster et comment avancer ensemble.</p></article>
           </div>
         </section>
 
@@ -124,12 +124,35 @@
 
         <section class="section security-band" id="security">
           <div>
-            <p class="eyebrow" data-i18n="securityEyebrow">Fondations propres</p>
-            <h2 data-i18n="securityTitle">Aucune vraie intégration payante ou base de données dans cette phase.</h2>
+            <p class="eyebrow" data-i18n="securityEyebrow">Confiance et clarté</p>
+            <h2 data-i18n="securityTitle">Une expérience simple pour organiser l’argent du foyer sans stress.</h2>
           </div>
           <p data-i18n="securityCopy">
-            Ce prototype utilise uniquement le navigateur et des données fictives. Les fichiers de documentation inclus préparent les prochaines étapes sans créer de tables ni exposer de clés.
+            Essayez BudgetHub Family gratuitement, explorez les outils essentiels et choisissez le plan qui correspond à votre famille quand vous êtes prêt.
           </p>
+        </section>
+      </main>
+
+      <main id="authView" class="auth-page" hidden>
+        <section class="auth-panel">
+          <div>
+            <button class="secondary-link back-link" id="authBack" type="button" data-i18n="backLanding">Retour accueil</button>
+            <p class="eyebrow" id="authModeLabel">Connexion</p>
+            <h1 id="authTitle">Accéder à BudgetHub Family</h1>
+            <p class="hero-copy" id="authCopy">Connectez-vous pour retrouver votre budget familial, vos dettes et vos objectifs au même endroit.</p>
+          </div>
+          <form class="auth-card" id="authForm">
+            <label>
+              <span data-i18n="email">Courriel</span>
+              <input type="email" placeholder="alex@example.com" autocomplete="email" required />
+            </label>
+            <label>
+              <span data-i18n="password">Mot de passe</span>
+              <input type="password" placeholder="••••••••" autocomplete="current-password" required />
+            </label>
+            <button class="primary-button full" type="submit" data-i18n="continue">Continuer</button>
+            <p class="form-note" data-i18n="authNote">Accédez à votre espace BudgetHub Family et retrouvez vos finances au même endroit.</p>
+          </form>
         </section>
       </main>
 
@@ -170,24 +193,6 @@
         </section>
       </main>
     </div>
-
-    <dialog class="auth-modal" id="authModal">
-      <form method="dialog" class="modal-card">
-        <button class="modal-close" value="cancel" aria-label="Fermer">×</button>
-        <p class="eyebrow" id="authModeLabel">Connexion</p>
-        <h2 id="authTitle">Accéder à BudgetHub Family</h2>
-        <label>
-          <span data-i18n="email">Courriel</span>
-          <input type="email" placeholder="alex@example.com" autocomplete="email" />
-        </label>
-        <label>
-          <span data-i18n="password">Mot de passe</span>
-          <input type="password" placeholder="••••••••" autocomplete="current-password" />
-        </label>
-        <button class="primary-button full" id="mockAuthButton" value="default" type="submit" data-i18n="continueMock">Continuer en mock</button>
-        <p class="form-note" data-i18n="authNote">Aucune authentification réelle pour cette phase frontend.</p>
-      </form>
-    </dialog>
 
     <script src="app.js"></script>
   </body>

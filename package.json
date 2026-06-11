@@ -2,7 +2,7 @@
   "name": "budgethub-family-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "Frontend-only prototype for BudgetHub Family SaaS.",
+  "description": "Public SaaS frontend for BudgetHub Family.",
   "scripts": {
     "dev": "npx --yes http-server . -p 5173 -c-1",
     "start": "npm run dev"

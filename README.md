@@ -1,43 +1,42 @@
 # BudgetHub Family
 
-Prototype frontend statique du SaaS BudgetHub Family.
+BudgetHub Family est une interface SaaS moderne pour organiser les finances du foyer: dettes, budget, transactions, objectifs et membres de la famille.
 
-Cette phase ne contient pas de backend Node.js, pas de Stripe réel, pas de Supabase réel et aucune clé API. Toutes les données sont fictives et restent dans le navigateur.
+## Fonctionnalités
 
-## Stack
-
-- HTML5
-- CSS3
-- JavaScript Vanilla
-- Aucun framework applicatif
-
-## Fonctionnalités incluses
-
-- Landing page professionnelle
-- Pricing: Free, Solo, Family, Family Plus
-- Login/Register mock
-- Dashboard applicatif
-- Dettes avec limite de démo
-- Comparaison Snowball/Avalanche
-- Budget
+- Landing page publique bilingue
+- Tarifs Free, Solo, Family et Family Plus
+- Connexion et inscription
+- Démo gratuite
+- Tableau de bord financier
+- Gestion des dettes
+- Comparaison Snowball et Avalanche
+- Budget familial
 - Transactions
 - Objectifs
-- Membres famille avec limite de démo
+- Membres famille
 - Paramètres
-- Français/Anglais
-- CAD/USD/EUR
-- Dark mode
+- Français et anglais
+- CAD, USD et EUR
+- Mode sombre
 - Responsive mobile, tablette et desktop
+
+## Plans
+
+- Free: 0$, 1 membre, 2 dettes, données locales dans le navigateur
+- Solo: 10$/mois, 1 utilisateur, dettes, budgets et objectifs illimités
+- Family: 15$/mois, jusqu’à 5 membres, budget familial et objectifs communs
+- Family Plus: 20$/mois, jusqu’à 10 membres, prévisions avancées, rapports et export PDF
 
 ## Lancer localement
 
-Option simple:
+Ouvrir directement:
 
 ```bash
-open index.html
+index.html
 ```
 
-Option serveur statique:
+Ou servir le dossier:
 
 ```bash
 npm run dev
@@ -49,17 +48,9 @@ Puis ouvrir:
 http://localhost:5173
 ```
 
-Le script `npm run dev` utilise `npx http-server` pour servir les fichiers statiques. Il ne démarre pas de backend applicatif.
+## Environnement
 
-## Variables d'environnement
-
-Copier `.env.example` vers `.env` pour les essais locaux:
-
-```bash
-cp .env.example .env
-```
-
-Le fichier `.env` est ignoré par Git. Ne jamais y mettre de secrets réels pour ce prototype frontend.
+`.env.example` fournit un modèle de configuration locale. Le fichier `.env` est ignoré par Git et ne doit pas être commité.
 
 ## Structure
 
@@ -77,10 +68,3 @@ Le fichier `.env` est ignoré par Git. Ne jamais y mettre de secrets réels pour
 ├── DATABASE_SCHEMA_DRAFT.md
 └── API_DOCUMENTATION_DRAFT.md
 ```
-
-## Notes d'intégration future
-
-- Remplacer les données mockées de `app.js` par des appels API.
-- Brancher l'authentification Supabase ou une auth serveur quand la phase backend commence.
-- Ajouter Stripe Checkout et le portail client côté backend uniquement.
-- Faire respecter les limites de plan côté serveur, pas seulement côté frontend.

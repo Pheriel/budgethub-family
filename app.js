@@ -5,14 +5,14 @@ const translations = {
     navSecurity: "Sécurité",
     login: "Connexion",
     freeDemo: "Démo gratuite",
-    heroEyebrow: "Prototype SaaS financier familial",
+    heroEyebrow: "Plateforme de budget familial",
     heroTitle: "Le cockpit moderne pour reprendre le contrôle des finances familiales.",
     heroCopy: "BudgetHub Family réunit dettes, budget, transactions, objectifs et membres de la famille dans un tableau de bord clair, collaboratif et prêt pour la croissance.",
     tryDemo: "Tester la démo",
     seePricing: "Voir les tarifs",
     trustNoCard: "Sans carte",
-    trustMock: "Données mockées",
-    trustReady: "Prêt API plus tard",
+    trustTrial: "Essai sans engagement",
+    trustFamily: "Pensé pour les familles",
     heroDebtFree: "Date sans dette",
     heroMonthlyBudget: "Budget mensuel",
     heroGoals: "Objectifs actifs",
@@ -24,13 +24,13 @@ const translations = {
     featureBudgetCopy: "Suivez les catégories clés, les écarts et les dépenses récurrentes.",
     featureFamilyTitle: "Famille organisée",
     featureFamilyCopy: "Gérez les rôles, membres et objectifs communs selon votre plan.",
-    featureMockTitle: "Prêt à brancher",
-    featureMockCopy: "Architecture front simple, sans clé réelle, pensée pour Node.js, Supabase et Stripe.",
+    featureClarityTitle: "Vision claire",
+    featureClarityCopy: "Des indicateurs simples pour décider quoi rembourser, où ajuster et comment avancer ensemble.",
     pricingEyebrow: "Plans simples",
     pricingTitle: "Commencez gratuitement, grandissez avec votre famille.",
-    securityEyebrow: "Fondations propres",
-    securityTitle: "Aucune vraie intégration payante ou base de données dans cette phase.",
-    securityCopy: "Ce prototype utilise uniquement le navigateur et des données fictives. Les fichiers de documentation inclus préparent les prochaines étapes sans créer de tables ni exposer de clés.",
+    securityEyebrow: "Confiance et clarté",
+    securityTitle: "Une expérience simple pour organiser l’argent du foyer sans stress.",
+    securityCopy: "Essayez BudgetHub Family gratuitement, explorez les outils essentiels et choisissez le plan qui correspond à votre famille quand vous êtes prêt.",
     appDashboard: "Tableau",
     appDebts: "Dettes",
     appStrategy: "Snowball/Avalanche",
@@ -45,8 +45,8 @@ const translations = {
     demoNotice: "Démo gratuite: 2 dettes maximum et 1 membre famille maximum. Les données restent dans le navigateur.",
     email: "Courriel",
     password: "Mot de passe",
-    continueMock: "Continuer en mock",
-    authNote: "Aucune authentification réelle pour cette phase frontend.",
+    continue: "Continuer",
+    authNote: "Accédez à votre espace BudgetHub Family et retrouvez vos finances au même endroit.",
     month: "/mois",
     choosePlan: "Choisir",
     current: "Actuel",
@@ -81,7 +81,7 @@ const translations = {
     member: "Membre",
     role: "Rôle",
     progress: "Progrès",
-    settingsCopy: "Ces réglages sont locaux pour le prototype. Plus tard, ils seront synchronisés avec le compte utilisateur.",
+    settingsCopy: "Personnalisez votre expérience BudgetHub Family selon votre langue, votre devise et votre préférence d’affichage.",
     darkMode: "Mode sombre",
     language: "Langue",
     currency: "Devise",
@@ -95,14 +95,14 @@ const translations = {
     navSecurity: "Security",
     login: "Login",
     freeDemo: "Free demo",
-    heroEyebrow: "Family finance SaaS prototype",
+    heroEyebrow: "Family budgeting platform",
     heroTitle: "The modern cockpit for taking control of family finances.",
     heroCopy: "BudgetHub Family brings debts, budget, transactions, goals, and family members into a clear collaborative dashboard built to grow.",
     tryDemo: "Try the demo",
     seePricing: "See pricing",
     trustNoCard: "No card",
-    trustMock: "Mock data",
-    trustReady: "API-ready later",
+    trustTrial: "No commitment trial",
+    trustFamily: "Built for families",
     heroDebtFree: "Debt-free date",
     heroMonthlyBudget: "Monthly budget",
     heroGoals: "Active goals",
@@ -114,13 +114,13 @@ const translations = {
     featureBudgetCopy: "Track key categories, gaps, and recurring expenses.",
     featureFamilyTitle: "Organized family",
     featureFamilyCopy: "Manage roles, members, and shared goals according to your plan.",
-    featureMockTitle: "Ready to connect",
-    featureMockCopy: "Simple frontend architecture, no real keys, designed for Node.js, Supabase, and Stripe.",
+    featureClarityTitle: "Clear direction",
+    featureClarityCopy: "Simple indicators help you decide what to pay down, where to adjust, and how to move forward together.",
     pricingEyebrow: "Simple plans",
     pricingTitle: "Start free, grow with your family.",
-    securityEyebrow: "Clean foundations",
-    securityTitle: "No real payment or database integration in this phase.",
-    securityCopy: "This prototype only uses the browser and mock data. Included documentation prepares the next steps without creating tables or exposing keys.",
+    securityEyebrow: "Confidence and clarity",
+    securityTitle: "A calmer way to organize household money.",
+    securityCopy: "Try BudgetHub Family for free, explore the essential tools, and choose the plan that fits your household when you are ready.",
     appDashboard: "Dashboard",
     appDebts: "Debts",
     appStrategy: "Snowball/Avalanche",
@@ -135,8 +135,8 @@ const translations = {
     demoNotice: "Free demo: 2 debts maximum and 1 family member maximum. Data stays in the browser.",
     email: "Email",
     password: "Password",
-    continueMock: "Continue mock",
-    authNote: "No real authentication for this frontend phase.",
+    continue: "Continue",
+    authNote: "Access your BudgetHub Family workspace and keep your finances organized in one place.",
     month: "/month",
     choosePlan: "Choose",
     current: "Current",
@@ -171,7 +171,7 @@ const translations = {
     member: "Member",
     role: "Role",
     progress: "Progress",
-    settingsCopy: "These settings are local for the prototype. Later, they will sync with the user account.",
+    settingsCopy: "Personalize BudgetHub Family with your preferred language, currency, and display mode.",
     darkMode: "Dark mode",
     language: "Language",
     currency: "Currency",
@@ -183,9 +183,9 @@ const translations = {
 
 const planDefinitions = [
   { id: "free", name: "Free", price: 0, members: 1, debts: 2, featured: false },
-  { id: "solo", name: "Solo", price: 9.99, members: 1, debts: 20, featured: false },
-  { id: "family", name: "Family", price: 14.99, members: 5, debts: 50, featured: true },
-  { id: "familyPlus", name: "Family Plus", price: 19.99, members: 10, debts: 100, featured: false }
+  { id: "solo", name: "Solo", price: 10, members: 1, debts: Infinity, featured: false },
+  { id: "family", name: "Family", price: 15, members: 5, debts: Infinity, featured: true },
+  { id: "familyPlus", name: "Family Plus", price: 20, members: 10, debts: Infinity, featured: false }
 ];
 
 const currencyMeta = {
@@ -237,6 +237,15 @@ function money(value) {
   }).format(value * meta.rate);
 }
 
+function planMoney(value) {
+  const meta = currencyMeta[state.currency];
+  return new Intl.NumberFormat(meta.locale, {
+    style: "currency",
+    currency: state.currency,
+    maximumFractionDigits: 0
+  }).format(value);
+}
+
 function persistPreferences() {
   localStorage.setItem("bh_lang", state.lang);
   localStorage.setItem("bh_currency", state.currency);
@@ -271,18 +280,75 @@ function renderMoneyTags() {
 
 function renderPricing() {
   const grid = $("#pricingGrid");
+  const planFeatures = {
+    free: {
+      fr: [
+        "1 membre",
+        "2 dettes",
+        "Données locales dans le navigateur",
+        "Parfait pour essayer"
+      ],
+      en: [
+        "1 member",
+        "2 debts",
+        "Local browser data",
+        "Perfect for trying it out"
+      ]
+    },
+    solo: {
+      fr: [
+        "1 utilisateur",
+        "Dettes illimitées",
+        "Budgets illimités",
+        "Objectifs illimités",
+        "Sauvegarde cloud"
+      ],
+      en: [
+        "1 user",
+        "Unlimited debts",
+        "Unlimited budgets",
+        "Unlimited goals",
+        "Cloud backup"
+      ]
+    },
+    family: {
+      fr: [
+        "Jusqu’à 5 membres",
+        "Budget familial",
+        "Objectifs communs",
+        "Suivi dettes, revenus et dépenses par membre"
+      ],
+      en: [
+        "Up to 5 members",
+        "Family budget",
+        "Shared goals",
+        "Track debts, income, and spending by member"
+      ]
+    },
+    familyPlus: {
+      fr: [
+        "Jusqu’à 10 membres",
+        "Prévisions avancées",
+        "Rapports",
+        "Export PDF",
+        "Fonctionnalités premium"
+      ],
+      en: [
+        "Up to 10 members",
+        "Advanced forecasts",
+        "Reports",
+        "PDF export",
+        "Premium features"
+      ]
+    }
+  };
   grid.innerHTML = planDefinitions.map((plan) => {
-    const features = [
-      plan.id === "free" ? "Demo: 2 dettes max" : `${plan.debts} dettes max`,
-      `${plan.members} ${state.lang === "fr" ? "membre(s)" : "member(s)"}`,
-      state.lang === "fr" ? "Budget et objectifs" : "Budget and goals",
-      state.lang === "fr" ? "Stripe plus tard" : "Stripe later"
-    ];
+    const features = planFeatures[plan.id][state.lang];
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
         <h3>${plan.name}</h3>
-        <div class="price">${money(plan.price)} <small>${t("month")}</small></div>
+        <div class="price">${planMoney(plan.price)} <small>${t("month")}</small></div>
         <ul>${features.map((feature) => `<li>${feature}</li>`).join("")}</ul>
         <button class="${plan.id === state.plan ? "secondary-button" : "primary-button"}" data-plan="${plan.id}">
           ${plan.id === state.plan ? t("current") : t("choosePlan")}
@@ -302,7 +368,9 @@ function selectPlan(planId) {
 }
 
 function openApp() {
+  $(".topbar").classList.remove("menu-open");
   $("#landingView").hidden = true;
+  $("#authView").hidden = true;
   $("#appView").hidden = false;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -597,11 +665,22 @@ function updatePreference(key, value) {
 }
 
 function openAuth(mode) {
+  $(".topbar").classList.remove("menu-open");
   $("#authModeLabel").textContent = mode === "register" ? t("createAccount") : t("login");
   $("#authTitle").textContent = mode === "register"
     ? (state.lang === "fr" ? "Créer votre espace famille" : "Create your family workspace")
     : (state.lang === "fr" ? "Accéder à BudgetHub Family" : "Access BudgetHub Family");
-  $("#authModal").showModal();
+  $("#authCopy").textContent = mode === "register"
+    ? (state.lang === "fr"
+      ? "Créez votre espace pour suivre budget, dettes, objectifs et membres de votre foyer."
+      : "Create your workspace to track budget, debts, goals, and household members.")
+    : (state.lang === "fr"
+      ? "Connectez-vous pour retrouver votre budget familial, vos dettes et vos objectifs au même endroit."
+      : "Sign in to keep your family budget, debts, and goals organized in one place.");
+  $("#landingView").hidden = true;
+  $("#appView").hidden = true;
+  $("#authView").hidden = false;
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function boot() {
@@ -616,17 +695,30 @@ function boot() {
   $("#startDemo").addEventListener("click", openApp);
   $("#heroDemo").addEventListener("click", openApp);
   $("#backToLanding").addEventListener("click", () => {
+    $(".topbar").classList.remove("menu-open");
+    $("#appView").hidden = true;
+    $("#authView").hidden = true;
+    $("#landingView").hidden = false;
+  });
+  $("#authBack").addEventListener("click", () => {
+    $(".topbar").classList.remove("menu-open");
+    $("#authView").hidden = true;
     $("#appView").hidden = true;
     $("#landingView").hidden = false;
   });
   $("#openLogin").addEventListener("click", () => openAuth("login"));
   $("#openRegister").addEventListener("click", () => openAuth("register"));
   $("#upgradeButton").addEventListener("click", () => {
+    $(".topbar").classList.remove("menu-open");
     $("#appView").hidden = true;
+    $("#authView").hidden = true;
     $("#landingView").hidden = false;
     document.querySelector("#pricing").scrollIntoView({ behavior: "smooth" });
   });
-  $("#mockAuthButton").addEventListener("click", openApp);
+  $("#authForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    openApp();
+  });
   $$("#appNav button").forEach((button) => button.addEventListener("click", () => {
     state.currentView = button.dataset.view;
     renderView();

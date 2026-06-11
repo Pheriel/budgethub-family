@@ -1,40 +1,26 @@
-# API Documentation Draft
+# Product Interface Draft
 
-Draft pour une future API. Aucune API réelle n'est incluse dans cette phase frontend.
+Document de référence pour les futurs échanges entre l’interface et les services produit.
 
-## Base URL future
+## Familles
 
-```text
-/api
-```
+### Lire la famille active
 
-## Auth
+Retourne la famille, le plan et les limites associées.
 
-Toutes les routes privées devront recevoir une session utilisateur valide.
+### Mettre à jour la famille
 
-```http
-Authorization: Bearer <token>
-```
+Met à jour le nom, la devise ou les préférences.
 
-## Families
+## Dettes
 
-### GET /families/current
+### Lister les dettes
 
-Retourne la famille active, le plan et les limites.
+Retourne les dettes de la famille active.
 
-### PATCH /families/current
+### Créer une dette
 
-Met à jour les préférences de la famille.
-
-## Debts
-
-### GET /debts
-
-Liste les dettes de la famille.
-
-### POST /debts
-
-Crée une dette. Le serveur doit vérifier la limite du plan.
+Champs attendus:
 
 ```json
 {
@@ -45,64 +31,60 @@ Crée une dette. Le serveur doit vérifier la limite du plan.
 }
 ```
 
-### DELETE /debts/:id
+### Supprimer une dette
 
-Supprime une dette.
+Retire une dette du suivi familial.
 
 ## Budget
 
-### GET /budget/categories
+### Lister les catégories
 
-Liste les catégories de budget.
+Retourne les catégories du budget familial.
 
-### POST /budget/categories
+### Créer une catégorie
 
-Crée une catégorie.
+Ajoute une catégorie de budget.
 
 ## Transactions
 
-### GET /transactions
+### Lister les transactions
 
-Paramètres possibles:
+Filtres possibles:
 
 - `from`
 - `to`
 - `categoryId`
 
-### POST /transactions
+### Créer une transaction
 
-Crée une transaction.
+Ajoute une dépense, un revenu ou un paiement.
 
-## Goals
+## Objectifs
 
-### GET /goals
+### Lister les objectifs
 
-Liste les objectifs.
+Retourne les objectifs de la famille.
 
-### POST /goals
+### Créer un objectif
 
-Crée un objectif.
+Ajoute un objectif commun ou personnel.
 
-## Family Members
+## Membres
 
-### GET /members
+### Lister les membres
 
-Liste les membres.
+Retourne les membres de la famille.
 
-### POST /members/invite
+### Inviter un membre
 
-Invite un membre. Le serveur doit vérifier la limite du plan.
+Invite une personne selon les limites du plan.
 
-## Billing
+## Facturation
 
-### POST /billing/create-checkout-session
+### Démarrer un abonnement
 
-Crée une session Stripe Checkout côté serveur.
+Crée un parcours de souscription pour le plan sélectionné.
 
-### POST /billing/create-portal-session
+### Gérer l’abonnement
 
-Crée une session Stripe Customer Portal.
-
-### POST /webhooks/stripe
-
-Reçoit les événements Stripe. Cette route doit utiliser la vérification de signature Stripe.
+Permet de modifier ou annuler le plan.

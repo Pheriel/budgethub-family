@@ -1,16 +1,12 @@
 # Deployment Home Server
 
-Ce document prépare un futur déploiement maison. Le prototype actuel peut être servi comme site statique.
+BudgetHub Family peut être servi comme site statique sur un serveur maison, un hébergement web ou GitHub Pages.
 
-## Déploiement statique simple
-
-Copier les fichiers suivants sur le serveur:
+## Fichiers à publier
 
 - `index.html`
 - `styles.css`
 - `app.js`
-
-Puis servir le dossier avec Nginx, Caddy, Apache ou un serveur statique.
 
 ## Exemple Nginx
 
@@ -37,21 +33,10 @@ budgethub.local {
 }
 ```
 
-## Préparation future backend
+## Checklist
 
-Quand Node.js sera ajouté:
-
-- Servir le frontend statique depuis un reverse proxy.
-- Exposer l'API sur `/api`.
-- Garder Stripe secret keys uniquement côté serveur.
-- Garder Supabase service role key uniquement côté serveur.
-- Utiliser HTTPS, même sur un serveur maison exposé à Internet.
-
-## Checklist sécurité
-
-- Ne pas exposer `.env`.
-- Ne pas committer de secrets.
-- Activer HTTPS.
-- Ajouter sauvegardes régulières.
-- Mettre à jour le système et les dépendances.
-- Limiter les ports ouverts.
+- Publier uniquement les fichiers nécessaires
+- Ne jamais publier `.env`
+- Activer HTTPS pour un domaine public
+- Garder des sauvegardes du dossier publié
+- Vérifier le rendu mobile après chaque mise à jour

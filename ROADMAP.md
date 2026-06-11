@@ -1,42 +1,35 @@
 # Roadmap
 
-## Phase 1 - Frontend prototype
+## Expérience publique
 
-- Landing page, pricing et démo gratuite.
-- Dashboard avec données mockées.
-- Navigation complète des modules.
-- Français/Anglais, CAD/USD/EUR, dark mode.
-- Documentation initiale.
+- Landing page crédible et bilingue
+- Tarifs clairs
+- Démo gratuite
+- Mode sombre
+- Responsive mobile, tablette et desktop
 
-Statut: complété dans ce prototype.
+## Produit
 
-## Phase 2 - Backend Node.js
+- Dashboard familial
+- Dettes et stratégies Snowball/Avalanche
+- Budgets et catégories
+- Transactions
+- Objectifs
+- Membres et rôles
+- Paramètres de langue et devise
 
-- Créer une API REST ou GraphQL.
-- Ajouter validation serveur.
-- Centraliser les règles de plans.
-- Ajouter authentification réelle.
-- Ajouter tests d'API.
+## Croissance
 
-## Phase 3 - Supabase
+- Sauvegarde cloud
+- Invitations famille
+- Rapports avancés
+- Export PDF
+- Prévisions financières
+- Fonctionnalités premium Family Plus
 
-- Créer le projet et les tables seulement après validation du schéma.
-- Ajouter Row Level Security.
-- Ajouter migrations.
-- Connecter utilisateurs, familles, dettes, budgets, transactions et objectifs.
+## Qualité
 
-## Phase 4 - Stripe
-
-- Créer produits et prix Stripe.
-- Ajouter Checkout Session côté backend.
-- Ajouter Customer Portal.
-- Gérer webhooks de souscription.
-- Synchroniser l'état du plan avec la base de données.
-
-## Phase 5 - Production
-
-- Observabilité, logs et alertes.
-- Sauvegardes base de données.
-- Politique de confidentialité et conditions.
-- Durcissement sécurité.
-- Tests end-to-end.
+- Tests de parcours utilisateur
+- Accessibilité
+- Optimisation performance
+- Amélioration continue des textes et conversions
