@@ -1,7 +1,7 @@
 const express = require("express");
 
 const { createStripeClient } = require("../config/stripe");
-const { handleCheckoutCompleted } = require("../services/billing.service");
+const { handleCheckoutCompleted, syncUserPlan } = require("../services/billing.service");
 
 const router = express.Router();
 
@@ -29,6 +29,21 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
   } catch (error) {
     console.error("Webhook processing failed:", error.message);
     res.status(500).json({ error: "Webhook processing failed." });
+  }
+});
+
+// Vérifie les achats Stripe d'un utilisateur et met à jour son plan
+router.get("/sync/:userId", async (req, res) => {
+  const { userId } = req.params;
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+    return res.status(400).json({ error: "Invalid user id." });
+  }
+  try {
+    const result = await syncUserPlan(userId);
+    res.json(result);
+  } catch (error) {
+    console.error("Billing sync failed:", error.message);
+    res.status(500).json({ error: "Billing sync failed." });
   }
 });
 

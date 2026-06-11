@@ -200,6 +200,10 @@ const supabaseClient = window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 
+const BACKEND_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  ? "http://localhost:3000"
+  : "";
+
 const stripePaymentLinks = {
   solo: "https://buy.stripe.com/test_7sYeVedo8gUwaU89Kr9Ve00",
   family: "https://buy.stripe.com/test_4gM28sdo847KbYc5ub9Ve01",
@@ -404,11 +408,31 @@ function setSessionUser(user) {
     logoutButton.hidden = false;
     registerButton.hidden = true;
     $("#demoNotice").hidden = true;
+    $("#openLogin").hidden = true;
+    $("#topRegister").hidden = true;
+    $("#startDemo").hidden = true;
   } else {
     chip.hidden = true;
     logoutButton.hidden = true;
     registerButton.hidden = false;
     $("#demoNotice").hidden = false;
+    $("#openLogin").hidden = false;
+    $("#topRegister").hidden = false;
+    $("#startDemo").hidden = false;
+  }
+}
+
+// Demande au backend de vérifier les achats Stripe récents et de mettre à jour le plan
+async function syncBillingPlan() {
+  if (!BACKEND_URL || !state.user) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/billing/sync/${state.user.id}`);
+    if (response.ok) {
+      const result = await response.json();
+      if (result.updated) loadProfilePlan();
+    }
+  } catch (_error) {
+    // Backend hors ligne: le plan sera synchronisé via webhook ou à la prochaine connexion
   }
 }
 
@@ -497,12 +521,31 @@ function selectPlan(planId) {
   openApp();
 }
 
-function openApp() {
+// Une seule vue visible à la fois — corrige les superpositions accueil/app
+function showView(name) {
   $(".topbar").classList.remove("menu-open");
-  $("#landingView").hidden = true;
-  $("#authView").hidden = true;
-  $("#appView").hidden = false;
+  $("#landingView").hidden = name !== "landing";
+  $("#authView").hidden = name !== "auth";
+  $("#appView").hidden = name !== "app";
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+const landingPages = ["home", "features", "pricing", "security"];
+
+function showLandingPage(page) {
+  const target = landingPages.includes(page) ? page : "home";
+  showView("landing");
+  landingPages.forEach((id) => {
+    $(`#${id}`).hidden = id !== target && target !== "home";
+  });
+  $$(".landing-nav a").forEach((link) => {
+    link.classList.toggle("active", link.getAttribute("href") === `#${target}`);
+  });
+}
+
+function openApp() {
+  showView("app");
+  renderView();
 }
 
 function getViewTitle(view) {
@@ -955,10 +998,13 @@ function openAuth(mode) {
     : (state.lang === "fr"
       ? "Connectez-vous pour retrouver votre budget familial, vos dettes et vos objectifs au même endroit."
       : "Sign in to keep your family budget, debts, and goals organized in one place.");
-  $("#landingView").hidden = true;
-  $("#appView").hidden = true;
-  $("#authView").hidden = false;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  const authForm = $("#authForm");
+  authForm.reset();
+  authForm.elements.password.setAttribute(
+    "autocomplete",
+    mode === "register" ? "new-password" : "current-password"
+  );
+  showView("auth");
 }
 
 function boot() {
@@ -972,18 +1018,31 @@ function boot() {
   $("#menuToggle").addEventListener("click", () => $(".topbar").classList.toggle("menu-open"));
   $("#startDemo").addEventListener("click", openApp);
   $("#heroDemo").addEventListener("click", openApp);
-  $("#backToLanding").addEventListener("click", () => {
-    $(".topbar").classList.remove("menu-open");
-    $("#appView").hidden = true;
-    $("#authView").hidden = true;
-    $("#landingView").hidden = false;
+  $("#backToLanding").addEventListener("click", () => showLandingPage("home"));
+  $("#authBack").addEventListener("click", () => showLandingPage("home"));
+
+  // Navigation multi-pages: Fonctions / Tarifs / Sécurité sont des pages distinctes
+  $$(".landing-nav a").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const page = link.getAttribute("href").replace("#", "");
+      history.replaceState(null, "", `#${page}`);
+      showLandingPage(page);
+    });
   });
-  $("#authBack").addEventListener("click", () => {
-    $(".topbar").classList.remove("menu-open");
-    $("#authView").hidden = true;
-    $("#appView").hidden = true;
-    $("#landingView").hidden = false;
+  document.querySelector(".brand").addEventListener("click", (event) => {
+    event.preventDefault();
+    history.replaceState(null, "", "#home");
+    showLandingPage("home");
   });
+  const pricingLink = document.querySelector('a[href="#pricing"].secondary-link, .hero a[href="#pricing"]');
+  if (pricingLink) {
+    pricingLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      history.replaceState(null, "", "#pricing");
+      showLandingPage("pricing");
+    });
+  }
   $("#openLogin").addEventListener("click", () => openAuth("login"));
   $("#topRegister").addEventListener("click", () => openAuth("register"));
   $("#openRegister").addEventListener("click", () => openAuth("register"));
@@ -993,9 +1052,7 @@ function boot() {
     setSessionUser(null);
     state.plan = "free";
     loadDemoData();
-    $("#appView").hidden = true;
-    $("#authView").hidden = true;
-    $("#landingView").hidden = false;
+    showLandingPage("home");
   });
 
   $("#forgotPassword").addEventListener("click", async () => {
@@ -1022,6 +1079,7 @@ function boot() {
       if (data.session) {
         setSessionUser(data.session.user);
         loadProfilePlan();
+        syncBillingPlan();
         loadUserData();
         openApp();
       }
@@ -1039,17 +1097,15 @@ function boot() {
         // Connexion via lien de confirmation courriel
         setSessionUser(session.user);
         loadProfilePlan();
+        syncBillingPlan();
         loadUserData();
         openApp();
       }
     });
   }
   $("#upgradeButton").addEventListener("click", () => {
-    $(".topbar").classList.remove("menu-open");
-    $("#appView").hidden = true;
-    $("#authView").hidden = true;
-    $("#landingView").hidden = false;
-    document.querySelector("#pricing").scrollIntoView({ behavior: "smooth" });
+    history.replaceState(null, "", "#pricing");
+    showLandingPage("pricing");
   });
   $("#authForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1090,6 +1146,7 @@ function boot() {
         if (error) throw error;
         setSessionUser(data.user);
         loadProfilePlan();
+        syncBillingPlan();
         loadUserData();
       }
       openApp();
@@ -1111,6 +1168,12 @@ function boot() {
     state.currentView = button.dataset.view;
     renderView();
   }));
+
+  // Page d'atterrissage selon le hash (ex: #pricing), sans casser les liens de confirmation Supabase
+  const initialHash = window.location.hash.replace("#", "");
+  if (landingPages.includes(initialHash) && initialHash !== "home") {
+    showLandingPage(initialHash);
+  }
 }
 
 boot();

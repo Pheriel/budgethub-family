@@ -44,4 +44,19 @@ async function handleCheckoutCompleted(session) {
   return { updated: true, plan };
 }
 
-module.exports = { handleCheckoutCompleted };
+// Cherche les achats récents d'un utilisateur (fallback quand le webhook n'est pas joignable)
+async function syncUserPlan(userId) {
+  const stripe = createStripeClient();
+  if (!stripe) return { updated: false, reason: "stripe_not_configured" };
+
+  const sessions = await stripe.checkout.sessions.list({ limit: 100 });
+  const completed = sessions.data.find(
+    (session) => session.client_reference_id === userId && session.status === "complete"
+  );
+
+  if (!completed) return { updated: false, reason: "no_completed_checkout" };
+
+  return handleCheckoutCompleted(completed);
+}
+
+module.exports = { handleCheckoutCompleted, syncUserPlan };

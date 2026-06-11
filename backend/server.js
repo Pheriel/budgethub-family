@@ -19,7 +19,14 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL || true }));
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://localhost:5180",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5180"
+].filter(Boolean);
+app.use(cors({ origin: allowedOrigins }));
 // Le webhook Stripe doit recevoir le corps brut, avant express.json()
 app.use("/api/billing", billingRoutes);
 app.use(express.json());
