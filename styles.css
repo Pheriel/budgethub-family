@@ -3,6 +3,10 @@
   display: none !important;
 }
 
+#userEmailChip {
+  cursor: pointer;
+}
+
 :root {
   color-scheme: light;
   --bg: #f6f7fb;

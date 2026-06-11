@@ -420,6 +420,7 @@ function setSessionUser(user) {
     $("#topRegister").hidden = false;
     $("#startDemo").hidden = false;
   }
+  updateUpgradeButton();
 }
 
 // Demande au backend de vérifier les achats Stripe récents et de mettre à jour le plan
@@ -446,6 +447,7 @@ async function loadProfilePlan() {
   if (!error && data && data.plan) {
     state.plan = data.plan;
     $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan)?.name || data.plan;
+    updateUpgradeButton();
     renderPricing();
     renderView();
   }
@@ -549,6 +551,7 @@ function openApp() {
 }
 
 function getViewTitle(view) {
+  if (view === "account") return state.lang === "fr" ? "Mon compte" : "My account";
   const keys = {
     dashboard: "dashboardTitle",
     debts: "debtsTitle",
@@ -575,7 +578,8 @@ function renderView() {
     transactions: renderTransactions,
     goals: renderGoals,
     family: renderFamily,
-    settings: renderSettings
+    settings: renderSettings,
+    account: renderAccount
   };
   $("#viewContainer").innerHTML = renderers[state.currentView]();
   bindViewActions();
@@ -793,6 +797,45 @@ function renderFamily() {
   `;
 }
 
+function renderAccount() {
+  const plan = planDefinitions.find((item) => item.id === state.plan) || planDefinitions[0];
+  const fr = state.lang === "fr";
+  return `
+    <section class="panel">
+      <h3>${fr ? "Mon compte" : "My account"}</h3>
+      <div class="form-grid">
+        <label><span>${t("email")}</span><input value="${state.user ? state.user.email : ""}" disabled /></label>
+      </div>
+    </section>
+    <section class="panel">
+      <h3>${fr ? "Mon abonnement" : "My subscription"}</h3>
+      <p><strong>${plan.name}</strong> · ${planMoney(plan.price)}${t("month")}</p>
+      <p class="form-note">${fr
+        ? (plan.id === "free" ? "Vous êtes sur le plan gratuit." : "Abonnement actif, payé via Stripe.")
+        : (plan.id === "free" ? "You are on the free plan." : "Active subscription, paid via Stripe.")}</p>
+      <button class="primary-button" id="changePlanButton" type="button">${fr ? "Changer de plan" : "Change plan"}</button>
+    </section>
+    <section class="panel">
+      <h3>${fr ? "Changer le mot de passe" : "Change password"}</h3>
+      <form class="form-grid" id="passwordForm">
+        <label><span>${fr ? "Nouveau mot de passe" : "New password"}</span><input name="newPassword" type="password" minlength="6" required autocomplete="new-password" /></label>
+        <button class="primary-button" type="submit">${fr ? "Mettre à jour" : "Update"}</button>
+      </form>
+      <p class="form-note" id="passwordNote" hidden></p>
+    </section>
+  `;
+}
+
+function updateUpgradeButton() {
+  const button = $("#upgradeButton");
+  if (state.user && state.plan !== "free") {
+    const plan = planDefinitions.find((item) => item.id === state.plan);
+    button.textContent = state.lang === "fr" ? `Plan: ${plan.name}` : `Plan: ${plan.name}`;
+  } else {
+    button.textContent = t("upgrade");
+  }
+}
+
 function renderSettings() {
   const passwordSection = state.user ? `
     <section class="panel">
@@ -934,6 +977,14 @@ function bindViewActions() {
       renderView();
     }));
   });
+
+  const changePlanButton = $("#changePlanButton");
+  if (changePlanButton) {
+    changePlanButton.addEventListener("click", () => {
+      history.replaceState(null, "", "#pricing");
+      showLandingPage("pricing");
+    });
+  }
 
   const passwordForm = $("#passwordForm");
   if (passwordForm) {
@@ -1104,8 +1155,22 @@ function boot() {
     });
   }
   $("#upgradeButton").addEventListener("click", () => {
+    if (state.user && state.plan !== "free") {
+      state.currentView = "account";
+      renderView();
+      return;
+    }
     history.replaceState(null, "", "#pricing");
     showLandingPage("pricing");
+  });
+  $("#userEmailChip").addEventListener("click", () => {
+    state.currentView = "account";
+    showView("app");
+    renderView();
+  });
+  // Au retour d'un paiement Stripe (autre onglet), re-synchroniser le plan
+  window.addEventListener("focus", () => {
+    if (state.user) syncBillingPlan();
   });
   $("#authForm").addEventListener("submit", async (event) => {
     event.preventDefault();
