@@ -411,6 +411,9 @@ function setSessionUser(user) {
     $("#openLogin").hidden = true;
     $("#topRegister").hidden = true;
     $("#startDemo").hidden = true;
+    const workspaceButton = $("#openWorkspace");
+    workspaceButton.textContent = state.lang === "fr" ? "Mon espace" : "My workspace";
+    workspaceButton.hidden = false;
   } else {
     chip.hidden = true;
     logoutButton.hidden = true;
@@ -419,6 +422,7 @@ function setSessionUser(user) {
     $("#openLogin").hidden = false;
     $("#topRegister").hidden = false;
     $("#startDemo").hidden = false;
+    $("#openWorkspace").hidden = true;
   }
   updateUpgradeButton();
 }
@@ -460,7 +464,7 @@ async function loadUserData() {
     supabaseClient.from("budget_categories").select("id,category,planned,spent").order("created_at"),
     supabaseClient.from("transactions").select("id,date,name,category,amount").order("date", { ascending: false }),
     supabaseClient.from("goals").select("id,name,target,saved").order("created_at"),
-    supabaseClient.from("family_members").select("id,name,role").order("created_at")
+    supabaseClient.from("family_members").select("id,name,role,email").order("created_at")
   ]);
   state.debts = (debts.data || []).map((row) => ({
     id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment)
@@ -474,7 +478,7 @@ async function loadUserData() {
   state.goals = (goals.data || []).map((row) => ({
     id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved)
   }));
-  state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role }));
+  state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "" }));
   renderView();
 }
 
@@ -526,6 +530,8 @@ function selectPlan(planId) {
 // Une seule vue visible à la fois — corrige les superpositions accueil/app
 function showView(name) {
   $(".topbar").classList.remove("menu-open");
+  // Dans l'app, la barre d'accueil disparaît: une seule barre à l'écran
+  $(".topbar").hidden = name === "app";
   $("#landingView").hidden = name !== "landing";
   $("#authView").hidden = name !== "auth";
   $("#appView").hidden = name !== "app";
@@ -634,6 +640,7 @@ function renderDebts() {
         <label><span>${t("name")}</span><input name="name" required placeholder="Mastercard" /></label>
         <label><span>${t("balance")}</span><input name="balance" required type="number" min="1" placeholder="2500" /></label>
         <label><span>${t("rate")}</span><input name="rate" required type="number" min="0" step="0.01" placeholder="18.99" /></label>
+        <label><span>${t("minPayment")}</span><input name="minPayment" required type="number" min="0" step="0.01" placeholder="75" /></label>
         <button class="primary-button" type="submit">${t("addDebt")}</button>
       </form>
       <div id="limitMessage"></div>
@@ -642,11 +649,18 @@ function renderDebts() {
   `;
 }
 
+// Paiement recommandé: couvre les intérêts du mois + 1% du capital (minimum 35$)
+function recommendedPayment(debt) {
+  const monthlyInterest = (debt.balance * debt.rate) / 100 / 12;
+  return Math.max(debt.minPayment, Math.max(35, Math.round(monthlyInterest + debt.balance * 0.01)));
+}
+
 function debtTable(actions) {
+  const recommendedLabel = state.lang === "fr" ? "Paiement recommandé" : "Recommended payment";
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${t("minPayment")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${t("minPayment")}</th><th>${recommendedLabel}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.debts.map((debt, index) => `
             <tr>
@@ -654,6 +668,7 @@ function debtTable(actions) {
               <td>${money(debt.balance)}</td>
               <td>${debt.rate.toFixed(2)}%</td>
               <td>${money(debt.minPayment)}</td>
+              <td>${money(recommendedPayment(debt))}</td>
               ${actions ? `<td><button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
             </tr>
           `).join("")}
@@ -781,15 +796,19 @@ function renderFamily() {
     <section class="panel">
       <form class="form-grid" id="memberForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="Sam" /></label>
+        <label><span>${t("email")}</span><input name="email" type="email" ${state.user ? "required" : ""} placeholder="sam@example.com" /></label>
         <label><span>${t("role")}</span><select name="role"><option>Admin</option><option>Parent</option><option>Viewer</option></select></label>
-        <button class="primary-button" type="submit">${t("addMember")}</button>
+        <button class="primary-button" type="submit">${state.user ? (state.lang === "fr" ? "Inviter le membre" : "Invite member") : t("addMember")}</button>
       </form>
+      ${state.user ? `<p class="form-note">${state.lang === "fr"
+        ? "Le membre recevra un courriel d'invitation pour choisir son mot de passe. Son compte sera relié à votre plan."
+        : "The member will receive an invitation email to choose their password. Their account will be linked to your plan."}</p>` : ""}
       <div id="limitMessage"></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>${t("member")}</th><th>${t("role")}</th><th>${t("action")}</th></tr></thead>
+          <thead><tr><th>${t("member")}</th><th>${t("email")}</th><th>${t("role")}</th><th>${t("action")}</th></tr></thead>
           <tbody>
-            ${state.members.map((member, index) => `<tr><td>${member.name}</td><td>${member.role}</td><td><button class="secondary-button" data-remove-member="${index}">${t("remove")}</button></td></tr>`).join("")}
+            ${state.members.map((member, index) => `<tr><td>${member.name}</td><td>${member.email || "—"}</td><td>${member.role}</td><td><button class="secondary-button" data-remove-member="${index}">${t("remove")}</button></td></tr>`).join("")}
           </tbody>
         </table>
       </div>
@@ -866,14 +885,14 @@ function bindViewActions() {
     debtForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const plan = planDefinitions.find((item) => item.id === state.plan);
-      if (state.debts.length >= plan.debts) return showLimit(t("demoLimitDebt"));
+      if (state.debts.length >= plan.debts) return showLimit(planLimitMessage("debts"));
       const form = new FormData(debtForm);
       const balance = Number(form.get("balance"));
       const debt = {
         name: form.get("name"),
         balance,
         rate: Number(form.get("rate")),
-        minPayment: Math.max(35, Math.round(balance * 0.03))
+        minPayment: Number(form.get("minPayment"))
       };
       if (state.user) {
         const row = await dbInsert("debts", {
@@ -891,13 +910,67 @@ function bindViewActions() {
     memberForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const plan = planDefinitions.find((item) => item.id === state.plan);
-      if (state.members.length >= plan.members) return showLimit(t("demoLimitMember"));
+      if (state.members.length >= plan.members) return showLimit(planLimitMessage("members"));
       const form = new FormData(memberForm);
-      const member = { name: form.get("name"), role: form.get("role") };
+      const member = { name: form.get("name"), role: form.get("role"), email: form.get("email") || "" };
+
       if (state.user) {
-        const row = await dbInsert("family_members", member);
-        if (row) member.id = row.id;
+        // Invitation réelle: le backend crée le compte du membre et l'envoie par courriel
+        if (!BACKEND_URL) {
+          return showLimit(state.lang === "fr"
+            ? "Le serveur d'invitations n'est pas joignable depuis cette adresse."
+            : "The invitation server is not reachable from this address.");
+        }
+        const submitButton = memberForm.querySelector("button[type=submit]");
+        submitButton.disabled = true;
+        try {
+          const response = await fetch(`${BACKEND_URL}/api/members/invite`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              inviterId: state.user.id,
+              email: member.email,
+              name: member.name,
+              role: member.role
+            })
+          });
+          const result = await response.json();
+          if (response.ok && result.invited) {
+            member.id = result.member.id;
+            state.members.push(member);
+            renderView();
+            showLimit(state.lang === "fr"
+              ? `Invitation envoyée à ${member.email}.`
+              : `Invitation sent to ${member.email}.`);
+          } else if (result.error === "member_limit_reached") {
+            showLimit(planLimitMessage("members"));
+          } else if (result.error === "email_already_registered") {
+            showLimit(state.lang === "fr"
+              ? "Un compte existe déjà avec ce courriel."
+              : "An account already exists with this email.");
+          } else if (result.error === "email_rate_limited") {
+            showLimit(state.lang === "fr"
+              ? "Limite d'envoi de courriels atteinte (Supabase gratuit: ~2/heure). Réessayez dans une heure."
+              : "Email sending limit reached (free Supabase: ~2/hour). Try again in an hour.");
+          } else if (result.error === "email_invalid") {
+            showLimit(state.lang === "fr"
+              ? "Cette adresse courriel est refusée par Supabase."
+              : "This email address is rejected by Supabase.");
+          } else {
+            showLimit(state.lang === "fr"
+              ? "L'invitation a échoué. Vérifiez que le backend est démarré."
+              : "The invitation failed. Check that the backend is running.");
+          }
+        } catch (_error) {
+          showLimit(state.lang === "fr"
+            ? "Backend injoignable: démarrez le serveur (port 3000) puis réessayez."
+            : "Backend unreachable: start the server (port 3000) and try again.");
+        } finally {
+          submitButton.disabled = false;
+        }
+        return;
       }
+
       state.members.push(member);
       renderView();
     });
@@ -1011,6 +1084,25 @@ function bindViewActions() {
     $("#settingsCurrency").addEventListener("change", (event) => updatePreference("currency", event.target.value));
     $("#settingsTheme").addEventListener("change", (event) => updatePreference("theme", event.target.value));
   }
+}
+
+// Message de limite adapté au plan réel de l'utilisateur
+function planLimitMessage(kind) {
+  const plan = planDefinitions.find((item) => item.id === state.plan);
+  const fr = state.lang === "fr";
+  if (kind === "debts") {
+    if (!state.user) return t("demoLimitDebt");
+    return fr
+      ? `Limite du plan ${plan.name}: ${plan.debts} dettes maximum. Passez à un plan supérieur pour des dettes illimitées.`
+      : `${plan.name} plan limit: ${plan.debts} debts maximum. Upgrade for unlimited debts.`;
+  }
+  if (!state.user) return t("demoLimitMember");
+  const upgradeHint = plan.id === "family"
+    ? (fr ? "Passez à Family Plus pour 10 membres." : "Upgrade to Family Plus for 10 members.")
+    : (fr ? "Passez à Family (5 membres) ou Family Plus (10 membres)." : "Upgrade to Family (5 members) or Family Plus (10 members).");
+  return fr
+    ? `Limite du plan ${plan.name}: ${plan.members} membre${plan.members > 1 ? "s" : ""} maximum. ${upgradeHint}`
+    : `${plan.name} plan limit: ${plan.members} member${plan.members > 1 ? "s" : ""} maximum. ${upgradeHint}`;
 }
 
 function showLimit(message) {
@@ -1162,6 +1254,10 @@ function boot() {
     }
     history.replaceState(null, "", "#pricing");
     showLandingPage("pricing");
+  });
+  $("#openWorkspace").addEventListener("click", () => {
+    showView("app");
+    renderView();
   });
   $("#userEmailChip").addEventListener("click", () => {
     state.currentView = "account";
