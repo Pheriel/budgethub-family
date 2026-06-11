@@ -1,3 +1,8 @@
+/* L'attribut hidden doit toujours gagner sur les display: grid/flex des classes */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: light;
   --bg: #f6f7fb;
