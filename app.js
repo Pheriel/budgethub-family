@@ -439,6 +439,7 @@ const state = {
   currency: localStorage.getItem("bh_currency") || detectDefaultCurrency(),
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
+  role: "Owner",
   currentView: "dashboard",
   debts: [],
   budget: [],
@@ -717,8 +718,92 @@ function durationSuffix() {
   }[state.billingDuration];
 }
 
+// Permissions par rôle famille — miroir de services/permissions.js (le backend
+// et les policies Supabase restent la vraie barrière, ceci pilote seulement l'UI)
+const rolePermissions = {
+  Owner: { manageBilling: true, inviteMembers: true, removeMembers: true, changeRoles: true, editData: true },
+  Admin: { manageBilling: false, inviteMembers: true, removeMembers: true, changeRoles: false, editData: true },
+  Editor: { manageBilling: false, inviteMembers: false, removeMembers: false, changeRoles: false, editData: true },
+  Viewer: { manageBilling: false, inviteMembers: false, removeMembers: false, changeRoles: false, editData: false }
+};
+
+function normalizeRole(role) {
+  if (role === "Parent") return "Editor";
+  return rolePermissions[role] ? role : "Viewer";
+}
+
+function can(action) {
+  if (!state.user) return true; // mode démo: tout est local
+  return Boolean(rolePermissions[normalizeRole(state.role)][action]);
+}
+
+// Un Admin peut retirer Viewer/Editor; le Owner retire tout le monde
+function canRemoveMemberRole(targetRole) {
+  if (!state.user) return true;
+  const actor = normalizeRole(state.role);
+  const target = normalizeRole(targetRole);
+  if (actor === "Owner") return true;
+  if (actor === "Admin") return target === "Viewer" || target === "Editor";
+  return false;
+}
+
+function roleLabel(role) {
+  const fr = state.lang === "fr";
+  return {
+    Owner: fr ? "Propriétaire" : "Owner",
+    Admin: "Admin",
+    Editor: fr ? "Éditeur" : "Editor",
+    Viewer: fr ? "Lecture seule" : "Viewer"
+  }[normalizeRole(role)] || role;
+}
+
+function forbiddenMessage() {
+  return state.lang === "fr"
+    ? `Votre rôle (${roleLabel(state.role)}) ne permet pas cette action.`
+    : `Your role (${roleLabel(state.role)}) does not allow this action.`;
+}
+
+function readOnlyNote() {
+  return `<p class="form-note role-note">${state.lang === "fr"
+    ? "Mode lecture seule: votre rôle ne permet pas de modifier ces données."
+    : "Read-only mode: your role does not allow editing this data."}</p>`;
+}
+
+// Jeton de session pour authentifier les appels au backend Express
+async function getAccessToken() {
+  if (!supabaseClient) return null;
+  const { data } = await supabaseClient.auth.getSession();
+  return data.session ? data.session.access_token : null;
+}
+
+async function authFetch(path, options = {}) {
+  const token = await getAccessToken();
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return fetch(`${BACKEND_URL}${path}`, { ...options, headers });
+}
+
+// Détermine le rôle de l'utilisateur connecté dans sa famille
+async function loadUserRole(profile) {
+  if (!supabaseClient || !state.user) return;
+  const ownerId = profile && profile.family_owner_id;
+  if (!ownerId || ownerId === state.user.id) {
+    state.role = "Owner";
+    return;
+  }
+  const { data } = await supabaseClient
+    .from("family_members")
+    .select("role")
+    .eq("invited_user_id", state.user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  state.role = normalizeRole(data ? data.role : "Viewer");
+}
+
 function setSessionUser(user) {
   state.user = user;
+  if (!user) state.role = "Owner";
   const chip = $("#userEmailChip");
   const logoutButton = $("#logoutButton");
   const registerButton = $("#openRegister");
@@ -752,7 +837,7 @@ function setSessionUser(user) {
 async function syncBillingPlan() {
   if (!state.user) return;
   try {
-    const response = await fetch(`${BACKEND_URL}/api/billing/sync/${state.user.id}`);
+    const response = await authFetch(`/api/billing/sync/${state.user.id}`);
     if (response.ok) {
       const result = await response.json();
       if (result.updated) loadProfilePlan();
@@ -766,11 +851,12 @@ async function loadProfilePlan() {
   if (!supabaseClient || !state.user) return;
   const { data, error } = await supabaseClient
     .from("profiles")
-    .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration")
+    .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id")
     .eq("id", state.user.id)
     .single();
   if (!error && data && data.plan) {
     state.plan = data.plan;
+    await loadUserRole(data);
     state.subscription = data.plan === "free" ? null : {
       status: data.subscription_status,
       cancelAtPeriodEnd: data.cancel_at_period_end,
@@ -889,13 +975,17 @@ async function selectPlan(planId) {
     return;
   }
 
+  if (!can("manageBilling")) {
+    alert(state.lang === "fr"
+      ? "Seul le propriétaire de la famille peut gérer l'abonnement."
+      : "Only the family owner can manage the subscription.");
+    return;
+  }
+
   try {
-    const response = await fetch(`${BACKEND_URL}/api/billing/checkout`, {
+    const response = await authFetch(`/api/billing/checkout`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        userId: state.user.id,
-        email: state.user.email,
         plan: planId,
         duration: state.billingDuration,
         currency: state.currency.toLowerCase()
@@ -904,6 +994,8 @@ async function selectPlan(planId) {
     const result = await response.json();
     if (response.ok && result.url) {
       window.open(result.url, "_blank", "noopener");
+    } else if (response.status === 403) {
+      alert(forbiddenMessage());
     } else {
       alert(state.lang === "fr" ? "Impossible de créer la session de paiement." : "Could not create the checkout session.");
     }
@@ -1084,6 +1176,7 @@ function renderDashboard() {
         : "Income, transactions, budget, debts, and goals below belong to this month only."}</p>
     </section>
     <section class="panel income-panel">
+      ${can("editData") ? `
       <form class="form-grid" id="incomeForm">
         <label><span>${fr ? "Revenu mensuel du foyer (salaire net)" : "Household monthly income (net salary)"}</span>
           <input name="income" type="number" min="0" step="0.01" value="${state.income || ""}" placeholder="3500" /></label>
@@ -1091,7 +1184,9 @@ function renderDashboard() {
       </form>
       <p class="form-note">${fr
         ? "Votre salaire net mensuel sert à calculer ce qu'il vous reste à la fin du mois."
-        : "Your net monthly salary is used to compute what's left at the end of the month."}</p>
+        : "Your net monthly salary is used to compute what's left at the end of the month."}</p>` : `
+      <p><strong>${fr ? "Revenu mensuel du foyer" : "Household monthly income"}:</strong> ${money(state.income)}</p>
+      ${readOnlyNote()}`}
     </section>
     <div class="stats-grid">
       ${stat(fr ? "Revenu du mois" : "Monthly income", money(tot.income), incomeBadge.cls, incomeBadge.txt)}
@@ -1138,6 +1233,9 @@ function renderDebts() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "debts";
   const d = editing ? findEditable(state.debts) : null;
+  if (!can("editData")) {
+    return `<section class="panel">${readOnlyNote()}${debtTable(false)}</section>`;
+  }
   return `
     <section class="panel">
       <form class="form-grid" id="debtForm">
@@ -1162,22 +1260,26 @@ function recommendedPayment(debt) {
 
 function debtTable(actions) {
   const fr = state.lang === "fr";
+  const showActions = actions && can("editData");
   const recommendedLabel = fr ? "Paiement recommandé" : "Recommended payment";
   const interestLabel = fr ? "Intérêts/mois" : "Interest/mo";
+  if (!state.debts.length) {
+    return `<p class="form-note">${fr ? "Aucune dette pour le moment." : "No debts yet."}</p>`;
+  }
   return `
     <div class="table-wrap">
-      <table>
-        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${recommendedLabel}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+      <table class="responsive-table">
+        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${recommendedLabel}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.debts.map((debt, index) => `
             <tr>
-              <td>${debt.name}</td>
-              <td>${money(debt.balance)}</td>
-              <td>${debt.rate.toFixed(2)}%</td>
-              <td>${money(monthlyInterest(debt))}</td>
-              <td>${money(debt.minPayment)}</td>
-              <td>${money(recommendedPayment(debt))}</td>
-              ${actions ? `<td><button class="secondary-button" data-edit-debt="${debt.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
+              <td data-label="${t("name")}">${debt.name}</td>
+              <td data-label="${t("balance")}">${money(debt.balance)}</td>
+              <td data-label="${t("rate")}">${debt.rate.toFixed(2)}%</td>
+              <td data-label="${interestLabel}">${money(monthlyInterest(debt))}</td>
+              <td data-label="${t("minPayment")}">${money(debt.minPayment)}</td>
+              <td data-label="${recommendedLabel}">${money(recommendedPayment(debt))}</td>
+              ${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-debt="${debt.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
             </tr>
           `).join("")}
         </tbody>
@@ -1215,6 +1317,9 @@ function renderBudget() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "budget_categories";
   const b = editing ? findEditable(state.budget) : null;
+  if (!can("editData")) {
+    return `<section class="panel">${readOnlyNote()}${budgetTable(false)}</section>`;
+  }
   return `
     <section class="panel">
       <form class="form-grid" id="budgetForm">
@@ -1232,15 +1337,19 @@ function renderBudget() {
 }
 
 function budgetTable(actions) {
+  const showActions = actions && can("editData");
+  if (!state.budget.length) {
+    return `<p class="form-note">${state.lang === "fr" ? "Aucune catégorie de budget pour le moment." : "No budget categories yet."}</p>`;
+  }
   return `
     <div class="table-wrap">
-      <table>
-        <thead><tr><th>${t("category")}</th><th>${t("planned")}</th><th>${t("spent")}</th><th>${t("progress")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+      <table class="responsive-table">
+        <thead><tr><th>${t("category")}</th><th>${t("planned")}</th><th>${t("spent")}</th><th>${t("progress")}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.budget.map((item, index) => {
             const spent = spentForCategory(item.category);
             const pct = item.planned > 0 ? Math.min(100, Math.round((spent / item.planned) * 100)) : 0;
-            return `<tr><td>${item.category}</td><td>${money(item.planned)}</td><td>${money(spent)}</td><td><div class="progress"><span style="width:${pct}%"></span></div></td>${actions ? `<td><button class="secondary-button" data-edit-budget="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+            return `<tr><td data-label="${t("category")}">${item.category}</td><td data-label="${t("planned")}">${money(item.planned)}</td><td data-label="${t("spent")}">${money(spent)}</td><td data-label="${t("progress")}"><div class="progress"><span style="width:${pct}%"></span></div></td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
@@ -1252,6 +1361,9 @@ function renderTransactions() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "transactions";
   const tr = editing ? findEditable(state.transactions) : null;
+  if (!can("editData")) {
+    return `<section class="panel">${readOnlyNote()}${transactionTable(false)}</section>`;
+  }
   return `
     <section class="panel">
       <form class="form-grid" id="transactionForm">
@@ -1271,12 +1383,16 @@ function renderTransactions() {
 }
 
 function transactionTable(actions) {
+  const showActions = actions && can("editData");
+  if (!state.transactions.length) {
+    return `<p class="form-note">${state.lang === "fr" ? "Aucune transaction ce mois-ci." : "No transactions this month."}</p>`;
+  }
   return `
     <div class="table-wrap">
-      <table>
-        <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+      <table class="responsive-table">
+        <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
-          ${state.transactions.map((item, index) => `<tr><td>${item.date}</td><td>${item.name}</td><td>${item.category}</td><td>${money(item.amount)}</td>${actions ? `<td><button class="secondary-button" data-edit-transaction="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
+          ${state.transactions.map((item, index) => `<tr><td data-label="${t("date")}">${item.date}</td><td data-label="${t("name")}">${item.name}</td><td data-label="${t("category")}">${item.category}</td><td data-label="${t("amount")}">${money(item.amount)}</td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-transaction="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -1287,6 +1403,9 @@ function renderGoals() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "goals";
   const g = editing ? findEditable(state.goals) : null;
+  if (!can("editData")) {
+    return `<section class="panel">${readOnlyNote()}${goalsList(false)}</section>`;
+  }
   return `
     <section class="panel">
       <form class="form-grid" id="goalForm">
@@ -1316,11 +1435,12 @@ function goalsList(actions) {
     const contribLine = goal.monthlyContribution
       ? ` · ${money(goal.monthlyContribution)}${fr ? "/mois" : "/mo"}`
       : "";
+    const showActions = actions && can("editData");
     return `
       <div class="goal-item">
         <strong>${goal.name}</strong>
         <p>${money(current)} / ${money(goal.target)} · ${pct.toFixed(1)}%${contribLine}
-          ${actions ? `<button class="secondary-button" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button>
+          ${showActions ? `<button class="secondary-button" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button>
           <button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button>` : ""}</p>
         <div class="progress"><span style="width:${pct}%"></span></div>
       </div>
@@ -1329,26 +1449,51 @@ function goalsList(actions) {
 }
 
 function renderFamily() {
-  return `
-    <section class="panel">
+  const fr = state.lang === "fr";
+  const canInvite = can("inviteMembers");
+  const canChangeRoles = can("changeRoles");
+  const roleOptions = ["Admin", "Editor", "Viewer"];
+  const inviteForm = canInvite ? `
       <form class="form-grid" id="memberForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="Sam" /></label>
         <label><span>${t("email")}</span><input name="email" type="email" ${state.user ? "required" : ""} placeholder="sam@example.com" /></label>
-        <label><span>${t("role")}</span><select name="role"><option>Admin</option><option>Parent</option><option>Viewer</option></select></label>
-        <button class="primary-button" type="submit">${state.user ? (state.lang === "fr" ? "Inviter le membre" : "Invite member") : t("addMember")}</button>
+        <label><span>${t("role")}</span><select name="role">${roleOptions.map((r) => `<option value="${r}">${roleLabel(r)}</option>`).join("")}</select></label>
+        <button class="primary-button" type="submit">${state.user ? (fr ? "Inviter le membre" : "Invite member") : t("addMember")}</button>
       </form>
-      ${state.user ? `<p class="form-note">${state.lang === "fr"
-        ? "Le membre recevra un courriel d'invitation pour choisir son mot de passe. Son compte sera relié à votre plan."
-        : "The member will receive an invitation email to choose their password. Their account will be linked to your plan."}</p>` : ""}
+      ${state.user ? `<p class="form-note">${fr
+        ? "Le membre recevra un courriel d'invitation pour créer son mot de passe. Son compte sera relié à votre famille et à votre plan."
+        : "The member will receive an invitation email to create their password. Their account will be linked to your family and plan."}</p>` : ""}`
+    : `<p class="form-note role-note">${fr
+        ? "Seuls le propriétaire et les admins peuvent inviter des membres."
+        : "Only the owner and admins can invite members."}</p>`;
+  const memberRows = state.members.map((member, index) => {
+    const roleCell = canChangeRoles && member.id
+      ? `<select class="role-select" data-role-member="${member.id}">${roleOptions.map((r) => `<option value="${r}" ${normalizeRole(member.role) === r ? "selected" : ""}>${roleLabel(r)}</option>`).join("")}</select>`
+      : roleLabel(member.role);
+    const removeCell = can("removeMembers") && canRemoveMemberRole(member.role)
+      ? `<button class="secondary-button" data-remove-member="${index}">${t("remove")}</button>`
+      : "—";
+    return `<tr>
+      <td data-label="${t("member")}">${member.name}</td>
+      <td data-label="${t("email")}">${member.email || "—"}</td>
+      <td data-label="${t("role")}">${roleCell}</td>
+      <td data-label="${t("action")}" class="cell-actions">${removeCell}</td>
+    </tr>`;
+  }).join("");
+  return `
+    <section class="panel">
+      ${inviteForm}
       <div id="limitMessage"></div>
+      ${state.members.length ? `
       <div class="table-wrap">
-        <table>
+        <table class="responsive-table">
           <thead><tr><th>${t("member")}</th><th>${t("email")}</th><th>${t("role")}</th><th>${t("action")}</th></tr></thead>
-          <tbody>
-            ${state.members.map((member, index) => `<tr><td>${member.name}</td><td>${member.email || "—"}</td><td>${member.role}</td><td><button class="secondary-button" data-remove-member="${index}">${t("remove")}</button></td></tr>`).join("")}
-          </tbody>
+          <tbody>${memberRows}</tbody>
         </table>
-      </div>
+      </div>` : `<p class="form-note">${fr ? "Aucun membre pour le moment." : "No members yet."}</p>`}
+      ${state.user ? `<p class="form-note">${fr
+        ? `Votre rôle: ${roleLabel(state.role)}.`
+        : `Your role: ${roleLabel(state.role)}.`}</p>` : ""}
     </section>
   `;
 }
@@ -1372,6 +1517,11 @@ function renderSubscriptionDetails(plan) {
   const renewLine = autoRenew
     ? (fr ? `Renouvellement automatique le ${renewDate}.` : `Auto-renews on ${renewDate}.`)
     : (fr ? `Se termine le ${renewDate} (non renouvelé).` : `Ends on ${renewDate} (not renewed).`);
+  const renewToggle = can("manageBilling") ? `
+    <label class="toggle-row">
+      <input type="checkbox" id="autoRenewToggle" ${autoRenew ? "checked" : ""} />
+      <span>${fr ? "Renouveler automatiquement à l'échéance" : "Automatically renew at expiry"}</span>
+    </label>` : "";
   const daysLine = daysLeft !== null
     ? (fr
       ? `<p class="sub-days"><strong>${daysLeft}</strong> jour${daysLeft > 1 ? "s" : ""} restant${daysLeft > 1 ? "s" : ""} dans la période en cours.</p>`
@@ -1381,10 +1531,7 @@ function renderSubscriptionDetails(plan) {
     <p><strong>${plan.name}</strong>${durLabel ? ` · ${durLabel}` : ""}</p>
     <p class="form-note">${renewLine}</p>
     ${daysLine}
-    <label class="toggle-row">
-      <input type="checkbox" id="autoRenewToggle" ${autoRenew ? "checked" : ""} />
-      <span>${fr ? "Renouveler automatiquement à l'échéance" : "Automatically renew at expiry"}</span>
-    </label>
+    ${renewToggle}
   `;
 }
 
@@ -1401,10 +1548,13 @@ function renderAccount() {
     <section class="panel">
       <h3>${fr ? "Mon abonnement" : "My subscription"}</h3>
       ${renderSubscriptionDetails(plan)}
+      ${can("manageBilling") ? `
       <div class="account-actions">
         <button class="primary-button" id="changePlanButton" type="button">${fr ? "Changer de plan" : "Change plan"}</button>
         ${state.subscription ? `<button class="secondary-button" id="cancelSubButton" type="button">${fr ? "Annuler le renouvellement" : "Cancel renewal"}</button>` : ""}
-      </div>
+      </div>` : `<p class="form-note role-note">${fr
+        ? "Seul le propriétaire de la famille peut gérer l'abonnement Stripe."
+        : "Only the family owner can manage the Stripe subscription."}</p>`}
       <p class="form-note" id="subNote" hidden></p>
     </section>
     <section class="panel">
@@ -1500,11 +1650,9 @@ function bindViewActions() {
         const submitButton = memberForm.querySelector("button[type=submit]");
         submitButton.disabled = true;
         try {
-          const response = await fetch(`${BACKEND_URL}/api/members/invite`, {
+          const response = await authFetch(`/api/members/invite`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              inviterId: state.user.id,
               email: member.email,
               name: member.name,
               role: member.role,
@@ -1527,6 +1675,8 @@ function bindViewActions() {
             showLimit(state.lang === "fr"
               ? "Ce membre fait déjà partie de votre famille."
               : "This member is already part of your family.");
+          } else if (response.status === 403 && result.error === "forbidden") {
+            showLimit(forbiddenMessage());
           } else if (result.error === "member_limit_reached") {
             showLimit(planLimitMessage("members"));
           } else if (result.error === "email_already_registered") {
@@ -1695,22 +1845,78 @@ function bindViewActions() {
 
   const removeBindings = [
     ["data-remove-debt", "debts", "debts"],
-    ["data-remove-member", "family_members", "members"],
     ["data-remove-transaction", "transactions", "transactions"],
     ["data-remove-goal", "goals", "goals"],
     ["data-remove-budget", "budget_categories", "budget"]
   ];
   removeBindings.forEach(([attr, table, key]) => {
     $$(`[${attr}]`).forEach((button) => button.addEventListener("click", async () => {
+      if (!can("editData")) return showLimit(forbiddenMessage());
       const index = Number(button.getAttribute(attr));
       const item = state[key][index];
-      const syncAllowed = key === "transactions" || key === "members" || canSyncUndatedMonthlyData();
+      const syncAllowed = key === "transactions" || canSyncUndatedMonthlyData();
       if (syncAllowed && state.user && item && item.id) await dbDelete(table, item.id);
       state[key].splice(index, 1);
-      if (["debts", "transactions", "goals", "budget"].includes(key)) saveMonthData();
+      saveMonthData();
       renderView();
     }));
   });
+
+  // Retrait d'un membre: passe par le backend qui applique les règles de rôle
+  $$("[data-remove-member]").forEach((button) => button.addEventListener("click", async () => {
+    const index = Number(button.getAttribute("data-remove-member"));
+    const member = state.members[index];
+    if (!member) return;
+    if (state.user && member.id) {
+      button.disabled = true;
+      try {
+        const response = await authFetch(`/api/members/${member.id}`, { method: "DELETE" });
+        if (response.status === 403) {
+          button.disabled = false;
+          return showLimit(forbiddenMessage());
+        }
+        if (!response.ok) throw new Error("remove_failed");
+      } catch (_error) {
+        button.disabled = false;
+        return showLimit(state.lang === "fr"
+          ? "Impossible de retirer ce membre pour le moment. Réessayez."
+          : "Could not remove this member right now. Please try again.");
+      }
+    }
+    state.members.splice(index, 1);
+    renderView();
+  }));
+
+  // Changement de rôle (Owner uniquement)
+  $$("[data-role-member]").forEach((select) => select.addEventListener("change", async (event) => {
+    const memberId = select.getAttribute("data-role-member");
+    const member = state.members.find((item) => String(item.id) === String(memberId));
+    const newRole = event.target.value;
+    select.disabled = true;
+    try {
+      const response = await authFetch(`/api/members/${memberId}/role`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: newRole })
+      });
+      if (response.status === 403) {
+        showLimit(forbiddenMessage());
+        renderView();
+        return;
+      }
+      if (!response.ok) throw new Error("role_change_failed");
+      if (member) member.role = newRole;
+      showLimit(state.lang === "fr"
+        ? `Rôle de ${member ? member.name : "membre"} mis à jour: ${roleLabel(newRole)}.`
+        : `${member ? member.name : "Member"}'s role updated: ${roleLabel(newRole)}.`);
+    } catch (_error) {
+      showLimit(state.lang === "fr"
+        ? "Impossible de changer le rôle pour le moment. Réessayez."
+        : "Could not change the role right now. Please try again.");
+      renderView();
+    } finally {
+      select.disabled = false;
+    }
+  }));
 
   const changePlanButton = $("#changePlanButton");
   if (changePlanButton) {
@@ -1727,12 +1933,15 @@ function bindViewActions() {
       const note = $("#subNote");
       event.target.disabled = true;
       try {
-        const response = await fetch(`${BACKEND_URL}/api/billing/auto-renew`, {
+        const response = await authFetch(`/api/billing/auto-renew`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: state.user.id, autoRenew })
+          body: JSON.stringify({ autoRenew })
         });
-        if (response.ok) {
+        if (response.status === 403) {
+          event.target.checked = !autoRenew;
+          note.textContent = forbiddenMessage();
+          note.hidden = false;
+        } else if (response.ok) {
           if (state.subscription) state.subscription.cancelAtPeriodEnd = !autoRenew;
           note.textContent = autoRenew
             ? (state.lang === "fr" ? "Renouvellement automatique activé." : "Auto-renew enabled.")
@@ -1764,12 +1973,12 @@ function bindViewActions() {
       const note = $("#subNote");
       cancelSubButton.disabled = true;
       try {
-        const response = await fetch(`${BACKEND_URL}/api/billing/cancel`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: state.user.id })
-        });
-        if (response.ok) {
+        const response = await authFetch(`/api/billing/cancel`, { method: "POST" });
+        if (response.status === 403) {
+          note.textContent = forbiddenMessage();
+          note.hidden = false;
+          cancelSubButton.disabled = false;
+        } else if (response.ok) {
           if (state.subscription) state.subscription.cancelAtPeriodEnd = true;
           renderView();
         } else {
@@ -1889,40 +2098,57 @@ async function changeSelectedMonth(value) {
 
 function openAuth(mode) {
   state.authMode = mode;
+  const fr = state.lang === "fr";
+  const isSetPassword = mode === "setPassword";
   const message = $("#authMessage");
   message.hidden = true;
   message.textContent = "";
   message.classList.remove("success");
-  $("#authSwitch").textContent = mode === "register"
-    ? (state.lang === "fr" ? "Déjà un compte ? Se connecter" : "Already have an account? Sign in")
-    : (state.lang === "fr" ? "Pas de compte ? Créer un compte" : "No account? Create one");
+  const authSwitch = $("#authSwitch");
+  authSwitch.hidden = isSetPassword;
+  authSwitch.textContent = mode === "register"
+    ? (fr ? "Déjà un compte ? Se connecter" : "Already have an account? Sign in")
+    : (fr ? "Pas de compte ? Créer un compte" : "No account? Create one");
   const forgot = $("#forgotPassword");
-  forgot.hidden = mode === "register";
-  forgot.textContent = state.lang === "fr" ? "Mot de passe oublié ?" : "Forgot password?";
+  forgot.hidden = mode !== "login";
+  forgot.textContent = fr ? "Mot de passe oublié ?" : "Forgot password?";
   $(".topbar").classList.remove("menu-open");
-  $("#authModeLabel").textContent = mode === "register" ? t("createAccount") : t("login");
-  $("#authTitle").textContent = mode === "register"
-    ? (state.lang === "fr" ? "Créer votre espace famille" : "Create your family workspace")
-    : (state.lang === "fr" ? "Accéder à BudgetHub Family" : "Access BudgetHub Family");
-  $("#authCopy").textContent = mode === "register"
-    ? (state.lang === "fr"
-      ? "Créez votre espace pour suivre budget, dettes, objectifs et membres de votre foyer."
-      : "Create your workspace to track budget, debts, goals, and household members.")
-    : (state.lang === "fr"
-      ? "Connectez-vous pour retrouver votre budget familial, vos dettes et vos objectifs au même endroit."
-      : "Sign in to keep your family budget, debts, and goals organized in one place.");
+  $("#authModeLabel").textContent = isSetPassword
+    ? (fr ? "Invitation" : "Invitation")
+    : (mode === "register" ? t("createAccount") : t("login"));
+  $("#authTitle").textContent = isSetPassword
+    ? (fr ? "Créez votre mot de passe pour rejoindre la famille" : "Create your password to join the family")
+    : (mode === "register"
+      ? (fr ? "Créer votre espace famille" : "Create your family workspace")
+      : (fr ? "Accéder à BudgetHub Family" : "Access BudgetHub Family"));
+  $("#authCopy").textContent = isSetPassword
+    ? (fr
+      ? "Votre invitation est confirmée. Choisissez un mot de passe sécuritaire pour activer votre compte et accéder au budget familial."
+      : "Your invitation is confirmed. Choose a secure password to activate your account and access the family budget.")
+    : (mode === "register"
+      ? (fr
+        ? "Créez votre espace pour suivre budget, dettes, objectifs et membres de votre foyer."
+        : "Create your workspace to track budget, debts, goals, and household members.")
+      : (fr
+        ? "Connectez-vous pour retrouver votre budget familial, vos dettes et vos objectifs au même endroit."
+        : "Sign in to keep your family budget, debts, and goals organized in one place."));
   const authForm = $("#authForm");
   authForm.reset();
   authForm.elements.password.setAttribute(
     "autocomplete",
-    mode === "register" ? "new-password" : "current-password"
+    mode === "login" ? "current-password" : "new-password"
   );
-  // Confirmation + jauge de force uniquement à l'inscription
-  const isRegister = mode === "register";
-  $("#confirmPasswordRow").hidden = !isRegister;
-  $("#passwordStrength").hidden = !isRegister;
-  $("#confirmPasswordLabel").textContent = state.lang === "fr" ? "Confirmer le mot de passe" : "Confirm password";
-  if (isRegister) renderPasswordStrength("");
+  // Invité: le courriel est déjà connu, on ne demande que le mot de passe
+  const emailLabel = authForm.elements.email.closest("label");
+  emailLabel.hidden = isSetPassword;
+  authForm.elements.email.required = !isSetPassword;
+  if (isSetPassword && state.user) authForm.elements.email.value = state.user.email;
+  // Confirmation + jauge de force pour inscription et création de mot de passe
+  const needsStrongPassword = mode === "register" || isSetPassword;
+  $("#confirmPasswordRow").hidden = !needsStrongPassword;
+  $("#passwordStrength").hidden = !needsStrongPassword;
+  $("#confirmPasswordLabel").textContent = fr ? "Confirmer le mot de passe" : "Confirm password";
+  if (needsStrongPassword) renderPasswordStrength("");
   showView("auth");
 }
 
@@ -2034,6 +2260,14 @@ async function handleAuthEmailLink() {
       return true;
     }
 
+    if (type === "invite") {
+      // Membre invité: il reste connecté et crée son mot de passe
+      history.replaceState(null, "", "/");
+      setSessionUser(data.user || null);
+      openAuth("setPassword");
+      return true;
+    }
+
     // Courriel confirmé: retour à l'écran de connexion avec message de succès
     await supabaseClient.auth.signOut();
     history.replaceState(null, "", "/?confirmed=true");
@@ -2049,6 +2283,13 @@ async function handleAuthEmailLink() {
 
     if (data.session && hashType === "recovery") {
       await openRecoverySession(data.session.user);
+      return true;
+    }
+
+    if (data.session && hashType === "invite") {
+      // Lien {{ .ConfirmationURL }} d'invitation: session ouverte, on demande le mot de passe
+      setSessionUser(data.session.user);
+      openAuth("setPassword");
       return true;
     }
 
@@ -2123,7 +2364,7 @@ function boot() {
 
   // Jauge de force en direct pendant la saisie du mot de passe
   $("#authForm").elements.password.addEventListener("input", (event) => {
-    if (state.authMode === "register") renderPasswordStrength(event.target.value);
+    if (state.authMode === "register" || state.authMode === "setPassword") renderPasswordStrength(event.target.value);
   });
 
   // Boutons œil: afficher/masquer le mot de passe
@@ -2270,8 +2511,8 @@ function boot() {
       return;
     }
 
-    // Validations spécifiques à l'inscription
-    if (state.authMode === "register") {
+    // Validations spécifiques à l'inscription et à la création de mot de passe
+    if (state.authMode === "register" || state.authMode === "setPassword") {
       const confirmPassword = form.elements.confirmPassword.value;
       if (!passwordIsStrong(password)) {
         message.textContent = state.lang === "fr"
@@ -2294,6 +2535,25 @@ function boot() {
     message.classList.remove("success");
 
     try {
+      if (state.authMode === "setPassword") {
+        // Membre invité: définit son mot de passe sur la session ouverte par le lien
+        const { error } = await supabaseClient.auth.updateUser({ password });
+        if (error) throw error;
+        const { data } = await supabaseClient.auth.getSession();
+        if (data.session) {
+          setSessionUser(data.session.user);
+          await loadProfilePlan();
+          syncBillingPlan();
+          await loadUserData();
+          openApp();
+          return;
+        }
+        // Pas de session (cas limite): retour connexion avec message clair
+        showLoginMessage(state.lang === "fr"
+          ? "Mot de passe créé. Connectez-vous pour rejoindre votre famille."
+          : "Password created. Sign in to join your family.", true);
+        return;
+      }
       if (state.authMode === "register") {
         const { data, error } = await supabaseClient.auth.signUp({
           email,
