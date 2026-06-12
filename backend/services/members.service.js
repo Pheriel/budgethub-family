@@ -12,7 +12,7 @@ async function inviteMember({ inviterId, email, name, role }) {
 
   const { data: inviterProfile, error: profileError } = await supabase
     .from("profiles")
-    .select("plan")
+    .select("plan, family_owner_id")
     .eq("id", inviterId)
     .single();
 
@@ -76,10 +76,17 @@ async function inviteMember({ inviterId, email, name, role }) {
     invitedUserId = invited.user.id;
   }
 
-  // Le profil du membre hérite du plan de l'invitant
+  // Le membre hérite du plan ET rejoint la famille de l'invitant (données partagées)
+  const familyOwnerId = inviterProfile.family_owner_id || inviterId;
   await supabase
     .from("profiles")
-    .update({ plan: inviterProfile.plan, invited_by: inviterId, display_name: name, updated_at: new Date().toISOString() })
+    .update({
+      plan: inviterProfile.plan,
+      invited_by: inviterId,
+      family_owner_id: familyOwnerId,
+      display_name: name,
+      updated_at: new Date().toISOString()
+    })
     .eq("id", invitedUserId);
 
   const { data: memberRow, error: memberError } = await supabase

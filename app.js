@@ -1332,6 +1332,35 @@ function showLimit(message) {
   box.innerHTML = `<p class="pill-warn">${message}</p>`;
 }
 
+// Retour depuis Stripe (success_url ?checkout=success): l'utilisateur reste connecté,
+// on confirme l'achat et on rafraîchit son plan plusieurs fois (le temps que Stripe finalise)
+function handleCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get("checkout");
+  if (!status) return;
+  history.replaceState(null, "", window.location.pathname);
+  if (status === "success") {
+    state.currentView = "account";
+    renderView();
+    let tries = 0;
+    const poll = setInterval(async () => {
+      tries += 1;
+      await syncBillingPlan();
+      if (state.plan !== "free" || tries >= 5) {
+        clearInterval(poll);
+        const note = state.lang === "fr"
+          ? "Merci ! Votre paiement est confirmé et votre abonnement est actif."
+          : "Thank you! Your payment is confirmed and your subscription is active.";
+        const box = document.createElement("div");
+        box.className = "notice";
+        box.textContent = note;
+        const container = $("#viewContainer");
+        if (container) container.prepend(box);
+      }
+    }, 2000);
+  }
+}
+
 function updatePreference(key, value) {
   state[key] = value;
   persistPreferences();
@@ -1447,6 +1476,7 @@ function boot() {
         syncBillingPlan();
         loadUserData();
         openApp();
+        handleCheckoutReturn();
       }
     });
 
