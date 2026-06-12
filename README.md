@@ -54,13 +54,13 @@ http://localhost:5173
 
 ## Remplir le fichier .env
 
-Pour préparer le backend, copier `backend/.env.example` vers `backend/.env`, puis remplir les valeurs nécessaires sur le serveur:
+Pour préparer le serveur, copier `.env.example` vers `.env`, puis remplir les valeurs nécessaires sur Hostinger ou en local:
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.example .env
 ```
 
-Le fichier `backend/.env` doit rester local au serveur et ne doit jamais être poussé dans Git.
+Le fichier `.env` doit rester local au serveur et ne doit jamais être poussé dans Git.
 
 ## Diagnostics backend
 
@@ -105,14 +105,11 @@ Les visiteurs sans compte voient des données de démonstration locales. Les uti
 ├── index.html
 ├── styles.css
 ├── app.js
-├── backend
-│   ├── config
-│   ├── controllers
-│   ├── middleware
-│   ├── routes
-│   ├── services
-│   ├── package.json
-│   └── server.js
+├── server.js
+├── config
+├── controllers
+├── routes
+├── services
 ├── package.json
 ├── .gitignore
 ├── .env.example

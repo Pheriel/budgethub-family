@@ -37,11 +37,11 @@
         </nav>
 
         <div class="top-actions">
-          <select id="languageSelect" aria-label="Langue">
+          <select id="languageSelect" class="language-select" aria-label="Langue">
             <option value="fr">FR</option>
             <option value="en">EN</option>
           </select>
-          <select id="currencySelect" aria-label="Devise">
+          <select id="currencySelect" class="currency-select" aria-label="Devise">
             <option value="CAD">CAD</option>
             <option value="USD">USD</option>
             <option value="EUR">EUR</option>
@@ -213,6 +213,20 @@
               <h2 id="workspaceTitle">Tableau de bord</h2>
             </div>
             <div class="workspace-actions">
+              <label class="compact-control" for="appMonthSelect">
+                <span id="appMonthLabel">Juin 2026</span>
+                <input id="appMonthSelect" type="month" />
+              </label>
+              <select id="appLanguageSelect" class="language-select" aria-label="Langue">
+                <option value="fr">FR</option>
+                <option value="en">EN</option>
+              </select>
+              <select id="appCurrencySelect" class="currency-select" aria-label="Devise">
+                <option value="CAD">CAD</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </select>
+              <button class="icon-button" id="appThemeToggle" type="button" aria-label="Changer le thème">☾</button>
               <span class="chip" id="userEmailChip" hidden></span>
               <button class="ghost-button" id="openRegister" type="button" data-i18n="createAccount">Créer un compte</button>
               <button class="ghost-button" id="logoutButton" type="button" hidden></button>

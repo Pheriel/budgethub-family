@@ -148,6 +148,32 @@
   margin-bottom: 18px;
 }
 
+.month-panel {
+  margin-bottom: 18px;
+}
+
+.compact-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.65rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.compact-control span {
+  white-space: nowrap;
+}
+
+.compact-control input {
+  min-height: 2rem;
+  padding: 0 0.35rem;
+}
+
 .debt-summary {
   margin-bottom: 18px;
 }

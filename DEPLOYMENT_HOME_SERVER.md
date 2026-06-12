@@ -1,42 +1,27 @@
-# Deployment Home Server
+# Deployment Hostinger / Node.js
 
-BudgetHub Family peut être servi comme site statique sur un serveur maison, un hébergement web ou GitHub Pages.
+BudgetHub Family est maintenant servi par Express à la racine du projet. Hostinger doit installer les dépendances puis lancer `npm start`.
 
-## Fichiers à publier
+## Commandes
 
-- `index.html`
-- `styles.css`
-- `app.js`
-
-## Exemple Nginx
-
-```nginx
-server {
-  listen 80;
-  server_name budgethub.local;
-
-  root /var/www/budgethub-family;
-  index index.html;
-
-  location / {
-    try_files $uri $uri/ /index.html;
-  }
-}
+```bash
+npm install
+npm start
 ```
 
-## Exemple Caddy
+## Fichier d'entrée
 
-```caddyfile
-budgethub.local {
-  root * /var/www/budgethub-family
-  file_server
-}
+```text
+server.js
 ```
+
+## Variables
+
+Copier `.env.example` vers `.env` sur le serveur et remplir les secrets Supabase/Stripe. Ne jamais commiter `.env`.
 
 ## Checklist
 
-- Publier uniquement les fichiers nécessaires
 - Ne jamais publier `.env`
-- Activer HTTPS pour un domaine public
-- Garder des sauvegardes du dossier publié
-- Vérifier le rendu mobile après chaque mise à jour
+- Configurer le port Hostinger via `process.env.PORT`
+- Vérifier `https://votre-domaine/health`
+- Vérifier que `index.html`, `app.js` et `styles.css` sont servis par Express

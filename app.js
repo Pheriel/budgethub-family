@@ -195,6 +195,48 @@ const currencyMeta = {
   EUR: { rate: 0.68, locale: "fr-FR" }
 };
 
+function detectDefaultCurrency() {
+  const locale = navigator.language || (navigator.languages && navigator.languages[0]) || "fr-CA";
+  const region = locale.split("-")[1]?.toUpperCase();
+  const europeanRegions = new Set(["AT", "BE", "CY", "DE", "EE", "ES", "FI", "FR", "GR", "HR", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PT", "SI", "SK"]);
+  if (region === "US") return "USD";
+  if (region === "CA") return "CAD";
+  if (europeanRegions.has(region)) return "EUR";
+  return "CAD";
+}
+
+function detectDefaultLanguage() {
+  return (navigator.language || "").toLowerCase().startsWith("en") ? "en" : "fr";
+}
+
+function currentMonthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(state.lang === "fr" ? "fr-CA" : "en-US", {
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function selectedMonthRange() {
+  const [year, month] = state.selectedMonth.split("-").map(Number);
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+    last: new Date(end.getTime() - 86400000).toISOString().slice(0, 10)
+  };
+}
+
+function defaultTransactionDate() {
+  const today = new Date().toISOString().slice(0, 10);
+  return today.startsWith(state.selectedMonth) ? today : `${state.selectedMonth}-01`;
+}
+
 // Taux réels du jour (Banque centrale européenne via frankfurter.app), cache 24h
 async function loadExchangeRates() {
   const cached = localStorage.getItem("bh_rates");
@@ -241,14 +283,15 @@ const BACKEND_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname
   : "";
 
 const state = {
-  lang: localStorage.getItem("bh_lang") || "fr",
+  lang: localStorage.getItem("bh_lang") || detectDefaultLanguage(),
   authMode: "login",
   user: null,
   subscription: null,
   billingDuration: "1m",
+  selectedMonth: localStorage.getItem("bh_selected_month") || currentMonthKey(),
   income: 0,
   editing: { table: null, id: null },
-  currency: localStorage.getItem("bh_currency") || "CAD",
+  currency: localStorage.getItem("bh_currency") || detectDefaultCurrency(),
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
   currentView: "dashboard",
@@ -293,7 +336,53 @@ function loadDemoData() {
   state.members = demoData.members.map((item) => ({ ...item }));
 }
 
-loadDemoData();
+function emptyMonthData() {
+  return { income: 0, debts: [], budget: [], transactions: [], goals: [] };
+}
+
+function monthlyStorageKey(monthKey = state.selectedMonth) {
+  const owner = state.user ? state.user.id : "demo";
+  return `bh_month_${owner}_${monthKey}`;
+}
+
+function applyMonthData(data) {
+  const monthData = data || emptyMonthData();
+  state.income = Number(monthData.income || 0);
+  state.debts = (monthData.debts || []).map((item) => ({ ...item }));
+  state.budget = (monthData.budget || []).map((item) => ({ ...item }));
+  state.transactions = (monthData.transactions || []).map((item) => ({ ...item }));
+  state.goals = (monthData.goals || []).map((item) => ({ ...item }));
+}
+
+function saveMonthData() {
+  localStorage.setItem(monthlyStorageKey(), JSON.stringify({
+    income: state.income,
+    debts: state.debts,
+    budget: state.budget,
+    transactions: state.transactions,
+    goals: state.goals
+  }));
+}
+
+function canSyncUndatedMonthlyData() {
+  return state.user && state.selectedMonth === currentMonthKey();
+}
+
+function loadMonthData(seedData = null) {
+  const cached = localStorage.getItem(monthlyStorageKey());
+  if (cached) {
+    try {
+      applyMonthData(JSON.parse(cached));
+      return;
+    } catch (_error) {
+      localStorage.removeItem(monthlyStorageKey());
+    }
+  }
+  applyMonthData(seedData);
+  saveMonthData();
+}
+
+loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -322,11 +411,16 @@ function persistPreferences() {
   localStorage.setItem("bh_lang", state.lang);
   localStorage.setItem("bh_currency", state.currency);
   localStorage.setItem("bh_theme", state.theme);
+  localStorage.setItem("bh_selected_month", state.selectedMonth);
 }
 
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme;
-  $("#themeToggle").textContent = state.theme === "dark" ? "☀" : "☾";
+  const icon = state.theme === "dark" ? "☀" : "☾";
+  const themeToggle = $("#themeToggle");
+  const appThemeToggle = $("#appThemeToggle");
+  if (themeToggle) themeToggle.textContent = icon;
+  if (appThemeToggle) appThemeToggle.textContent = icon;
 }
 
 function applyTranslations() {
@@ -334,8 +428,14 @@ function applyTranslations() {
   $$("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
-  $("#languageSelect").value = state.lang;
-  $("#currencySelect").value = state.currency;
+  $$(".language-select").forEach((select) => { select.value = state.lang; });
+  $$(".currency-select").forEach((select) => { select.value = state.currency; });
+  const monthInput = $("#monthSelect");
+  if (monthInput) monthInput.value = state.selectedMonth;
+  const appMonthInput = $("#appMonthSelect");
+  if (appMonthInput) appMonthInput.value = state.selectedMonth;
+  const appMonthLabel = $("#appMonthLabel");
+  if (appMonthLabel) appMonthLabel.textContent = monthLabel(state.selectedMonth);
   $("#workspaceTitle").textContent = getViewTitle(state.currentView);
   $("#workspaceEyebrow").textContent = state.plan === "free" ? "Demo" : state.plan;
   $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan).name;
@@ -542,30 +642,34 @@ async function loadProfilePlan() {
 
 async function loadUserData() {
   if (!supabaseClient || !state.user) return;
+  const { start, end } = selectedMonthRange();
   const [debts, budget, transactions, goals, members, incomes] = await Promise.all([
     supabaseClient.from("debts").select("id,name,balance,rate,min_payment").order("created_at"),
     supabaseClient.from("budget_categories").select("id,category,planned,spent").order("created_at"),
-    supabaseClient.from("transactions").select("id,date,name,category,amount").order("date", { ascending: false }),
+    supabaseClient.from("transactions").select("id,date,name,category,amount").gte("date", start).lt("date", end).order("date", { ascending: false }),
     supabaseClient.from("goals").select("id,name,target,saved,monthly_contribution,created_at").order("created_at"),
     supabaseClient.from("family_members").select("id,name,role,email").order("created_at"),
     supabaseClient.from("profiles").select("monthly_income")
   ]);
-  state.debts = (debts.data || []).map((row) => ({
-    id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment)
-  }));
-  state.budget = (budget.data || []).map((row) => ({
-    id: row.id, category: row.category, planned: Number(row.planned), spent: Number(row.spent)
-  }));
-  state.transactions = (transactions.data || []).map((row) => ({
-    id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount)
-  }));
-  state.goals = (goals.data || []).map((row) => ({
-    id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved),
-    monthlyContribution: Number(row.monthly_contribution || 0), createdAt: row.created_at
-  }));
   state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "" }));
-  // Revenu du foyer = somme des salaires de tous les membres de la famille
-  state.income = (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0);
+  const seed = {
+    debts: (debts.data || []).map((row) => ({
+      id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment)
+    })),
+    budget: (budget.data || []).map((row) => ({
+      id: row.id, category: row.category, planned: Number(row.planned), spent: Number(row.spent || 0)
+    })),
+    transactions: (transactions.data || []).map((row) => ({
+      id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount)
+    })),
+    goals: (goals.data || []).map((row) => ({
+      id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved),
+      monthlyContribution: Number(row.monthly_contribution || 0), createdAt: row.created_at
+    })),
+    // Revenu du foyer = somme des salaires de tous les membres de la famille
+    income: (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0)
+  };
+  loadMonthData(state.selectedMonth === currentMonthKey() ? seed : emptyMonthData());
   renderView();
 }
 
@@ -616,8 +720,9 @@ function goalCurrentSaved(goal) {
 // Met à jour le salaire de l'utilisateur connecté
 async function updateIncome(value) {
   if (!supabaseClient || !state.user) return;
+  if (!canSyncUndatedMonthlyData()) return;
   await supabaseClient.from("profiles").update({ monthly_income: value }).eq("id", state.user.id);
-  loadUserData();
+  saveMonthData();
 }
 
 async function selectPlan(planId) {
@@ -736,22 +841,46 @@ function renderView() {
   bindViewActions();
 }
 
+function findEditable(collection) {
+  return collection.find((item) => String(item.id) === String(state.editing.id))
+    || collection[Number(state.editing.id)];
+}
+
 // Intérêts mensuels d'une dette: solde × taux annuel / 12
 function monthlyInterest(debt) {
   return (debt.balance * debt.rate) / 100 / 12;
+}
+
+function transactionExpenses() {
+  return state.transactions
+    .filter((item) => Number(item.amount) < 0)
+    .reduce((sum, item) => sum + Math.abs(Number(item.amount)), 0);
+}
+
+function transactionIncome() {
+  return state.transactions
+    .filter((item) => Number(item.amount) > 0)
+    .reduce((sum, item) => sum + Number(item.amount), 0);
+}
+
+function spentForCategory(category) {
+  return state.transactions
+    .filter((item) => item.category && item.category.toLowerCase() === category.toLowerCase() && Number(item.amount) < 0)
+    .reduce((sum, item) => sum + Math.abs(Number(item.amount)), 0);
 }
 
 function totals() {
   const debt = state.debts.reduce((sum, item) => sum + item.balance, 0);
   const debtPayments = state.debts.reduce((sum, item) => sum + item.minPayment, 0);
   const debtInterest = state.debts.reduce((sum, item) => sum + monthlyInterest(item), 0);
-  const monthlyExpenses = state.budget.reduce((sum, item) => sum + item.spent, 0);
+  const monthlyExpenses = transactionExpenses();
+  const extraIncome = transactionIncome();
   const goalContributions = state.goals.reduce((sum, item) => sum + (item.monthlyContribution || 0), 0);
-  const income = state.income;
+  const income = state.income + extraIncome;
   const leftover = income - monthlyExpenses - debtPayments - goalContributions;
   const saved = goalContributions + Math.max(0, leftover);
   const savingsRate = income > 0 ? Math.round((saved / income) * 100) : 0;
-  return { debt, debtPayments, debtInterest, monthlyExpenses, goalContributions, income, leftover, savingsRate };
+  return { debt, debtPayments, debtInterest, monthlyExpenses, extraIncome, goalContributions, income, leftover, savingsRate };
 }
 
 function renderDashboard() {
@@ -774,6 +903,12 @@ function renderDashboard() {
     : { cls: "pill-warn", txt: fr ? "À remplir" : "To set" };
 
   return `
+    <section class="panel month-panel">
+      <strong>${fr ? "Mois sélectionné" : "Selected month"}: ${monthLabel(state.selectedMonth)}</strong>
+      <p class="form-note">${fr
+        ? "Le revenu, les transactions, le budget, les dettes et les objectifs ci-dessous appartiennent à ce mois seulement."
+        : "Income, transactions, budget, debts, and goals below belong to this month only."}</p>
+    </section>
     <section class="panel income-panel">
       <form class="form-grid" id="incomeForm">
         <label><span>${fr ? "Revenu mensuel du foyer (salaire net)" : "Household monthly income (net salary)"}</span>
@@ -785,9 +920,10 @@ function renderDashboard() {
         : "Your net monthly salary is used to compute what's left at the end of the month."}</p>
     </section>
     <div class="stats-grid">
-      ${stat(fr ? "Revenu mensuel" : "Monthly income", money(tot.income), incomeBadge.cls, incomeBadge.txt)}
+      ${stat(fr ? "Revenu du mois" : "Monthly income", money(tot.income), incomeBadge.cls, incomeBadge.txt)}
+      ${stat(fr ? "Dépenses du mois" : "Monthly expenses", money(tot.monthlyExpenses), tot.monthlyExpenses ? "pill-warn" : "pill-good", tot.monthlyExpenses ? (fr ? "Actives" : "Active") : (fr ? "Aucune" : "None"))}
       ${stat(t("totalDebt"), money(tot.debt), debtBadge.cls, debtBadge.txt)}
-      ${stat(fr ? "Reste à la fin du mois" : "Left at month end", money(tot.leftover), leftoverBadge.cls, leftoverBadge.txt)}
+      ${stat(fr ? "Cash disponible" : "Available cash", money(tot.leftover), leftoverBadge.cls, leftoverBadge.txt)}
       ${stat(t("savingsRate"), `${tot.savingsRate}%`, savingsBadge.cls, savingsBadge.txt)}
     </div>
     <section class="panel debt-summary">
@@ -827,7 +963,7 @@ function stat(label, value, className, status) {
 function renderDebts() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "debts";
-  const d = editing ? state.debts.find((x) => x.id === state.editing.id) : null;
+  const d = editing ? findEditable(state.debts) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="debtForm">
@@ -867,7 +1003,7 @@ function debtTable(actions) {
               <td>${money(monthlyInterest(debt))}</td>
               <td>${money(debt.minPayment)}</td>
               <td>${money(recommendedPayment(debt))}</td>
-              ${actions ? `<td><button class="secondary-button" data-edit-debt="${debt.id}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
+              ${actions ? `<td><button class="secondary-button" data-edit-debt="${debt.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
             </tr>
           `).join("")}
         </tbody>
@@ -904,19 +1040,18 @@ function strategyList(items) {
 function renderBudget() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "budget_categories";
-  const b = editing ? state.budget.find((x) => x.id === state.editing.id) : null;
+  const b = editing ? findEditable(state.budget) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="budgetForm">
         <label><span>${t("category")}</span><input name="category" required placeholder="${fr ? "Logement" : "Housing"}" value="${b ? b.category : ""}" /></label>
         <label><span>${fr ? "Budget prévu" : "Planned budget"}</span><input name="planned" required type="number" min="0" step="0.01" placeholder="1500" value="${b ? b.planned : ""}" /></label>
-        <label><span>${fr ? "Déjà dépensé ce mois" : "Spent this month"}</span><input name="spent" type="number" min="0" step="0.01" placeholder="0" value="${b ? b.spent : ""}" /></label>
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
       <p class="form-note">${fr
-        ? "« Prévu » = le montant que vous comptez dépenser dans cette catégorie. « Dépensé » = ce que vous avez déjà dépensé ce mois-ci. La barre montre la progression."
-        : "“Planned” = the amount you intend to spend in this category. “Spent” = what you've already spent this month. The bar shows progress."}</p>
+        ? "Un budget est une limite ou prévision mensuelle. Le dépensé est calculé automatiquement à partir des transactions du mois qui utilisent la même catégorie."
+        : "A budget is a monthly limit or forecast. Spent is calculated automatically from this month's transactions using the same category."}</p>
       ${budgetTable(true)}
     </section>
   `;
@@ -929,8 +1064,9 @@ function budgetTable(actions) {
         <thead><tr><th>${t("category")}</th><th>${t("planned")}</th><th>${t("spent")}</th><th>${t("progress")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.budget.map((item, index) => {
-            const pct = item.planned > 0 ? Math.min(100, Math.round((item.spent / item.planned) * 100)) : 0;
-            return `<tr><td>${item.category}</td><td>${money(item.planned)}</td><td>${money(item.spent)}</td><td><div class="progress"><span style="width:${pct}%"></span></div></td>${actions ? `<td><button class="secondary-button" data-edit-budget="${item.id}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+            const spent = spentForCategory(item.category);
+            const pct = item.planned > 0 ? Math.min(100, Math.round((spent / item.planned) * 100)) : 0;
+            return `<tr><td>${item.category}</td><td>${money(item.planned)}</td><td>${money(spent)}</td><td><div class="progress"><span style="width:${pct}%"></span></div></td>${actions ? `<td><button class="secondary-button" data-edit-budget="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
@@ -941,11 +1077,11 @@ function budgetTable(actions) {
 function renderTransactions() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "transactions";
-  const tr = editing ? state.transactions.find((x) => x.id === state.editing.id) : null;
+  const tr = editing ? findEditable(state.transactions) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="transactionForm">
-        <label><span>${t("date")}</span><input name="date" required type="date" value="${tr ? tr.date : new Date().toISOString().slice(0, 10)}" /></label>
+        <label><span>${t("date")}</span><input name="date" required type="date" min="${state.selectedMonth}-01" max="${selectedMonthRange().last}" value="${tr ? tr.date : defaultTransactionDate()}" /></label>
         <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.name : ""}" /></label>
         <label><span>${t("category")}</span><input name="category" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.category : ""}" /></label>
         <label><span>${t("amount")}</span><input name="amount" required type="number" step="0.01" placeholder="-50.00" value="${tr ? tr.amount : ""}" /></label>
@@ -966,7 +1102,7 @@ function transactionTable(actions) {
       <table>
         <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
-          ${state.transactions.map((item, index) => `<tr><td>${item.date}</td><td>${item.name}</td><td>${item.category}</td><td>${money(item.amount)}</td>${actions ? `<td><button class="secondary-button" data-edit-transaction="${item.id}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
+          ${state.transactions.map((item, index) => `<tr><td>${item.date}</td><td>${item.name}</td><td>${item.category}</td><td>${money(item.amount)}</td>${actions ? `<td><button class="secondary-button" data-edit-transaction="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -976,7 +1112,7 @@ function transactionTable(actions) {
 function renderGoals() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "goals";
-  const g = editing ? state.goals.find((x) => x.id === state.editing.id) : null;
+  const g = editing ? findEditable(state.goals) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="goalForm">
@@ -1010,7 +1146,7 @@ function goalsList(actions) {
       <div class="goal-item">
         <strong>${goal.name}</strong>
         <p>${money(current)} / ${money(goal.target)} · ${pct.toFixed(1)}%${contribLine}
-          ${actions ? `<button class="secondary-button" data-edit-goal="${goal.id}">${fr ? "Modifier" : "Edit"}</button>
+          ${actions ? `<button class="secondary-button" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button>
           <button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button>` : ""}</p>
         <div class="progress"><span style="width:${pct}%"></span></div>
       </div>
@@ -1155,9 +1291,10 @@ function bindViewActions() {
         min_payment: Number(form.get("minPayment"))
       };
       if (state.editing.table === "debts") {
-        const debt = state.debts.find((x) => x.id === state.editing.id);
-        if (state.user && debt.id) await dbUpdate("debts", debt.id, payload);
+        const debt = findEditable(state.debts);
+        if (canSyncUndatedMonthlyData() && debt.id) await dbUpdate("debts", debt.id, payload);
         Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment });
+        saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
         return;
@@ -1165,11 +1302,12 @@ function bindViewActions() {
       const plan = planDefinitions.find((item) => item.id === state.plan);
       if (state.debts.length >= plan.debts) return showLimit(planLimitMessage("debts"));
       const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment };
-      if (state.user) {
+      if (canSyncUndatedMonthlyData()) {
         const row = await dbInsert("debts", payload);
         if (row) debt.id = row.id;
       }
       state.debts.push(debt);
+      saveMonthData();
       renderView();
     });
   }
@@ -1264,10 +1402,16 @@ function bindViewActions() {
         category: form.get("category"),
         amount: Number(form.get("amount"))
       };
+      if (!payload.date.startsWith(state.selectedMonth)) {
+        return showLimit(state.lang === "fr"
+          ? "La transaction doit rester dans le mois sélectionné."
+          : "The transaction must stay inside the selected month.");
+      }
       if (state.editing.table === "transactions") {
-        const tr = state.transactions.find((x) => x.id === state.editing.id);
+        const tr = findEditable(state.transactions);
         if (state.user && tr.id) await dbUpdate("transactions", tr.id, payload);
         Object.assign(tr, payload);
+        saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
         return;
@@ -1278,6 +1422,7 @@ function bindViewActions() {
         if (row) transaction.id = row.id;
       }
       state.transactions.unshift(transaction);
+      saveMonthData();
       renderView();
     });
   }
@@ -1294,19 +1439,21 @@ function bindViewActions() {
         monthly_contribution: Number(form.get("monthlyContribution") || 0)
       };
       if (state.editing.table === "goals") {
-        const goal = state.goals.find((x) => x.id === state.editing.id);
-        if (state.user && goal.id) await dbUpdate("goals", goal.id, payload);
+        const goal = findEditable(state.goals);
+        if (canSyncUndatedMonthlyData() && goal.id) await dbUpdate("goals", goal.id, payload);
         Object.assign(goal, { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution });
+        saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
         return;
       }
       const goal = { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, createdAt: new Date().toISOString() };
-      if (state.user) {
+      if (canSyncUndatedMonthlyData()) {
         const row = await dbInsert("goals", payload);
         if (row) { goal.id = row.id; goal.createdAt = row.created_at; }
       }
       state.goals.push(goal);
+      saveMonthData();
       renderView();
     });
   }
@@ -1318,23 +1465,24 @@ function bindViewActions() {
       const form = new FormData(budgetForm);
       const payload = {
         category: form.get("category"),
-        planned: Number(form.get("planned")),
-        spent: Number(form.get("spent") || 0)
+        planned: Number(form.get("planned"))
       };
       if (state.editing.table === "budget_categories") {
-        const b = state.budget.find((x) => x.id === state.editing.id);
-        if (state.user && b.id) await dbUpdate("budget_categories", b.id, payload);
-        Object.assign(b, payload);
+        const b = findEditable(state.budget);
+        if (canSyncUndatedMonthlyData() && b.id) await dbUpdate("budget_categories", b.id, payload);
+        Object.assign(b, { ...payload, spent: 0 });
+        saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
         return;
       }
-      const item = { ...payload };
-      if (state.user) {
+      const item = { ...payload, spent: 0 };
+      if (canSyncUndatedMonthlyData()) {
         const row = await dbInsert("budget_categories", payload);
         if (row) item.id = row.id;
       }
       state.budget.push(item);
+      saveMonthData();
       renderView();
     });
   }
@@ -1346,6 +1494,7 @@ function bindViewActions() {
       const value = Number(new FormData(incomeForm).get("income") || 0);
       state.income = value;
       if (state.user) await updateIncome(value);
+      saveMonthData();
       renderView();
     });
   }
@@ -1385,8 +1534,10 @@ function bindViewActions() {
     $$(`[${attr}]`).forEach((button) => button.addEventListener("click", async () => {
       const index = Number(button.getAttribute(attr));
       const item = state[key][index];
-      if (state.user && item && item.id) await dbDelete(table, item.id);
+      const syncAllowed = key === "transactions" || key === "members" || canSyncUndatedMonthlyData();
+      if (syncAllowed && state.user && item && item.id) await dbDelete(table, item.id);
       state[key].splice(index, 1);
+      if (["debts", "transactions", "goals", "budget"].includes(key)) saveMonthData();
       renderView();
     }));
   });
@@ -1556,6 +1707,20 @@ function updatePreference(key, value) {
   applyTranslations();
 }
 
+async function changeSelectedMonth(value) {
+  saveMonthData();
+  state.selectedMonth = value || currentMonthKey();
+  state.editing = { table: null, id: null };
+  persistPreferences();
+  if (state.user) {
+    await loadUserData();
+  } else {
+    loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
+    renderView();
+  }
+  applyTranslations();
+}
+
 function openAuth(mode) {
   state.authMode = mode;
   const message = $("#authMessage");
@@ -1641,9 +1806,15 @@ function boot() {
   applyTranslations();
   loadExchangeRates();
 
-  $("#languageSelect").addEventListener("change", (event) => updatePreference("lang", event.target.value));
-  $("#currencySelect").addEventListener("change", (event) => updatePreference("currency", event.target.value));
+  $$(".language-select").forEach((select) => {
+    select.addEventListener("change", (event) => updatePreference("lang", event.target.value));
+  });
+  $$(".currency-select").forEach((select) => {
+    select.addEventListener("change", (event) => updatePreference("currency", event.target.value));
+  });
   $("#themeToggle").addEventListener("click", () => updatePreference("theme", state.theme === "dark" ? "light" : "dark"));
+  $("#appThemeToggle").addEventListener("click", () => updatePreference("theme", state.theme === "dark" ? "light" : "dark"));
+  $("#appMonthSelect").addEventListener("change", (event) => changeSelectedMonth(event.target.value));
   $("#menuToggle").addEventListener("click", () => $(".topbar").classList.toggle("menu-open"));
   $("#startDemo").addEventListener("click", openApp);
   $("#heroDemo").addEventListener("click", openApp);
@@ -1701,7 +1872,7 @@ function boot() {
     if (supabaseClient) await supabaseClient.auth.signOut();
     setSessionUser(null);
     state.plan = "free";
-    loadDemoData();
+    loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
     showLandingPage("home");
   });
 

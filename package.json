@@ -2,12 +2,29 @@
   "name": "budgethub-family",
   "version": "0.1.0",
   "private": true,
-  "description": "BudgetHub Family SaaS",
+  "description": "BudgetHub Family web app and Express backend for Hostinger.",
   "main": "server.js",
   "scripts": {
+    "dev": "node --watch server.js",
     "start": "node server.js"
   },
+  "keywords": [
+    "budget",
+    "family",
+    "finance",
+    "express",
+    "hostinger"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
   "dependencies": {
-    "express": "^4.18.3"
-  }
+    "@supabase/supabase-js": "^2.47.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0",
+    "stripe": "^17.4.0"
+  },
+  "devDependencies": {}
 }
