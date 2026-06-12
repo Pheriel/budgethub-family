@@ -1,5 +1,8 @@
 const { createSupabaseAdminClient } = require("../config/supabase");
 const { createStripeClient } = require("../config/stripe");
+const { planPriceEnv } = require("../config/billing.prices");
+
+const stripePriceConfigKeys = Object.values(planPriceEnv).flatMap((durations) => Object.values(durations));
 
 const requiredConfigKeys = [
   "NODE_ENV",
@@ -10,9 +13,7 @@ const requiredConfigKeys = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
-  "STRIPE_PRICE_SOLO",
-  "STRIPE_PRICE_FAMILY",
-  "STRIPE_PRICE_FAMILY_PLUS",
+  ...stripePriceConfigKeys,
   "JWT_SECRET"
 ];
 

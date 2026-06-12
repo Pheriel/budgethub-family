@@ -1,6 +1,11 @@
 const { createSupabaseAdminClient } = require("../config/supabase");
 const { createStripeClient } = require("../config/stripe");
-const { stripePrices, priceIdToPlan, validDurations, validCurrencies } = require("../config/billing.prices");
+const {
+  getMissingStripePriceEnv,
+  getPriceIdToPlan,
+  getStripePrices,
+  validCurrencies
+} = require("../config/billing.prices");
 
 const durationToLabel = { "1m": "1 mois", "3m": "3 mois", "6m": "6 mois", "12m": "1 an" };
 const productionUrl = "https://budgethubfamily.com";
@@ -15,6 +20,12 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
   const stripe = createStripeClient();
   if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
 
+  const missingPriceEnv = getMissingStripePriceEnv();
+  if (missingPriceEnv.length) {
+    return { status: 503, body: { error: "stripe_prices_not_configured", missing: missingPriceEnv } };
+  }
+
+  const stripePrices = getStripePrices();
   const priceId = stripePrices[plan] && stripePrices[plan][duration];
   if (!priceId) return { status: 400, body: { error: "invalid_plan_or_duration" } };
 
@@ -84,6 +95,7 @@ async function handleCheckoutCompleted(session) {
   const stripe = createStripeClient();
   const subscription = await stripe.subscriptions.retrieve(session.subscription);
   const priceId = subscription.items.data[0]?.price?.id;
+  const priceIdToPlan = getPriceIdToPlan();
   const plan = priceIdToPlan[priceId];
   if (!plan) return { updated: false, reason: "unknown_price" };
 
@@ -100,6 +112,7 @@ async function syncSubscription(subscriptionId) {
   if (!userId) return { updated: false, reason: "missing_app_user_id" };
 
   const priceId = subscription.items.data[0]?.price?.id;
+  const priceIdToPlan = getPriceIdToPlan();
   const plan = priceIdToPlan[priceId];
   if (!plan) return { updated: false, reason: "unknown_price" };
 
@@ -163,6 +176,7 @@ async function syncUserPlan(userId) {
 
   const subscription = await stripe.subscriptions.retrieve(completed.subscription);
   const priceId = subscription.items.data[0]?.price?.id;
+  const priceIdToPlan = getPriceIdToPlan();
   const plan = priceIdToPlan[priceId];
   if (!plan) return { updated: false, reason: "unknown_price" };
 
