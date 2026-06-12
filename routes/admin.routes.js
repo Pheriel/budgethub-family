@@ -3,7 +3,7 @@ const express = require("express");
 const { requireAuth } = require("../middleware/auth");
 const {
   isSuperAdminEmail,
-  searchUsers,
+  listUsers,
   getUserDetails,
   setPlan,
   extendUser,
@@ -27,7 +27,11 @@ router.get("/me", (req, res) => {
 });
 
 router.get("/users", async (req, res) => {
-  const result = await searchUsers(req.query.q || "");
+  const result = await listUsers({
+    query: req.query.q || "",
+    page: req.query.page || 1,
+    pageSize: req.query.pageSize || 20
+  });
   res.status(result.status).json(result.body);
 });
 

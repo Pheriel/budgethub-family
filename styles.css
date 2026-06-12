@@ -254,39 +254,88 @@
   gap: 0.75rem;
 }
 
-.admin-results,
 .admin-log {
   display: grid;
   gap: 0.75rem;
   margin-top: 1rem;
 }
 
-.admin-user-row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) auto auto;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 3.5rem;
-  padding: 0.75rem;
+.admin-table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
 }
 
-.admin-user-row.active {
-  border-color: var(--primary);
+.admin-table {
+  width: 100%;
+  min-width: 52rem;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-table th {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-table tr.active {
   background: color-mix(in srgb, var(--primary) 8%, var(--surface));
 }
 
-.admin-user-row small,
+.admin-table small,
 .admin-summary span,
 .admin-log span {
   display: block;
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-pill.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.status-pill.inactive {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  color: var(--muted);
+}
+
+.admin-pagination div {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .admin-summary {
@@ -1321,9 +1370,14 @@ label select {
     flex-direction: column;
   }
 
-  .admin-search,
-  .admin-user-row {
+  .admin-search {
     grid-template-columns: 1fr;
+  }
+
+  .admin-pagination,
+  .admin-pagination div {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .admin-button-row .secondary-button {

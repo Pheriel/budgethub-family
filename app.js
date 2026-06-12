@@ -465,7 +465,7 @@ const state = {
   plan: "free",
   role: "Owner",
   isSuperAdmin: false,
-  admin: { query: "", users: [], selected: null, logs: [], message: "" },
+  admin: { query: "", users: [], selected: null, logs: [], message: "", page: 1, pageSize: 20, total: 0, hasPrevious: false, hasNext: false, loaded: false },
   currentView: "dashboard",
   debts: [],
   budget: [],
@@ -858,7 +858,7 @@ function setSessionUser(user) {
   if (!user) {
     state.role = "Owner";
     state.isSuperAdmin = false;
-    state.admin = { query: "", users: [], selected: null, logs: [], message: "" };
+    state.admin = { query: "", users: [], selected: null, logs: [], message: "", page: 1, pageSize: 20, total: 0, hasPrevious: false, hasNext: false, loaded: false };
   }
   const chip = $("#userEmailChip");
   const logoutButton = $("#logoutButton");
@@ -906,6 +906,15 @@ async function checkSuperAdminAccess() {
     adminButton.textContent = t("appAdmin") || "Super Admin";
   }
   if (state.currentView === "admin" && !$("#appView").hidden) renderView();
+  if (state.isSuperAdmin && !state.admin.loaded) {
+    try {
+      await adminLoadUsers();
+    } catch (error) {
+      state.admin.message = error.message;
+      state.admin.loaded = true;
+    }
+    if (state.currentView === "admin" && !$("#appView").hidden) renderView();
+  }
 }
 
 // Demande au backend de vérifier les achats Stripe récents et de mettre à jour le plan
@@ -1692,28 +1701,41 @@ function adminUserSummary(user) {
   `;
 }
 
+function activeLabel(user) {
+  const fr = state.lang === "fr";
+  if (user.isSuspended) return fr ? "Inactif" : "Inactive";
+  return fr ? "Actif" : "Active";
+}
+
+function subscriptionStatusLabel(user) {
+  const base = activeLabel(user);
+  return user.subscriptionStatus ? `${base} · ${user.subscriptionStatus}` : base;
+}
+
 function renderAdmin() {
   const fr = state.lang === "fr";
   if (!state.isSuperAdmin) {
     return `
       <section class="panel">
-        <h3>Super Admin</h3>
-        <p class="form-note role-note">${fr
-          ? "Accès réservé aux emails configurés dans SUPER_ADMIN_EMAILS."
-          : "Access is restricted to emails configured in SUPER_ADMIN_EMAILS."}</p>
+        <h3>${fr ? "Centre d’administration BudgetHub Family" : "BudgetHub Family Administration Center"}</h3>
+        <p class="form-note">${fr
+          ? "Cette section permet la gestion des utilisateurs, des abonnements et des accès de la plateforme."
+          : "This section allows management of users, subscriptions and platform access."}</p>
       </section>
     `;
   }
 
   const selected = state.admin.selected;
+  const start = state.admin.total ? ((state.admin.page - 1) * state.admin.pageSize) + 1 : 0;
+  const end = Math.min(state.admin.total, state.admin.page * state.admin.pageSize);
   return `
     <section class="panel admin-hero">
       <div>
         <p class="eyebrow">Owner tools</p>
-        <h3>Super Admin Dashboard</h3>
+        <h3>${fr ? "Centre d’administration BudgetHub Family" : "BudgetHub Family Administration Center"}</h3>
         <p class="form-note">${fr
-          ? "Gérez les abonnements, accès gratuits, prolongations et suspensions sans toucher Supabase directement."
-          : "Manage subscriptions, free access, extensions, and suspensions without opening Supabase directly."}</p>
+          ? "Cette section permet la gestion des utilisateurs, des abonnements et des accès de la plateforme."
+          : "This section allows management of users, subscriptions and platform access."}</p>
       </div>
       <span class="chip">${state.user ? state.user.email : ""}</span>
     </section>
@@ -1721,18 +1743,42 @@ function renderAdmin() {
     <section class="panel">
       <h3>${fr ? "Recherche utilisateur" : "User search"}</h3>
       <form class="admin-search" id="adminSearchForm">
-        <input name="query" type="search" value="${state.admin.query}" placeholder="${fr ? "Courriel ou nom" : "Email or name"}" autocomplete="off" required />
+        <input name="query" type="search" value="${state.admin.query}" placeholder="${fr ? "Courriel, nom ou plan" : "Email, name, or plan"}" autocomplete="off" />
         <button class="primary-button" type="submit">${fr ? "Rechercher" : "Search"}</button>
       </form>
       ${state.admin.message ? `<p class="form-note">${state.admin.message}</p>` : ""}
-      <div class="admin-results">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Plan</th>
+              <th>${fr ? "Statut" : "Status"}</th>
+              <th>${fr ? "Expiration" : "Expiration"}</th>
+              <th>${fr ? "Date création" : "Created"}</th>
+              <th>${fr ? "Actions" : "Actions"}</th>
+            </tr>
+          </thead>
+          <tbody>
         ${state.admin.users.map((user) => `
-          <button class="admin-user-row ${selected && selected.id === user.id ? "active" : ""}" data-admin-user="${user.id}" type="button">
-            <span><strong>${user.email || user.id}</strong><small>${user.name || "—"}</small></span>
-            <span>${planName(user.plan)}</span>
-            <span>${user.isSuspended ? (fr ? "Suspendu" : "Suspended") : fmtDate(user.currentPeriodEnd)}</span>
-          </button>
+            <tr class="${selected && selected.id === user.id ? "active" : ""}">
+              <td><strong>${user.email || user.id}</strong><small>${user.name || "—"}</small></td>
+              <td>${planName(user.plan)}</td>
+              <td><span class="status-pill ${user.isSuspended ? "inactive" : "active"}">${subscriptionStatusLabel(user)}</span></td>
+              <td>${fmtDate(user.currentPeriodEnd)}</td>
+              <td>${fmtDate(user.createdAt)}</td>
+              <td><button class="secondary-button" data-admin-user="${user.id}" type="button">${fr ? "Voir" : "View"}</button></td>
+            </tr>
         `).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="admin-pagination">
+        <span>${fr ? "Résultats" : "Results"} ${start}-${end} / ${state.admin.total}</span>
+        <div>
+          <button class="secondary-button" data-admin-page="prev" type="button" ${state.admin.hasPrevious ? "" : "disabled"}>${fr ? "Précédent" : "Previous"}</button>
+          <button class="secondary-button" data-admin-page="next" type="button" ${state.admin.hasNext ? "" : "disabled"}>${fr ? "Suivant" : "Next"}</button>
+        </div>
       </div>
     </section>
 
@@ -1842,6 +1888,24 @@ async function adminLoadUser(userId) {
   state.admin.logs = result.logs || [];
 }
 
+async function adminLoadUsers(page = state.admin.page) {
+  const params = new URLSearchParams({
+    q: state.admin.query || "",
+    page: String(page),
+    pageSize: String(state.admin.pageSize || 20)
+  });
+  const response = await authFetch(`/api/admin/users?${params.toString()}`);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || result.error || "users_list_failed");
+  state.admin.users = result.users || [];
+  state.admin.page = result.page || page;
+  state.admin.pageSize = result.pageSize || 20;
+  state.admin.total = result.total || 0;
+  state.admin.hasPrevious = Boolean(result.hasPrevious);
+  state.admin.hasNext = Boolean(result.hasNext);
+  state.admin.loaded = true;
+}
+
 async function adminPost(path, payload) {
   const response = await authFetch(path, {
     method: "POST",
@@ -1851,6 +1915,7 @@ async function adminPost(path, payload) {
   if (!response.ok) throw new Error(result.error || "admin_action_failed");
   state.admin.selected = result.user;
   state.admin.logs = result.logs || [];
+  await adminLoadUsers(state.admin.page);
 }
 
 function bindViewActions() {
@@ -1860,12 +1925,10 @@ function bindViewActions() {
       event.preventDefault();
       const query = new FormData(adminSearchForm).get("query").trim();
       state.admin.query = query;
+      state.admin.page = 1;
       state.admin.message = "";
       try {
-        const response = await authFetch(`/api/admin/users?q=${encodeURIComponent(query)}`);
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "search_failed");
-        state.admin.users = result.users || [];
+        await adminLoadUsers(1);
         state.admin.message = state.admin.users.length
           ? ""
           : (state.lang === "fr" ? "Aucun utilisateur trouvé." : "No user found.");
@@ -1875,6 +1938,21 @@ function bindViewActions() {
       renderView();
     });
   }
+
+  $$("[data-admin-page]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const direction = button.dataset.adminPage;
+      const nextPage = direction === "next" ? state.admin.page + 1 : state.admin.page - 1;
+      if (nextPage < 1) return;
+      state.admin.message = "";
+      try {
+        await adminLoadUsers(nextPage);
+      } catch (error) {
+        state.admin.message = error.message;
+      }
+      renderView();
+    });
+  });
 
   $$("[data-admin-user]").forEach((button) => {
     button.addEventListener("click", async () => {

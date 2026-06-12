@@ -4,6 +4,8 @@ const VALID_PLANS = ["free", "solo", "family", "familyPlus"];
 const VALID_DURATIONS = ["1m", "3m", "6m", "12m"];
 const durationDays = { "1m": 30, "3m": 90, "6m": 180, "12m": 365 };
 const extensionDays = [30, 90, 180, 365];
+const profileSelect = "id,email,display_name,created_at,plan,billing_duration,subscription_status,current_period_end,stripe_customer_id,stripe_subscription_id,family_owner_id,is_suspended,suspended_at";
+const legacyProfileSelect = "id,email,display_name,created_at,plan,billing_duration,subscription_status,current_period_end,stripe_customer_id,stripe_subscription_id,family_owner_id";
 
 function superAdminEmails() {
   return (process.env.SUPER_ADMIN_EMAILS || "")
@@ -27,6 +29,7 @@ function normalizeProfile(row) {
     id: row.id,
     email: row.email || "",
     name: row.display_name || "",
+    createdAt: row.created_at || null,
     plan: row.plan || "free",
     billingDuration: row.billing_duration || null,
     subscriptionStatus: row.subscription_status || null,
@@ -35,7 +38,8 @@ function normalizeProfile(row) {
     stripeSubscriptionId: row.stripe_subscription_id || null,
     familyOwnerId: row.family_owner_id || row.id,
     isSuspended: Boolean(row.is_suspended),
-    suspendedAt: row.suspended_at || null
+    suspendedAt: row.suspended_at || null,
+    isActive: !row.is_suspended
   };
 }
 
@@ -57,12 +61,43 @@ async function audit(supabase, actor, targetUserId, action, beforeState, afterSt
 }
 
 async function getProfileOrNull(supabase, userId) {
-  const { data } = await supabase
+  let { data, error } = await supabase
     .from("profiles")
-    .select("id,email,display_name,plan,billing_duration,subscription_status,current_period_end,stripe_customer_id,stripe_subscription_id,family_owner_id,is_suspended,suspended_at")
+    .select(profileSelect)
     .eq("id", userId)
     .maybeSingle();
+  if (error && error.code === "42703") {
+    const fallback = await supabase
+      .from("profiles")
+      .select(legacyProfileSelect)
+      .eq("id", userId)
+      .maybeSingle();
+    data = fallback.data;
+  }
   return data || null;
+}
+
+async function selectProfiles(supabase, { term, from, to }) {
+  const safeTerm = term.replace(/[%_]/g, "\\$&");
+  let request = supabase
+    .from("profiles")
+    .select(profileSelect, { count: "exact" });
+
+  if (term) {
+    request = request.or(`email.ilike.%${safeTerm}%,display_name.ilike.%${safeTerm}%,plan.ilike.%${safeTerm}%`);
+  }
+
+  let result = await request.order("created_at", { ascending: false }).range(from, to);
+  if (result.error && result.error.code === "42703") {
+    request = supabase
+      .from("profiles")
+      .select(legacyProfileSelect, { count: "exact" });
+    if (term) {
+      request = request.or(`email.ilike.%${safeTerm}%,display_name.ilike.%${safeTerm}%,plan.ilike.%${safeTerm}%`);
+    }
+    result = await request.order("created_at", { ascending: false }).range(from, to);
+  }
+  return result;
 }
 
 async function familyMemberCount(supabase, ownerId) {
@@ -88,28 +123,32 @@ async function enrichProfile(supabase, row) {
   };
 }
 
-async function searchUsers(query) {
+async function listUsers({ query = "", page = 1, pageSize = 20 } = {}) {
   const supabase = createSupabaseAdminClient();
   if (!supabase) return { status: 503, body: { error: "supabase_not_configured" } };
 
   const term = (query || "").trim();
-  if (term.length < 2) {
-    return { status: 400, body: { error: "query_too_short" } };
-  }
+  const currentPage = Math.max(1, Number(page) || 1);
+  const limit = Math.min(50, Math.max(1, Number(pageSize) || 20));
+  const from = (currentPage - 1) * limit;
+  const to = from + limit - 1;
+  const { data, error, count } = await selectProfiles(supabase, { term, from, to });
 
-  const safeTerm = term.replace(/[%_]/g, "\\$&");
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id,email,display_name,plan,billing_duration,subscription_status,current_period_end,stripe_customer_id,stripe_subscription_id,family_owner_id,is_suspended,suspended_at")
-    .or(`email.ilike.%${safeTerm}%,display_name.ilike.%${safeTerm}%`)
-    .order("updated_at", { ascending: false })
-    .limit(20);
-
-  if (error) return { status: 500, body: { error: "search_failed" } };
+  if (error) return { status: 500, body: { error: "users_list_failed", detail: error.message } };
 
   const users = [];
   for (const row of data || []) users.push(await enrichProfile(supabase, row));
-  return { status: 200, body: { users } };
+  return {
+    status: 200,
+    body: {
+      users,
+      page: currentPage,
+      pageSize: limit,
+      total: count || 0,
+      hasPrevious: currentPage > 1,
+      hasNext: (count || 0) > currentPage * limit
+    }
+  };
 }
 
 async function getUserDetails(userId) {
@@ -119,7 +158,7 @@ async function getUserDetails(userId) {
   const profile = await getProfileOrNull(supabase, userId);
   if (!profile) return { status: 404, body: { error: "user_not_found" } };
 
-  const { data: logs } = await supabase
+  const { data: logs, error: logError } = await supabase
     .from("admin_audit_logs")
     .select("id,actor_email,action,before_state,after_state,created_at")
     .eq("target_user_id", userId)
@@ -130,7 +169,7 @@ async function getUserDetails(userId) {
     status: 200,
     body: {
       user: await enrichProfile(supabase, profile),
-      logs: logs || []
+      logs: logError ? [] : (logs || [])
     }
   };
 }
@@ -184,6 +223,7 @@ async function setPlan({ actor, userId, plan, duration }) {
   if (error) return { status: 500, body: { error: "plan_update_failed" } };
 
   const after = await getProfileOrNull(supabase, userId);
+  if (!after || after.plan !== plan) return { status: 500, body: { error: "plan_update_not_persisted" } };
   await audit(supabase, actor, userId, "set_plan", beforeState, { ...normalizeProfile(after), appliedToUserIds: ids });
   return getUserDetails(userId);
 }
@@ -234,6 +274,7 @@ async function setSuspended({ actor, userId, suspended }) {
   };
 
   const { error } = await supabase.from("profiles").update(update).eq("id", userId);
+  if (error && error.code === "42703") return { status: 500, body: { error: "admin_migration_required" } };
   if (error) return { status: 500, body: { error: "suspension_failed" } };
 
   const after = await getProfileOrNull(supabase, userId);
@@ -243,7 +284,7 @@ async function setSuspended({ actor, userId, suspended }) {
 
 module.exports = {
   isSuperAdminEmail,
-  searchUsers,
+  listUsers,
   getUserDetails,
   setPlan,
   extendUser,
