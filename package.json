@@ -1,20 +1,13 @@
 {
-  "name": "budgethub-family-frontend",
+  "name": "budgethub-family",
   "version": "0.1.0",
   "private": true,
-  "description": "Public SaaS frontend for BudgetHub Family.",
+  "description": "BudgetHub Family SaaS",
+  "main": "server.js",
   "scripts": {
-    "dev": "npx --yes http-server . -p 5173 -c-1",
-    "start": "npm run dev"
+    "start": "node server.js"
   },
-  "keywords": [
-    "budget",
-    "family",
-    "finance",
-    "frontend",
-    "vanilla-js"
-  ],
-  "author": "",
-  "license": "UNLICENSED",
-  "devDependencies": {}
+  "dependencies": {
+    "express": "^4.18.3"
+  }
 }
