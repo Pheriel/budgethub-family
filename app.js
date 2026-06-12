@@ -246,6 +246,8 @@ const state = {
   user: null,
   subscription: null,
   billingDuration: "1m",
+  income: 0,
+  editing: { table: null, id: null },
   currency: localStorage.getItem("bh_currency") || "CAD",
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
@@ -540,12 +542,13 @@ async function loadProfilePlan() {
 
 async function loadUserData() {
   if (!supabaseClient || !state.user) return;
-  const [debts, budget, transactions, goals, members] = await Promise.all([
+  const [debts, budget, transactions, goals, members, incomes] = await Promise.all([
     supabaseClient.from("debts").select("id,name,balance,rate,min_payment").order("created_at"),
     supabaseClient.from("budget_categories").select("id,category,planned,spent").order("created_at"),
     supabaseClient.from("transactions").select("id,date,name,category,amount").order("date", { ascending: false }),
-    supabaseClient.from("goals").select("id,name,target,saved").order("created_at"),
-    supabaseClient.from("family_members").select("id,name,role,email").order("created_at")
+    supabaseClient.from("goals").select("id,name,target,saved,monthly_contribution,created_at").order("created_at"),
+    supabaseClient.from("family_members").select("id,name,role,email").order("created_at"),
+    supabaseClient.from("profiles").select("monthly_income")
   ]);
   state.debts = (debts.data || []).map((row) => ({
     id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment)
@@ -557,9 +560,12 @@ async function loadUserData() {
     id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount)
   }));
   state.goals = (goals.data || []).map((row) => ({
-    id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved)
+    id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved),
+    monthlyContribution: Number(row.monthly_contribution || 0), createdAt: row.created_at
   }));
   state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "" }));
+  // Revenu du foyer = somme des salaires de tous les membres de la famille
+  state.income = (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0);
   renderView();
 }
 
@@ -577,10 +583,41 @@ async function dbInsert(table, payload) {
   return data;
 }
 
+async function dbUpdate(table, id, payload) {
+  if (!supabaseClient || !state.user || !id) return null;
+  const { data, error } = await supabaseClient
+    .from(table)
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) {
+    console.error(`Update ${table} failed:`, error.message);
+    return null;
+  }
+  return data;
+}
+
 async function dbDelete(table, id) {
   if (!supabaseClient || !state.user || !id) return;
   const { error } = await supabaseClient.from(table).delete().eq("id", id);
   if (error) console.error(`Delete from ${table} failed:`, error.message);
+}
+
+// Épargne actuelle d'un objectif: montant de départ + cotisation × mois écoulés depuis la création
+function goalCurrentSaved(goal) {
+  if (!goal.monthlyContribution || !goal.createdAt) return goal.saved;
+  const created = new Date(goal.createdAt).getTime();
+  const monthsElapsed = (Date.now() - created) / (1000 * 60 * 60 * 24 * 30.44);
+  const grown = goal.saved + goal.monthlyContribution * Math.max(0, monthsElapsed);
+  return Math.min(goal.target, grown);
+}
+
+// Met à jour le salaire de l'utilisateur connecté
+async function updateIncome(value) {
+  if (!supabaseClient || !state.user) return;
+  await supabaseClient.from("profiles").update({ monthly_income: value }).eq("id", state.user.id);
+  loadUserData();
 }
 
 async function selectPlan(planId) {
@@ -701,20 +738,51 @@ function renderView() {
 
 function totals() {
   const debt = state.debts.reduce((sum, item) => sum + item.balance, 0);
-  const payments = state.debts.reduce((sum, item) => sum + item.minPayment, 0);
-  const income = state.transactions.filter((item) => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
-  const expenses = Math.abs(state.transactions.filter((item) => item.amount < 0).reduce((sum, item) => sum + item.amount, 0));
-  return { debt, payments, income, expenses, cashflow: income - expenses };
+  const debtPayments = state.debts.reduce((sum, item) => sum + item.minPayment, 0);
+  const monthlyExpenses = state.budget.reduce((sum, item) => sum + item.spent, 0);
+  const goalContributions = state.goals.reduce((sum, item) => sum + (item.monthlyContribution || 0), 0);
+  const income = state.income;
+  const leftover = income - monthlyExpenses - debtPayments - goalContributions;
+  const saved = goalContributions + Math.max(0, leftover);
+  const savingsRate = income > 0 ? Math.round((saved / income) * 100) : 0;
+  return { debt, debtPayments, monthlyExpenses, goalContributions, income, leftover, savingsRate };
 }
 
 function renderDashboard() {
-  const total = totals();
+  const fr = state.lang === "fr";
+  const tot = totals();
+
+  const debtBadge = tot.debt === 0
+    ? { cls: "pill-good", txt: fr ? "Aucune" : "None" }
+    : (tot.income > 0 && tot.debt > tot.income * 6
+      ? { cls: "pill-danger", txt: fr ? "Élevée" : "High" }
+      : { cls: "pill-warn", txt: fr ? "À surveiller" : "Watch" });
+  const leftoverBadge = tot.leftover >= 0
+    ? { cls: "pill-good", txt: fr ? "Positif" : "Positive" }
+    : { cls: "pill-danger", txt: fr ? "Négatif" : "Negative" };
+  const savingsBadge = tot.savingsRate >= 20
+    ? { cls: "pill-good", txt: fr ? "Excellent" : "Great" }
+    : (tot.savingsRate >= 10 ? { cls: "pill-warn", txt: fr ? "Correct" : "Fair" } : { cls: "pill-danger", txt: fr ? "Faible" : "Low" });
+  const incomeBadge = tot.income > 0
+    ? { cls: "pill-good", txt: fr ? "Défini" : "Set" }
+    : { cls: "pill-warn", txt: fr ? "À remplir" : "To set" };
+
   return `
+    <section class="panel income-panel">
+      <form class="form-grid" id="incomeForm">
+        <label><span>${fr ? "Revenu mensuel du foyer (salaire net)" : "Household monthly income (net salary)"}</span>
+          <input name="income" type="number" min="0" step="0.01" value="${state.income || ""}" placeholder="3500" /></label>
+        <button class="primary-button" type="submit">${fr ? "Enregistrer le revenu" : "Save income"}</button>
+      </form>
+      <p class="form-note">${fr
+        ? "Votre salaire net mensuel sert à calculer ce qu'il vous reste à la fin du mois."
+        : "Your net monthly salary is used to compute what's left at the end of the month."}</p>
+    </section>
     <div class="stats-grid">
-      ${stat(t("totalDebt"), money(total.debt), "pill-danger", "High")}
-      ${stat(t("monthlyCashflow"), money(total.cashflow), "pill-good", "Positive")}
-      ${stat(t("nextPayment"), money(total.payments), "pill-warn", "Soon")}
-      ${stat(t("savingsRate"), "18%", "pill-good", "Stable")}
+      ${stat(fr ? "Revenu mensuel" : "Monthly income", money(tot.income), incomeBadge.cls, incomeBadge.txt)}
+      ${stat(t("totalDebt"), money(tot.debt), debtBadge.cls, debtBadge.txt)}
+      ${stat(fr ? "Reste à la fin du mois" : "Left at month end", money(tot.leftover), leftoverBadge.cls, leftoverBadge.txt)}
+      ${stat(t("savingsRate"), `${tot.savingsRate}%`, savingsBadge.cls, savingsBadge.txt)}
     </div>
     <div class="card-grid">
       <section class="panel">
@@ -742,14 +810,18 @@ function stat(label, value, className, status) {
 }
 
 function renderDebts() {
+  const fr = state.lang === "fr";
+  const editing = state.editing.table === "debts";
+  const d = editing ? state.debts.find((x) => x.id === state.editing.id) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="debtForm">
-        <label><span>${t("name")}</span><input name="name" required placeholder="Mastercard" /></label>
-        <label><span>${t("balance")}</span><input name="balance" required type="number" min="1" placeholder="2500" /></label>
-        <label><span>${t("rate")}</span><input name="rate" required type="number" min="0" step="0.01" placeholder="18.99" /></label>
-        <label><span>${t("minPayment")}</span><input name="minPayment" required type="number" min="0" step="0.01" placeholder="75" /></label>
-        <button class="primary-button" type="submit">${t("addDebt")}</button>
+        <label><span>${t("name")}</span><input name="name" required placeholder="Mastercard" value="${d ? d.name : ""}" /></label>
+        <label><span>${t("balance")}</span><input name="balance" required type="number" min="1" placeholder="2500" value="${d ? d.balance : ""}" /></label>
+        <label><span>${t("rate")}</span><input name="rate" required type="number" min="0" step="0.01" placeholder="18.99" value="${d ? d.rate : ""}" /></label>
+        <label><span>${t("minPayment")}</span><input name="minPayment" required type="number" min="0" step="0.01" placeholder="75" value="${d ? d.minPayment : ""}" /></label>
+        <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : t("addDebt")}</button>
+        ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
       <div id="limitMessage"></div>
       ${debtTable(true)}
@@ -777,7 +849,7 @@ function debtTable(actions) {
               <td>${debt.rate.toFixed(2)}%</td>
               <td>${money(debt.minPayment)}</td>
               <td>${money(recommendedPayment(debt))}</td>
-              ${actions ? `<td><button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
+              ${actions ? `<td><button class="secondary-button" data-edit-debt="${debt.id}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
             </tr>
           `).join("")}
         </tbody>
@@ -812,14 +884,21 @@ function strategyList(items) {
 }
 
 function renderBudget() {
+  const fr = state.lang === "fr";
+  const editing = state.editing.table === "budget_categories";
+  const b = editing ? state.budget.find((x) => x.id === state.editing.id) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="budgetForm">
-        <label><span>${t("category")}</span><input name="category" required placeholder="${state.lang === "fr" ? "Logement" : "Housing"}" /></label>
-        <label><span>${t("planned")}</span><input name="planned" required type="number" min="0" step="0.01" placeholder="1500" /></label>
-        <label><span>${t("spent")}</span><input name="spent" type="number" min="0" step="0.01" placeholder="0" /></label>
-        <button class="primary-button" type="submit">${state.lang === "fr" ? "Ajouter" : "Add"}</button>
+        <label><span>${t("category")}</span><input name="category" required placeholder="${fr ? "Logement" : "Housing"}" value="${b ? b.category : ""}" /></label>
+        <label><span>${fr ? "Budget prévu" : "Planned budget"}</span><input name="planned" required type="number" min="0" step="0.01" placeholder="1500" value="${b ? b.planned : ""}" /></label>
+        <label><span>${fr ? "Déjà dépensé ce mois" : "Spent this month"}</span><input name="spent" type="number" min="0" step="0.01" placeholder="0" value="${b ? b.spent : ""}" /></label>
+        <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
+        ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
+      <p class="form-note">${fr
+        ? "« Prévu » = le montant que vous comptez dépenser dans cette catégorie. « Dépensé » = ce que vous avez déjà dépensé ce mois-ci. La barre montre la progression."
+        : "“Planned” = the amount you intend to spend in this category. “Spent” = what you've already spent this month. The bar shows progress."}</p>
       ${budgetTable(true)}
     </section>
   `;
@@ -833,7 +912,7 @@ function budgetTable(actions) {
         <tbody>
           ${state.budget.map((item, index) => {
             const pct = item.planned > 0 ? Math.min(100, Math.round((item.spent / item.planned) * 100)) : 0;
-            return `<tr><td>${item.category}</td><td>${money(item.planned)}</td><td>${money(item.spent)}</td><td><div class="progress"><span style="width:${pct}%"></span></div></td>${actions ? `<td><button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+            return `<tr><td>${item.category}</td><td>${money(item.planned)}</td><td>${money(item.spent)}</td><td><div class="progress"><span style="width:${pct}%"></span></div></td>${actions ? `<td><button class="secondary-button" data-edit-budget="${item.id}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
@@ -842,15 +921,22 @@ function budgetTable(actions) {
 }
 
 function renderTransactions() {
+  const fr = state.lang === "fr";
+  const editing = state.editing.table === "transactions";
+  const tr = editing ? state.transactions.find((x) => x.id === state.editing.id) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="transactionForm">
-        <label><span>${t("date")}</span><input name="date" required type="date" value="${new Date().toISOString().slice(0, 10)}" /></label>
-        <label><span>${t("name")}</span><input name="name" required placeholder="${state.lang === "fr" ? "Épicerie" : "Groceries"}" /></label>
-        <label><span>${t("category")}</span><input name="category" required placeholder="${state.lang === "fr" ? "Épicerie" : "Groceries"}" /></label>
-        <label><span>${t("amount")}</span><input name="amount" required type="number" step="0.01" placeholder="-50.00" /></label>
-        <button class="primary-button" type="submit">${state.lang === "fr" ? "Ajouter" : "Add"}</button>
+        <label><span>${t("date")}</span><input name="date" required type="date" value="${tr ? tr.date : new Date().toISOString().slice(0, 10)}" /></label>
+        <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.name : ""}" /></label>
+        <label><span>${t("category")}</span><input name="category" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.category : ""}" /></label>
+        <label><span>${t("amount")}</span><input name="amount" required type="number" step="0.01" placeholder="-50.00" value="${tr ? tr.amount : ""}" /></label>
+        <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
+        ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
+      <p class="form-note">${fr
+        ? "Montant négatif pour une dépense (ex. -50), positif pour un revenu (ex. 3000)."
+        : "Negative amount for an expense (e.g. -50), positive for income (e.g. 3000)."}</p>
       ${transactionTable(true)}
     </section>
   `;
@@ -862,7 +948,7 @@ function transactionTable(actions) {
       <table>
         <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
-          ${state.transactions.map((item, index) => `<tr><td>${item.date}</td><td>${item.name}</td><td>${item.category}</td><td>${money(item.amount)}</td>${actions ? `<td><button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
+          ${state.transactions.map((item, index) => `<tr><td>${item.date}</td><td>${item.name}</td><td>${item.category}</td><td>${money(item.amount)}</td>${actions ? `<td><button class="secondary-button" data-edit-transaction="${item.id}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -870,29 +956,44 @@ function transactionTable(actions) {
 }
 
 function renderGoals() {
+  const fr = state.lang === "fr";
+  const editing = state.editing.table === "goals";
+  const g = editing ? state.goals.find((x) => x.id === state.editing.id) : null;
   return `
     <section class="panel">
       <form class="form-grid" id="goalForm">
-        <label><span>${t("name")}</span><input name="name" required placeholder="${state.lang === "fr" ? "Fonds urgence" : "Emergency fund"}" /></label>
-        <label><span>${state.lang === "fr" ? "Cible" : "Target"}</span><input name="target" required type="number" min="1" placeholder="10000" /></label>
-        <label><span>${state.lang === "fr" ? "Épargné" : "Saved"}</span><input name="saved" type="number" min="0" placeholder="0" /></label>
-        <button class="primary-button" type="submit">${state.lang === "fr" ? "Ajouter" : "Add"}</button>
+        <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Fonds urgence" : "Emergency fund"}" value="${g ? g.name : ""}" /></label>
+        <label><span>${fr ? "Cible" : "Target"}</span><input name="target" required type="number" min="1" placeholder="15000" value="${g ? g.target : ""}" /></label>
+        <label><span>${fr ? "Déjà épargné" : "Already saved"}</span><input name="saved" type="number" min="0" placeholder="0" value="${g ? g.saved : ""}" /></label>
+        <label><span>${fr ? "Cotisation par mois" : "Monthly contribution"}</span><input name="monthlyContribution" type="number" min="0" step="0.01" placeholder="100" value="${g ? g.monthlyContribution : ""}" /></label>
+        <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
+        ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
+      <p class="form-note">${fr
+        ? "L'épargne monte automatiquement chaque mois selon la cotisation, depuis la date de création."
+        : "Savings grow automatically each month based on the contribution, from the creation date."}</p>
       ${goalsList(true)}
     </section>
   `;
 }
 
 function goalsList(actions) {
+  const fr = state.lang === "fr";
   if (!state.goals.length) {
-    return `<p class="form-note">${state.lang === "fr" ? "Aucun objectif pour le moment." : "No goals yet."}</p>`;
+    return `<p class="form-note">${fr ? "Aucun objectif pour le moment." : "No goals yet."}</p>`;
   }
   return state.goals.map((goal, index) => {
-    const pct = Math.round((goal.saved / goal.target) * 100);
+    const current = goalCurrentSaved(goal);
+    const pct = goal.target > 0 ? Math.min(100, (current / goal.target) * 100) : 0;
+    const contribLine = goal.monthlyContribution
+      ? ` · ${money(goal.monthlyContribution)}${fr ? "/mois" : "/mo"}`
+      : "";
     return `
-      <div>
+      <div class="goal-item">
         <strong>${goal.name}</strong>
-        <p>${money(goal.saved)} / ${money(goal.target)} · ${pct}% ${actions ? `<button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button>` : ""}</p>
+        <p>${money(current)} / ${money(goal.target)} · ${pct.toFixed(1)}%${contribLine}
+          ${actions ? `<button class="secondary-button" data-edit-goal="${goal.id}">${fr ? "Modifier" : "Edit"}</button>
+          <button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button>` : ""}</p>
         <div class="progress"><span style="width:${pct}%"></span></div>
       </div>
     `;
@@ -1028,20 +1129,26 @@ function bindViewActions() {
   if (debtForm) {
     debtForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const form = new FormData(debtForm);
+      const payload = {
+        name: form.get("name"),
+        balance: Number(form.get("balance")),
+        rate: Number(form.get("rate")),
+        min_payment: Number(form.get("minPayment"))
+      };
+      if (state.editing.table === "debts") {
+        const debt = state.debts.find((x) => x.id === state.editing.id);
+        if (state.user && debt.id) await dbUpdate("debts", debt.id, payload);
+        Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment });
+        state.editing = { table: null, id: null };
+        renderView();
+        return;
+      }
       const plan = planDefinitions.find((item) => item.id === state.plan);
       if (state.debts.length >= plan.debts) return showLimit(planLimitMessage("debts"));
-      const form = new FormData(debtForm);
-      const balance = Number(form.get("balance"));
-      const debt = {
-        name: form.get("name"),
-        balance,
-        rate: Number(form.get("rate")),
-        minPayment: Number(form.get("minPayment"))
-      };
+      const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment };
       if (state.user) {
-        const row = await dbInsert("debts", {
-          name: debt.name, balance: debt.balance, rate: debt.rate, min_payment: debt.minPayment
-        });
+        const row = await dbInsert("debts", payload);
         if (row) debt.id = row.id;
       }
       state.debts.push(debt);
@@ -1133,14 +1240,23 @@ function bindViewActions() {
     transactionForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(transactionForm);
-      const transaction = {
+      const payload = {
         date: form.get("date"),
         name: form.get("name"),
         category: form.get("category"),
         amount: Number(form.get("amount"))
       };
+      if (state.editing.table === "transactions") {
+        const tr = state.transactions.find((x) => x.id === state.editing.id);
+        if (state.user && tr.id) await dbUpdate("transactions", tr.id, payload);
+        Object.assign(tr, payload);
+        state.editing = { table: null, id: null };
+        renderView();
+        return;
+      }
+      const transaction = { ...payload };
       if (state.user) {
-        const row = await dbInsert("transactions", transaction);
+        const row = await dbInsert("transactions", payload);
         if (row) transaction.id = row.id;
       }
       state.transactions.unshift(transaction);
@@ -1153,14 +1269,24 @@ function bindViewActions() {
     goalForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(goalForm);
-      const goal = {
+      const payload = {
         name: form.get("name"),
         target: Number(form.get("target")),
-        saved: Number(form.get("saved") || 0)
+        saved: Number(form.get("saved") || 0),
+        monthly_contribution: Number(form.get("monthlyContribution") || 0)
       };
+      if (state.editing.table === "goals") {
+        const goal = state.goals.find((x) => x.id === state.editing.id);
+        if (state.user && goal.id) await dbUpdate("goals", goal.id, payload);
+        Object.assign(goal, { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution });
+        state.editing = { table: null, id: null };
+        renderView();
+        return;
+      }
+      const goal = { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, createdAt: new Date().toISOString() };
       if (state.user) {
-        const row = await dbInsert("goals", goal);
-        if (row) goal.id = row.id;
+        const row = await dbInsert("goals", payload);
+        if (row) { goal.id = row.id; goal.createdAt = row.created_at; }
       }
       state.goals.push(goal);
       renderView();
@@ -1172,16 +1298,60 @@ function bindViewActions() {
     budgetForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(budgetForm);
-      const item = {
+      const payload = {
         category: form.get("category"),
         planned: Number(form.get("planned")),
         spent: Number(form.get("spent") || 0)
       };
+      if (state.editing.table === "budget_categories") {
+        const b = state.budget.find((x) => x.id === state.editing.id);
+        if (state.user && b.id) await dbUpdate("budget_categories", b.id, payload);
+        Object.assign(b, payload);
+        state.editing = { table: null, id: null };
+        renderView();
+        return;
+      }
+      const item = { ...payload };
       if (state.user) {
-        const row = await dbInsert("budget_categories", item);
+        const row = await dbInsert("budget_categories", payload);
         if (row) item.id = row.id;
       }
       state.budget.push(item);
+      renderView();
+    });
+  }
+
+  const incomeForm = $("#incomeForm");
+  if (incomeForm) {
+    incomeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const value = Number(new FormData(incomeForm).get("income") || 0);
+      state.income = value;
+      if (state.user) await updateIncome(value);
+      renderView();
+    });
+  }
+
+  // Boutons "Modifier": passent le formulaire en mode édition
+  const editBindings = [
+    ["data-edit-debt", "debts"],
+    ["data-edit-budget", "budget_categories"],
+    ["data-edit-goal", "goals"],
+    ["data-edit-transaction", "transactions"]
+  ];
+  editBindings.forEach(([attr, table]) => {
+    $$(`[${attr}]`).forEach((button) => button.addEventListener("click", () => {
+      state.editing = { table, id: button.getAttribute(attr) };
+      renderView();
+      const panel = $("#viewContainer");
+      if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
+  });
+
+  const cancelEdit = $("#cancelEdit");
+  if (cancelEdit) {
+    cancelEdit.addEventListener("click", () => {
+      state.editing = { table: null, id: null };
       renderView();
     });
   }
@@ -1579,8 +1749,19 @@ function boot() {
   });
   $$("#appNav button").forEach((button) => button.addEventListener("click", () => {
     state.currentView = button.dataset.view;
+    state.editing = { table: null, id: null };
     renderView();
   }));
+
+  // Rafraîchit l'épargne des objectifs en temps réel (croissance par cotisation)
+  if (!window.__goalTicker) {
+    window.__goalTicker = setInterval(() => {
+      if (!$("#appView").hidden && (state.currentView === "goals" || state.currentView === "dashboard")
+        && state.goals.some((g) => g.monthlyContribution > 0) && !state.editing.table) {
+        renderView();
+      }
+    }, 3000);
+  }
 
   // Page d'atterrissage selon le hash (ex: #pricing), sans casser les liens de confirmation Supabase
   const initialHash = window.location.hash.replace("#", "");
