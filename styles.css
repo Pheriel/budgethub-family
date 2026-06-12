@@ -7,6 +7,109 @@
   cursor: pointer;
 }
 
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 44px;
+  box-sizing: border-box;
+}
+
+.eye-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  opacity: 0.7;
+  padding: 4px;
+}
+
+.eye-toggle:hover {
+  opacity: 1;
+}
+
+.strength-bar {
+  height: 7px;
+  border-radius: 4px;
+  background: var(--surface-strong);
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.strength-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  transition: width 0.25s ease, background 0.25s ease;
+  border-radius: 4px;
+}
+
+.strength-criteria {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 3px;
+  font-size: 0.82rem;
+}
+
+.strength-criteria li {
+  color: var(--muted);
+  transition: color 0.2s ease;
+}
+
+.strength-criteria li.met {
+  color: var(--accent);
+}
+
+.strength-criteria li::before {
+  content: "○ ";
+}
+
+.strength-criteria li.met::before {
+  content: "✓ ";
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 12, 20, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 440px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.modal-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+
+.modal-email {
+  font-weight: 600;
+  color: var(--primary);
+  margin: 12px 0 20px;
+  word-break: break-all;
+}
+
 .duration-picker {
   display: flex;
   align-items: center;
@@ -43,6 +146,30 @@
 
 .income-panel {
   margin-bottom: 18px;
+}
+
+.debt-summary {
+  margin-bottom: 18px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.summary-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-grid small {
+  color: var(--muted);
+}
+
+.summary-grid strong {
+  font-size: 1.25rem;
 }
 
 .goal-item {

@@ -736,16 +736,22 @@ function renderView() {
   bindViewActions();
 }
 
+// Intérêts mensuels d'une dette: solde × taux annuel / 12
+function monthlyInterest(debt) {
+  return (debt.balance * debt.rate) / 100 / 12;
+}
+
 function totals() {
   const debt = state.debts.reduce((sum, item) => sum + item.balance, 0);
   const debtPayments = state.debts.reduce((sum, item) => sum + item.minPayment, 0);
+  const debtInterest = state.debts.reduce((sum, item) => sum + monthlyInterest(item), 0);
   const monthlyExpenses = state.budget.reduce((sum, item) => sum + item.spent, 0);
   const goalContributions = state.goals.reduce((sum, item) => sum + (item.monthlyContribution || 0), 0);
   const income = state.income;
   const leftover = income - monthlyExpenses - debtPayments - goalContributions;
   const saved = goalContributions + Math.max(0, leftover);
   const savingsRate = income > 0 ? Math.round((saved / income) * 100) : 0;
-  return { debt, debtPayments, monthlyExpenses, goalContributions, income, leftover, savingsRate };
+  return { debt, debtPayments, debtInterest, monthlyExpenses, goalContributions, income, leftover, savingsRate };
 }
 
 function renderDashboard() {
@@ -784,6 +790,15 @@ function renderDashboard() {
       ${stat(fr ? "Reste à la fin du mois" : "Left at month end", money(tot.leftover), leftoverBadge.cls, leftoverBadge.txt)}
       ${stat(t("savingsRate"), `${tot.savingsRate}%`, savingsBadge.cls, savingsBadge.txt)}
     </div>
+    <section class="panel debt-summary">
+      <h3>${fr ? "Résumé des dettes" : "Debt summary"}</h3>
+      <div class="summary-grid">
+        <div><small>${fr ? "Solde total" : "Total balance"}</small><strong>${money(tot.debt)}</strong></div>
+        <div><small>${fr ? "Paiements mensuels (min.)" : "Monthly payments (min.)"}</small><strong>${money(tot.debtPayments)}</strong></div>
+        <div><small>${fr ? "Intérêts payés par mois" : "Interest paid per month"}</small><strong>${money(tot.debtInterest)}</strong></div>
+        <div><small>${fr ? "Intérêts par an" : "Interest per year"}</small><strong>${money(tot.debtInterest * 12)}</strong></div>
+      </div>
+    </section>
     <div class="card-grid">
       <section class="panel">
         <h3>${t("debtsTitle")}</h3>
@@ -836,20 +851,23 @@ function recommendedPayment(debt) {
 }
 
 function debtTable(actions) {
-  const recommendedLabel = state.lang === "fr" ? "Paiement recommandé" : "Recommended payment";
+  const fr = state.lang === "fr";
+  const recommendedLabel = fr ? "Paiement recommandé" : "Recommended payment";
+  const interestLabel = fr ? "Intérêts/mois" : "Interest/mo";
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${t("minPayment")}</th><th>${recommendedLabel}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${recommendedLabel}</th>${actions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.debts.map((debt, index) => `
             <tr>
               <td>${debt.name}</td>
               <td>${money(debt.balance)}</td>
               <td>${debt.rate.toFixed(2)}%</td>
+              <td>${money(monthlyInterest(debt))}</td>
               <td>${money(debt.minPayment)}</td>
               <td>${money(recommendedPayment(debt))}</td>
-              ${actions ? `<td><button class="secondary-button" data-edit-debt="${debt.id}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
+              ${actions ? `<td><button class="secondary-button" data-edit-debt="${debt.id}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
             </tr>
           `).join("")}
         </tbody>
@@ -1567,7 +1585,54 @@ function openAuth(mode) {
     "autocomplete",
     mode === "register" ? "new-password" : "current-password"
   );
+  // Confirmation + jauge de force uniquement à l'inscription
+  const isRegister = mode === "register";
+  $("#confirmPasswordRow").hidden = !isRegister;
+  $("#passwordStrength").hidden = !isRegister;
+  $("#confirmPasswordLabel").textContent = state.lang === "fr" ? "Confirmer le mot de passe" : "Confirm password";
+  if (isRegister) renderPasswordStrength("");
   showView("auth");
+}
+
+// Critères de force du mot de passe
+function passwordCriteria(pw) {
+  return [
+    { key: "len", label: state.lang === "fr" ? "14 caractères minimum" : "14 characters minimum", met: pw.length >= 14 },
+    { key: "upper", label: state.lang === "fr" ? "1 majuscule" : "1 uppercase letter", met: /[A-Z]/.test(pw) },
+    { key: "lower", label: state.lang === "fr" ? "1 minuscule" : "1 lowercase letter", met: /[a-z]/.test(pw) },
+    { key: "digit", label: state.lang === "fr" ? "1 chiffre" : "1 digit", met: /[0-9]/.test(pw) },
+    { key: "special", label: state.lang === "fr" ? "1 caractère spécial" : "1 special character", met: /[^A-Za-z0-9]/.test(pw) }
+  ];
+}
+
+function passwordIsStrong(pw) {
+  return passwordCriteria(pw).every((c) => c.met);
+}
+
+function renderPasswordStrength(pw) {
+  const criteria = passwordCriteria(pw);
+  const metCount = criteria.filter((c) => c.met).length;
+  const fill = $("#strengthFill");
+  const colors = ["#dc2626", "#dc2626", "#f59e0b", "#f59e0b", "#84cc16", "#11a683"];
+  if (fill) {
+    fill.style.width = `${(metCount / criteria.length) * 100}%`;
+    fill.style.background = colors[metCount];
+  }
+  const list = $("#strengthCriteria");
+  if (list) {
+    list.innerHTML = criteria.map((c) => `<li class="${c.met ? "met" : ""}">${c.label}</li>`).join("");
+  }
+}
+
+function showEmailModal(email) {
+  const fr = state.lang === "fr";
+  $("#emailModalTitle").textContent = fr ? "Vérifiez votre courriel" : "Check your email";
+  $("#emailModalText").textContent = fr
+    ? "Un courriel de confirmation vient d'être envoyé. Cliquez sur le lien pour activer votre compte, puis revenez vous connecter."
+    : "A confirmation email was just sent. Click the link to activate your account, then come back to sign in.";
+  $("#emailModalAddress").textContent = email;
+  $("#emailModalClose").textContent = fr ? "Compris" : "Got it";
+  $("#emailModal").hidden = false;
 }
 
 function boot() {
@@ -1582,6 +1647,27 @@ function boot() {
   $("#menuToggle").addEventListener("click", () => $(".topbar").classList.toggle("menu-open"));
   $("#startDemo").addEventListener("click", openApp);
   $("#heroDemo").addEventListener("click", openApp);
+
+  // Jauge de force en direct pendant la saisie du mot de passe
+  $("#authForm").elements.password.addEventListener("input", (event) => {
+    if (state.authMode === "register") renderPasswordStrength(event.target.value);
+  });
+
+  // Boutons œil: afficher/masquer le mot de passe
+  $$("[data-toggle-password]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = button.parentElement.querySelector("input");
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      button.textContent = show ? "🙈" : "👁";
+    });
+  });
+
+  // Fermeture de la modale de confirmation courriel
+  $("#emailModalClose").addEventListener("click", () => {
+    $("#emailModal").hidden = true;
+    openAuth("login");
+  });
   $("#backToLanding").addEventListener("click", () => showLandingPage("home"));
   $("#authBack").addEventListener("click", () => showLandingPage("home"));
 
@@ -1706,6 +1792,25 @@ function boot() {
       return;
     }
 
+    // Validations spécifiques à l'inscription
+    if (state.authMode === "register") {
+      const confirmPassword = form.elements.confirmPassword.value;
+      if (!passwordIsStrong(password)) {
+        message.textContent = state.lang === "fr"
+          ? "Le mot de passe ne respecte pas tous les critères de sécurité."
+          : "The password does not meet all security criteria.";
+        message.hidden = false;
+        return;
+      }
+      if (password !== confirmPassword) {
+        message.textContent = state.lang === "fr"
+          ? "Les deux mots de passe ne sont pas identiques."
+          : "The two passwords do not match.";
+        message.hidden = false;
+        return;
+      }
+    }
+
     submitButton.disabled = true;
     message.hidden = true;
 
@@ -1718,10 +1823,7 @@ function boot() {
         });
         if (error) throw error;
         if (data.user && !data.session) {
-          message.textContent = state.lang === "fr"
-            ? "Compte créé. Vérifiez votre courriel pour confirmer votre adresse."
-            : "Account created. Check your email to confirm your address.";
-          message.hidden = false;
+          showEmailModal(email);
           return;
         }
       } else {
@@ -1756,7 +1858,10 @@ function boot() {
   // Rafraîchit l'épargne des objectifs en temps réel (croissance par cotisation)
   if (!window.__goalTicker) {
     window.__goalTicker = setInterval(() => {
-      if (!$("#appView").hidden && (state.currentView === "goals" || state.currentView === "dashboard")
+      // Ne jamais re-render pendant que l'utilisateur saisit dans un champ (sinon la saisie est effacée)
+      const active = document.activeElement;
+      const typing = active && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA");
+      if (!typing && !$("#appView").hidden && (state.currentView === "goals" || state.currentView === "dashboard")
         && state.goals.some((g) => g.monthlyContribution > 0) && !state.editing.table) {
         renderView();
       }

@@ -17,7 +17,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
   </head>
   <body>
     <div class="app-shell">
@@ -162,7 +162,21 @@
             </label>
             <label>
               <span data-i18n="password">Mot de passe</span>
-              <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" minlength="6" required />
+              <span class="password-field">
+                <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" minlength="6" required />
+                <button type="button" class="eye-toggle" data-toggle-password aria-label="Afficher le mot de passe">👁</button>
+              </span>
+            </label>
+            <div id="passwordStrength" hidden>
+              <div class="strength-bar"><span id="strengthFill"></span></div>
+              <ul class="strength-criteria" id="strengthCriteria"></ul>
+            </div>
+            <label id="confirmPasswordRow" hidden>
+              <span id="confirmPasswordLabel">Confirmer le mot de passe</span>
+              <span class="password-field">
+                <input type="password" name="confirmPassword" placeholder="••••••••" autocomplete="new-password" />
+                <button type="button" class="eye-toggle" data-toggle-password aria-label="Afficher le mot de passe">👁</button>
+              </span>
             </label>
             <button class="primary-button full" type="submit" data-i18n="continue">Continuer</button>
             <p class="form-note" id="authMessage" hidden></p>
@@ -213,7 +227,17 @@
       </main>
     </div>
 
+    <div id="emailModal" class="modal-overlay" hidden>
+      <div class="modal-card">
+        <div class="modal-icon">📧</div>
+        <h2 id="emailModalTitle">Vérifiez votre courriel</h2>
+        <p id="emailModalText">Un courriel de confirmation vient d'être envoyé. Cliquez sur le lien pour activer votre compte, puis revenez vous connecter.</p>
+        <p class="modal-email" id="emailModalAddress"></p>
+        <button class="primary-button full" id="emailModalClose" type="button">Compris</button>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="app.js?v=16"></script>
+    <script src="app.js?v=17"></script>
   </body>
 </html>
