@@ -5,6 +5,7 @@
   "description": "BudgetHub Family web app and Express backend for Hostinger.",
   "main": "server.js",
   "scripts": {
+    "apply:auth-emails": "node scripts/apply-supabase-auth-emails.js",
     "dev": "node --watch server.js",
     "start": "node server.js"
   },

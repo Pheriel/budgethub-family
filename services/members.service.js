@@ -1,10 +1,16 @@
 const { createSupabaseAdminClient } = require("../config/supabase");
 
 const planMemberLimits = { free: 1, solo: 1, family: 5, familyPlus: 10 };
+const productionUrl = "https://budgethubfamily.com";
+
+function clientUrl() {
+  const value = process.env.CLIENT_URL || productionUrl;
+  return value.includes("localhost") || value.includes("127.0.0.1") ? productionUrl : value;
+}
 
 // Invite un membre: crée son compte Supabase (courriel d'invitation avec choix
 // du mot de passe), le relie au plan de l'invitant et l'ajoute à la famille.
-async function inviteMember({ inviterId, email, name, role }) {
+async function inviteMember({ inviterId, email, name, role, lang = "en" }) {
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
     return { status: 503, body: { error: "Supabase admin client unavailable." } };
@@ -59,8 +65,14 @@ async function inviteMember({ inviterId, email, name, role }) {
     }
   } else {
     const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: process.env.CLIENT_URL || undefined,
-      data: { invited_by: inviterId, display_name: name }
+      redirectTo: `${clientUrl()}/auth/confirm`,
+      data: {
+        invited_by: inviterId,
+        display_name: name,
+        lang,
+        language: lang,
+        locale: lang === "fr" ? "fr-CA" : "en"
+      }
     });
 
     if (inviteError) {

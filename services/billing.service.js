@@ -3,6 +3,12 @@ const { createStripeClient } = require("../config/stripe");
 const { stripePrices, priceIdToPlan, validDurations, validCurrencies } = require("../config/billing.prices");
 
 const durationToLabel = { "1m": "1 mois", "3m": "3 mois", "6m": "6 mois", "12m": "1 an" };
+const productionUrl = "https://budgethubfamily.com";
+
+function clientUrl() {
+  const value = process.env.CLIENT_URL || productionUrl;
+  return value.includes("localhost") || value.includes("127.0.0.1") ? productionUrl : value;
+}
 
 // Crée une session de paiement Stripe pour un plan, une durée et une devise donnés
 async function createCheckoutSession({ userId, email, plan, duration, currency }) {
@@ -13,7 +19,7 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
   if (!priceId) return { status: 400, body: { error: "invalid_plan_or_duration" } };
 
   const cur = validCurrencies.includes(currency) ? currency : "cad";
-  const clientUrl = process.env.CLIENT_URL || "http://localhost:5180";
+  const appUrl = clientUrl();
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -22,8 +28,8 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
     line_items: [{ price: priceId, quantity: 1 }],
     currency: cur,
     subscription_data: { metadata: { plan, duration, app_user_id: userId } },
-    success_url: `${clientUrl}?checkout=success`,
-    cancel_url: `${clientUrl}?checkout=cancel`
+    success_url: `${appUrl}?checkout=success`,
+    cancel_url: `${appUrl}?checkout=cancel`
   });
 
   return { status: 200, body: { url: session.url } };

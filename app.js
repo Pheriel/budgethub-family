@@ -281,6 +281,8 @@ const supabaseClient = window.supabase
 const BACKEND_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
   ? "http://localhost:3000"
   : "";
+const PRODUCTION_URL = "https://budgethubfamily.com";
+const authRedirectUrl = `${PRODUCTION_URL}/auth/confirm`;
 
 const state = {
   lang: localStorage.getItem("bh_lang") || detectDefaultLanguage(),
@@ -1338,7 +1340,8 @@ function bindViewActions() {
               inviterId: state.user.id,
               email: member.email,
               name: member.name,
-              role: member.role
+              role: member.role,
+              lang: state.lang
             })
           });
           const result = await response.json();
@@ -1800,6 +1803,42 @@ function showEmailModal(email) {
   $("#emailModal").hidden = false;
 }
 
+async function handleAuthEmailLink() {
+  if (!supabaseClient) return false;
+  const params = new URLSearchParams(window.location.search);
+  const tokenHash = params.get("token_hash");
+  const type = params.get("type");
+  if (!tokenHash || !type) return false;
+
+  const message = $("#authMessage");
+  const { data, error } = await supabaseClient.auth.verifyOtp({
+    token_hash: tokenHash,
+    type
+  });
+
+  history.replaceState(null, "", window.location.pathname);
+
+  if (error) {
+    openAuth("login");
+    message.textContent = state.lang === "fr"
+      ? "Ce lien n'est plus valide. Demandez un nouveau courriel et réessayez."
+      : "This link is no longer valid. Request a new email and try again.";
+    message.hidden = false;
+    return true;
+  }
+
+  if (data.user) {
+    setSessionUser(data.user);
+    await loadProfilePlan();
+    await syncBillingPlan();
+    await loadUserData();
+  }
+
+  state.currentView = type === "recovery" ? "settings" : "dashboard";
+  openApp();
+  return true;
+}
+
 function boot() {
   applyTheme();
   renderPricing();
@@ -1887,7 +1926,7 @@ function boot() {
       return;
     }
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + window.location.pathname
+      redirectTo: authRedirectUrl
     });
     message.textContent = error
       ? (state.lang === "fr" ? "Impossible d'envoyer le courriel de réinitialisation." : "Could not send the reset email.")
@@ -1896,7 +1935,9 @@ function boot() {
   });
 
   if (supabaseClient) {
-    supabaseClient.auth.getSession().then(({ data }) => {
+    handleAuthEmailLink().then((handled) => {
+      if (handled) return;
+      return supabaseClient.auth.getSession().then(({ data }) => {
       if (data.session) {
         setSessionUser(data.session.user);
         loadProfilePlan();
@@ -1905,6 +1946,7 @@ function boot() {
         openApp();
         handleCheckoutReturn();
       }
+      });
     });
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
@@ -1990,7 +2032,14 @@ function boot() {
         const { data, error } = await supabaseClient.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin + window.location.pathname }
+          options: {
+            emailRedirectTo: authRedirectUrl,
+            data: {
+              lang: state.lang,
+              language: state.lang,
+              locale: state.lang === "fr" ? "fr-CA" : "en"
+            }
+          }
         });
         if (error) throw error;
         if (data.user && !data.session) {

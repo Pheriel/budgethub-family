@@ -5,7 +5,7 @@ const { inviteMember } = require("../services/members.service");
 const router = express.Router();
 
 router.post("/invite", async (req, res) => {
-  const { inviterId, email, name, role } = req.body || {};
+  const { inviterId, email, name, role, lang } = req.body || {};
 
   if (!inviterId || !/^[0-9a-f-]{36}$/i.test(inviterId)) {
     return res.status(400).json({ error: "Invalid inviter id." });
@@ -22,7 +22,8 @@ router.post("/invite", async (req, res) => {
       inviterId,
       email: email.trim().toLowerCase(),
       name: name.trim(),
-      role: ["Admin", "Parent", "Viewer"].includes(role) ? role : "Viewer"
+      role: ["Admin", "Parent", "Viewer"].includes(role) ? role : "Viewer",
+      lang: lang === "fr" ? "fr" : "en"
     });
     res.status(result.status).json(result.body);
   } catch (error) {
