@@ -21,6 +21,7 @@ const planPriceEnv = {
 
 const validDurations = ["1m", "3m", "6m", "12m"];
 const validCurrencies = ["cad", "usd", "eur"];
+const planRank = { free: 0, solo: 1, family: 2, familyPlus: 3 };
 
 function readPriceId(envKey) {
   return (process.env[envKey] || "").trim();
@@ -53,11 +54,17 @@ function getPriceIdToPlan() {
   return Object.fromEntries(entries);
 }
 
+function isUpgrade(currentPlan, targetPlan) {
+  return (planRank[targetPlan] || 0) > (planRank[currentPlan] || 0);
+}
+
 module.exports = {
   planPriceEnv,
+  planRank,
   validDurations,
   validCurrencies,
   getMissingStripePriceEnv,
   getStripePrices,
-  getPriceIdToPlan
+  getPriceIdToPlan,
+  isUpgrade
 };

@@ -9,6 +9,8 @@ const {
   syncSubscription,
   syncUserPlan,
   createCheckoutSession,
+  previewUpgrade,
+  upgradeSubscription,
   setAutoRenew,
   cancelSubscription
 } = require("../services/billing.service");
@@ -70,6 +72,34 @@ router.post("/checkout", requireAuth, requirePermission("manageBilling"), async 
   } catch (error) {
     console.error("Checkout creation failed:", error.message);
     res.status(500).json({ error: "Checkout creation failed." });
+  }
+});
+
+router.post("/upgrade/preview", requireAuth, requirePermission("manageBilling"), async (req, res) => {
+  const { targetPlan } = req.body || {};
+  if (!targetPlan) return res.status(400).json({ error: "Missing target plan." });
+  try {
+    const result = await previewUpgrade({ userId: req.user.id, targetPlan });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error("Upgrade preview failed:", error.message);
+    res.status(500).json({ error: "Upgrade preview failed." });
+  }
+});
+
+router.post("/upgrade", requireAuth, requirePermission("manageBilling"), async (req, res) => {
+  const { targetPlan, prorationDate } = req.body || {};
+  if (!targetPlan) return res.status(400).json({ error: "Missing target plan." });
+  try {
+    const result = await upgradeSubscription({
+      userId: req.user.id,
+      targetPlan,
+      prorationDate: Number(prorationDate) || undefined
+    });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error("Upgrade failed:", error.message);
+    res.status(500).json({ error: "Upgrade failed." });
   }
 });
 

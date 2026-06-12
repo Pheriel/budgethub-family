@@ -354,6 +354,7 @@ const planDefinitions = [
   { id: "family", name: "Family", price: 15, members: 5, debts: Infinity, featured: true },
   { id: "familyPlus", name: "Family Plus", price: 20, members: 10, debts: Infinity, featured: false }
 ];
+const planRank = { free: 0, solo: 1, family: 2, familyPlus: 3 };
 
 // Taux de secours si l'API de taux de change est injoignable
 const currencyMeta = {
@@ -573,6 +574,17 @@ function planMoney(value) {
   }).format(value);
 }
 
+function minorMoney(amount, currency) {
+  const upper = (currency || state.currency || "CAD").toUpperCase();
+  const locale = currencyMeta[upper]?.locale || (state.lang === "fr" ? "fr-CA" : "en-US");
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: upper,
+    minimumFractionDigits: amount % 100 ? 2 : 0,
+    maximumFractionDigits: amount % 100 ? 2 : 0
+  }).format(amount / 100);
+}
+
 function persistPreferences() {
   localStorage.setItem("bh_lang", state.lang);
   localStorage.setItem("bh_currency", state.currency);
@@ -685,14 +697,19 @@ function renderPricing() {
   const months = durationMonths[state.billingDuration];
   grid.innerHTML = planDefinitions.map((plan) => {
     const features = planFeatures[plan.id][state.lang];
+    const fr = state.lang === "fr";
     const discount = durationDiscounts[state.billingDuration] || 0;
     const fullPrice = plan.price * months;
     const total = plan.id === "free" ? 0 : planTotal(plan);
-    const durationText = plan.id === "free" ? t("noBilling") : durationLabel(state.billingDuration);
-    const savings = plan.id === "free" ? 0 : Math.max(0, fullPrice - total);
-    const priceLine = planMoney(total);
-    const savingsLine = savings > 0 ? planMoney(savings) : t("noSavings");
-    const discountLine = plan.id === "free" ? `0% ${t("discountSuffix")}` : `${discount}% ${t("discountSuffix")}`;
+    const hasDiscount = plan.id !== "free" && months > 1 && discount > 0;
+    // 1 mois: prix + "/mois" seulement. Durées plus longues: prix final gros,
+    // ancien prix barré et "X — Y% de rabais".
+    const priceLine = months === 1 || plan.id === "free"
+      ? `${planMoney(total)} <small>${t("month")}</small>`
+      : `${planMoney(total)}${hasDiscount ? ` <s class="price-strike">${planMoney(fullPrice)}</s>` : ""}`;
+    const discountLine = hasDiscount
+      ? `<p class="price-discount">${durationLabel(state.billingDuration)} — ${discount}% ${fr ? "de rabais" : "off"}</p>`
+      : "";
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
@@ -701,15 +718,9 @@ function renderPricing() {
           <h3>${plan.name}</h3>
         </div>
         <div>
-          <span class="price-meta">${t("priceLabel")}</span>
           <div class="price">${priceLine}</div>
+          ${discountLine}
         </div>
-        <div class="pricing-facts">
-          <p><span>${t("durationLabel")}</span><strong>${durationText}</strong></p>
-          <p><span>${t("savingsLabel")}</span><strong>${savingsLine}</strong></p>
-          <p><span>${t("savePercentLabel")}</span><strong>${discountLine}</strong></p>
-        </div>
-        ${plan.id !== "free" && months > 1 ? `<p class="price-detail">${t("insteadOfLabel")} ${planMoney(fullPrice)} · ${planMoney(plan.price)} ${t("month")}</p>` : ""}
         <p class="price-meta">${t("includedLabel")}</p>
         <ul>${features.map((feature) => `<li>${feature}</li>`).join("")}</ul>
         ${plan.id !== "free" ? `<p class="form-note">${state.lang === "fr"
@@ -1003,6 +1014,31 @@ async function loadUserData() {
   };
   loadMonthData(state.selectedMonth === currentMonthKey() ? seed : emptyMonthData());
   renderView();
+}
+
+// Recharge depuis Supabase/API les données pertinentes pour l'onglet ouvert,
+// avec un anti-spam de 5 s par vue (changer d'onglet ne doit jamais exiger F5).
+const viewRefreshTimes = {};
+
+async function refreshViewData(view) {
+  if (!state.user) return; // démo: tout est local
+  const now = Date.now();
+  if (viewRefreshTimes[view] && now - viewRefreshTimes[view] < 5000) return;
+  viewRefreshTimes[view] = now;
+
+  try {
+    if (["dashboard", "debts", "strategy", "budget", "transactions", "goals", "family"].includes(view)) {
+      await loadUserData();
+    } else if (view === "account") {
+      await loadProfilePlan();
+    } else if (view === "admin") {
+      await adminLoadUsers(state.admin.page);
+      if (state.admin.selected) await adminLoadUser(state.admin.selected.id);
+      renderView();
+    }
+  } catch (_error) {
+    // Hors ligne: on garde l'affichage actuel
+  }
 }
 
 async function dbInsert(table, payload) {
@@ -1642,6 +1678,7 @@ function renderSubscriptionDetails(plan) {
 function renderAccount() {
   const plan = planDefinitions.find((item) => item.id === state.plan) || planDefinitions[0];
   const fr = state.lang === "fr";
+  const targets = state.subscription ? upgradeTargets() : [];
   return `
     <section class="panel">
       <h3>${fr ? "Mon compte" : "My account"}</h3>
@@ -1661,6 +1698,19 @@ function renderAccount() {
         : "Only the family owner can manage the Stripe subscription."}</p>`}
       <p class="form-note" id="subNote" hidden></p>
     </section>
+    ${can("manageBilling") && targets.length ? `
+    <section class="panel">
+      <h3>${fr ? "Mettre à niveau" : "Upgrade"}</h3>
+      <form class="form-grid upgrade-grid" id="upgradePreviewForm">
+        <label><span>${fr ? "Plan actuel" : "Current plan"}</span><input value="${plan.name}" disabled /></label>
+        <label><span>${fr ? "Nouveau plan" : "New plan"}</span><select name="targetPlan">
+          ${targets.map((target) => `<option value="${target}">${planName(target)}</option>`).join("")}
+        </select></label>
+        <label><span>${fr ? "Durée conservée" : "Kept billing cycle"}</span><input value="${state.subscription.duration ? durationLabel(state.subscription.duration) : "—"}" disabled /></label>
+        <button class="primary-button" type="submit">${fr ? "Calculer le coût supplémentaire" : "Preview additional cost"}</button>
+      </form>
+      <div id="upgradePreviewBox"></div>
+    </section>` : ""}
     <section class="panel">
       <h3>${fr ? "Changer le mot de passe" : "Change password"}</h3>
       <form class="form-grid" id="passwordForm">
@@ -1683,6 +1733,12 @@ function fmtDate(value) {
 
 function planName(planId) {
   return planDefinitions.find((plan) => plan.id === planId)?.name || planId || "Free";
+}
+
+function upgradeTargets() {
+  return planDefinitions
+    .filter((plan) => plan.id !== "free" && planRank[plan.id] > planRank[state.plan])
+    .map((plan) => plan.id);
 }
 
 function adminUserSummary(user) {
@@ -1919,6 +1975,57 @@ async function adminPost(path, payload) {
 }
 
 function bindViewActions() {
+  const upgradePreviewForm = $("#upgradePreviewForm");
+  if (upgradePreviewForm) {
+    upgradePreviewForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const box = $("#upgradePreviewBox");
+      const targetPlan = new FormData(upgradePreviewForm).get("targetPlan");
+      box.innerHTML = `<p class="form-note">${state.lang === "fr" ? "Calcul en cours..." : "Calculating..."}</p>`;
+      try {
+        const response = await authFetch("/api/billing/upgrade/preview", {
+          method: "POST",
+          body: JSON.stringify({ targetPlan })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "upgrade_preview_failed");
+        box.innerHTML = `
+          <div class="upgrade-preview">
+            <p><span>${state.lang === "fr" ? "Plan actuel" : "Current plan"}</span><strong>${result.currentPlanLabel}</strong></p>
+            <p><span>${state.lang === "fr" ? "Nouveau plan" : "New plan"}</span><strong>${result.targetPlanLabel}</strong></p>
+            <p><span>${state.lang === "fr" ? "Durée" : "Billing cycle"}</span><strong>${durationLabel(result.duration)}</strong></p>
+            <p><span>${state.lang === "fr" ? "Coût supplémentaire" : "Additional cost"}</span><strong>${minorMoney(result.amountDue, result.currency)}</strong></p>
+          </div>
+          <button class="primary-button" id="confirmUpgradeButton" data-target-plan="${result.targetPlan}" data-proration-date="${result.prorationDate || ""}" type="button">${state.lang === "fr" ? "Confirmer la mise à niveau" : "Confirm upgrade"}</button>
+          <p class="form-note">${state.lang === "fr"
+            ? "Stripe facture seulement la différence proratisée pour la période restante."
+            : "Stripe charges only the prorated difference for the remaining period."}</p>
+        `;
+        $("#confirmUpgradeButton").addEventListener("click", async () => {
+          const button = $("#confirmUpgradeButton");
+          button.disabled = true;
+          try {
+            const upgradeResponse = await authFetch("/api/billing/upgrade", {
+              method: "POST",
+              body: JSON.stringify({
+                targetPlan: button.dataset.targetPlan,
+                prorationDate: Number(button.dataset.prorationDate) || undefined
+              })
+            });
+            const upgrade = await upgradeResponse.json();
+            if (!upgradeResponse.ok) throw new Error(upgrade.error || "upgrade_failed");
+            await loadProfilePlan();
+            box.innerHTML = `<p class="form-note success">${state.lang === "fr" ? "Mise à niveau appliquée." : "Upgrade applied."}</p>${upgrade.invoiceUrl ? `<a class="secondary-link" href="${upgrade.invoiceUrl}" target="_blank" rel="noopener">${state.lang === "fr" ? "Voir la facture Stripe" : "View Stripe invoice"}</a>` : ""}`;
+          } catch (error) {
+            box.innerHTML = `<p class="form-note role-note">${error.message}</p>`;
+          }
+        });
+      } catch (error) {
+        box.innerHTML = `<p class="form-note role-note">${error.message}</p>`;
+      }
+    });
+  }
+
   const adminSearchForm = $("#adminSearchForm");
   if (adminSearchForm) {
     adminSearchForm.addEventListener("submit", async (event) => {
@@ -2908,6 +3015,7 @@ function boot() {
     state.currentView = "account";
     showView("app");
     renderView();
+    refreshViewData("account");
   });
   // Au retour d'un paiement Stripe (autre onglet), re-synchroniser le plan
   window.addEventListener("focus", () => {
@@ -3019,6 +3127,7 @@ function boot() {
     state.currentView = button.dataset.view;
     state.editing = { table: null, id: null };
     renderView();
+    refreshViewData(button.dataset.view);
   }));
 
   // Rafraîchit l'épargne des objectifs en temps réel (croissance par cotisation)

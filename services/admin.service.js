@@ -219,12 +219,24 @@ async function setPlan({ actor, userId, plan, duration }) {
       updated_at: new Date().toISOString()
     };
 
-  const { error } = await supabase.from("profiles").update(update).in("id", ids.length ? ids : [ownerId]);
-  if (error) return { status: 500, body: { error: "plan_update_failed" } };
+  const targetIds = ids.length ? ids : [ownerId];
+  console.log(`[admin.setPlan] cible=${userId} ancien=${beforeState.plan} nouveau=${plan} durée=${plan === "free" ? "-" : duration} table=profiles lignes=${targetIds.join(",")}`);
 
+  const { error } = await supabase.from("profiles").update(update).in("id", targetIds);
+  if (error) {
+    console.error(`[admin.setPlan] ÉCHEC update Supabase pour ${userId}:`, error.code, error.message);
+    return { status: 500, body: { error: "plan_update_failed", detail: error.message } };
+  }
+
+  // Relire depuis Supabase pour confirmer la persistance réelle
   const after = await getProfileOrNull(supabase, userId);
-  if (!after || after.plan !== plan) return { status: 500, body: { error: "plan_update_not_persisted" } };
-  await audit(supabase, actor, userId, "set_plan", beforeState, { ...normalizeProfile(after), appliedToUserIds: ids });
+  if (!after || after.plan !== plan) {
+    console.error(`[admin.setPlan] NON PERSISTÉ pour ${userId}: plan_db=${after ? after.plan : "introuvable"} attendu=${plan}`);
+    return { status: 500, body: { error: "plan_update_not_persisted" } };
+  }
+  console.log(`[admin.setPlan] OK pour ${userId}: plan_db=${after.plan} statut=${after.subscription_status} fin_période=${after.current_period_end || "-"}`);
+
+  await audit(supabase, actor, userId, "set_plan", beforeState, { ...normalizeProfile(after), appliedToUserIds: targetIds });
   return getUserDetails(userId);
 }
 

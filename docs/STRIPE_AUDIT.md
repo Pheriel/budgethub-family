@@ -42,9 +42,11 @@ The mapping is defined by environment variable names in `config/billing.prices.j
 ## Expected Stripe Live structure
 
 - Products: 3
-- Prices used by checkout: 12
+- Prices used by checkout: 12 FINAL recurring Prices (duration discount already included in the amount)
 - Currencies: CAD as base currency, USD and EUR as `currency_options`
 - Discounts by billing cycle: monthly 0%, quarterly 5%, semiannual 10%, yearly 15%
+
+Discount architecture: the Prices contain the final discounted amount, so Stripe Checkout displays exactly the amount shown on the site (UI = Stripe, guaranteed). The discount is communicated on the site with the crossed-out full price and a "duration — X% off" line. The previous duration coupons were deleted; `allow_promotion_codes` stays enabled for real promo campaigns.
 
 ## Expected displayed and Checkout amounts
 
@@ -55,6 +57,16 @@ Each amount is identical in CAD, USD and EUR because Stripe Prices use CAD as th
 | Solo | 10.00 | 28.50 | 54.00 | 102.00 |
 | Family | 15.00 | 42.75 | 81.00 | 153.00 |
 | Family Plus | 20.00 | 57.00 | 108.00 | 204.00 |
+
+## Upgrade rules
+
+The backend only allows upgrades while keeping the same billing duration:
+
+- Solo -> Family
+- Solo -> Family Plus
+- Family -> Family Plus
+
+Downgrades and cancellation-to-free are not handled as upgrades. Stripe calculates the prorated difference with `proration_behavior=always_invoice`; the preview and the confirmation share the same `proration_date`, so the charged amount equals the previewed amount. Supabase syncs from the updated Stripe subscription/webhooks; when a subscription runs on an archived/legacy Price that is no longer in the environment variables, the plan is resolved from `subscription.metadata.plan`. Super admin plan overrides (`admin_granted`/`admin_free`) are never overwritten by a Stripe resync older than the admin decision.
 
 ## Webhook endpoint
 

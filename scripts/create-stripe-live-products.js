@@ -41,9 +41,11 @@ function envName(plan, duration) {
   return `STRIPE_PRICE_${plan.envName}_${duration.envSuffix}`;
 }
 
-function discountedAmount(plan, duration) {
-  const base = plan.monthlyAmount * duration.months;
-  return Math.round(base * (100 - duration.discountPercent) / 100);
+// Montant FINAL facturé par Stripe: plein prix moins le rabais de durée
+// (3m=5%, 6m=10%, 12m=15%). Le site affiche le même montant que Checkout.
+function fullAmount(plan, duration) {
+  const full = plan.monthlyAmount * duration.months;
+  return Math.round(full * (100 - duration.discountPercent) / 100);
 }
 
 function currencyOptions(amount) {
@@ -140,7 +142,7 @@ async function createPrice(stripe, product, plan, duration, key, amount) {
 
 async function findOrCreatePrice(stripe, product, plan, duration) {
   const key = lookupKey(plan.key, duration.label);
-  const amount = discountedAmount(plan, duration);
+  const amount = fullAmount(plan, duration);
   const found = await stripe.prices.list({
     lookup_keys: [key, `${key}_correct`],
     limit: 10,
@@ -197,6 +199,21 @@ async function findOrCreatePrice(stripe, product, plan, duration) {
   return { price, action: "created" };
 }
 
+// Les anciens coupons de durée ne sont plus utilisés: le rabais est intégré
+// dans le montant des Prices pour que Checkout affiche le prix final.
+async function deactivateLegacyCoupons(stripe) {
+  const existing = await stripe.coupons.list({ limit: 100 });
+  const ours = existing.data.filter((coupon) => coupon.metadata && coupon.metadata.app === appName && coupon.valid);
+  for (const coupon of ours) {
+    if (dryRun) {
+      console.log(`! [dry-run] Legacy coupon would be deleted: ${coupon.id} (${coupon.percent_off}%)`);
+      continue;
+    }
+    await stripe.coupons.del(coupon.id);
+    console.log(`! Legacy coupon deleted: ${coupon.id} (${coupon.percent_off}%)`);
+  }
+}
+
 async function main() {
   const secretKey = (process.env.STRIPE_SECRET_KEY || "").trim();
   if (!secretKey) {
@@ -232,6 +249,8 @@ async function main() {
     }
   }
 
+  await deactivateLegacyCoupons(stripe);
+
   console.log("\n--- Products ---\n");
   for (const product of products) {
     console.log(`${product.action.toUpperCase()} ${product.name}: ${product.id}`);
@@ -244,7 +263,7 @@ async function main() {
 
   console.log("\n--- Copy these variables into .env and Hostinger ---\n");
   console.log(envLines.join("\n"));
-  console.log("\nDone: 3 products, 12 prices (CAD base + USD/EUR currency_options).");
+  console.log("\nDone: 3 products and 12 FINAL discounted prices (CAD base + USD/EUR currency_options). Checkout shows exactly the displayed amount.");
 }
 
 main().catch((error) => {
