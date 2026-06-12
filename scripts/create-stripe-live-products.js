@@ -41,8 +41,11 @@ function envName(plan, duration) {
   return `STRIPE_PRICE_${plan.envName}_${duration.envSuffix}`;
 }
 
+// Montant FINAL facturé par Stripe: plein prix moins le rabais de durée
+// (3m=5%, 6m=10%, 12m=15%). Le site affiche le même montant que Checkout.
 function fullAmount(plan, duration) {
-  return plan.monthlyAmount * duration.months;
+  const full = plan.monthlyAmount * duration.months;
+  return Math.round(full * (100 - duration.discountPercent) / 100);
 }
 
 function currencyOptions(amount) {
@@ -196,41 +199,19 @@ async function findOrCreatePrice(stripe, product, plan, duration) {
   return { price, action: "created" };
 }
 
-function couponEnvName(duration) {
-  return `STRIPE_COUPON_${duration.envSuffix}`;
-}
-
-function couponKey(duration) {
-  return `budgethub_${duration.label}_${duration.discountPercent}_percent`;
-}
-
-async function findOrCreateCoupon(stripe, duration) {
-  if (!duration.discountPercent) return null;
-  const key = couponKey(duration);
+// Les anciens coupons de durée ne sont plus utilisés: le rabais est intégré
+// dans le montant des Prices pour que Checkout affiche le prix final.
+async function deactivateLegacyCoupons(stripe) {
   const existing = await stripe.coupons.list({ limit: 100 });
-  const match = existing.data.find((coupon) => (
-    coupon.metadata
-    && coupon.metadata.app === appName
-    && coupon.metadata.duration === duration.key
-    && Number(coupon.percent_off) === duration.discountPercent
-    && coupon.valid
-  ));
-  if (match) {
-    console.log(`= Coupon reused: ${key} (${match.id})`);
-    return { coupon: match, action: "reused" };
+  const ours = existing.data.filter((coupon) => coupon.metadata && coupon.metadata.app === appName && coupon.valid);
+  for (const coupon of ours) {
+    if (dryRun) {
+      console.log(`! [dry-run] Legacy coupon would be deleted: ${coupon.id} (${coupon.percent_off}%)`);
+      continue;
+    }
+    await stripe.coupons.del(coupon.id);
+    console.log(`! Legacy coupon deleted: ${coupon.id} (${coupon.percent_off}%)`);
   }
-  if (dryRun) {
-    console.log(`+ [dry-run] Coupon to create: ${key} - ${duration.discountPercent}%`);
-    return { coupon: { id: `dry-run-${key}` }, action: "dry-run" };
-  }
-  const coupon = await stripe.coupons.create({
-    name: `BudgetHub ${duration.discountPercent}% ${duration.label}`,
-    percent_off: duration.discountPercent,
-    duration: "forever",
-    metadata: { app: appName, duration: duration.key, lookup_key: key }
-  });
-  console.log(`+ Coupon created: ${key} (${coupon.id}) - ${duration.discountPercent}%`);
-  return { coupon, action: "created" };
 }
 
 async function main() {
@@ -250,7 +231,6 @@ async function main() {
   const envLines = [];
   const products = [];
   const prices = [];
-  const coupons = [];
 
   for (const plan of plans) {
     const { product, action: productAction } = await findOrCreateProduct(stripe, plan);
@@ -269,11 +249,7 @@ async function main() {
     }
   }
 
-  for (const duration of durations.filter((item) => item.discountPercent > 0)) {
-    const { coupon, action } = await findOrCreateCoupon(stripe, duration);
-    coupons.push({ env: couponEnvName(duration), id: coupon.id, action });
-    envLines.push(`${couponEnvName(duration)}=${coupon.id}`);
-  }
+  await deactivateLegacyCoupons(stripe);
 
   console.log("\n--- Products ---\n");
   for (const product of products) {
@@ -285,14 +261,9 @@ async function main() {
     console.log(`${price.action.toUpperCase()} ${price.env}: ${price.id}`);
   }
 
-  console.log("\n--- Coupons ---\n");
-  for (const coupon of coupons) {
-    console.log(`${coupon.action.toUpperCase()} ${coupon.env}: ${coupon.id}`);
-  }
-
   console.log("\n--- Copy these variables into .env and Hostinger ---\n");
   console.log(envLines.join("\n"));
-  console.log("\nDone: 3 products, 12 full prices (CAD base + USD/EUR currency_options) and 3 automatic duration coupons.");
+  console.log("\nDone: 3 products and 12 FINAL discounted prices (CAD base + USD/EUR currency_options). Checkout shows exactly the displayed amount.");
 }
 
 main().catch((error) => {

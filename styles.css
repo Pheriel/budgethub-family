@@ -875,27 +875,20 @@ h3 {
   text-transform: uppercase;
 }
 
-.pricing-facts {
-  display: grid;
-  gap: 0.55rem;
-  padding: 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-strong);
-}
-
-.pricing-facts p {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0;
+/* Ancien prix barré à côté du prix final réduit */
+.price-strike {
+  margin-left: 0.45rem;
   color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 600;
 }
 
-.pricing-facts strong {
-  color: var(--text);
-  text-align: right;
+/* Ligne courte sous le prix: "6 mois — 10% de rabais" */
+.price-discount {
+  margin: 0.25rem 0 0;
+  color: var(--accent);
+  font-weight: 750;
+  font-size: 0.92rem;
 }
 
 .pricing-note {

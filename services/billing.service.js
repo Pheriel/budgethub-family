@@ -5,7 +5,6 @@ const {
   getPriceIdToPlan,
   getStripePrices,
   validCurrencies,
-  couponForDuration,
   isUpgrade
 } = require("../config/billing.prices");
 
@@ -71,15 +70,15 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
   const cur = validCurrencies.includes(currency) ? currency : "cad";
   const appUrl = clientUrl();
   const planName = `${plan} ${durationToLabel[duration] || duration}`.trim();
-  const coupon = couponForDuration(duration);
 
+  // Les Prices contiennent déjà le rabais de durée: Checkout affiche
+  // exactement le montant montré sur le site.
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     client_reference_id: userId,
     customer_email: email,
     line_items: [{ price: priceId, quantity: 1 }],
     currency: cur,
-    ...(coupon ? { discounts: [{ coupon }] } : {}),
     metadata: { plan, duration, app_user_id: userId },
     subscription_data: {
       description: `BudgetHub Family - ${planName}`,
@@ -90,7 +89,7 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
         message: "Refunds may be requested within 7 days after the initial purchase. After 7 days, subscriptions can be canceled before renewal with access kept until the paid period ends."
       }
     },
-    ...(!coupon ? { allow_promotion_codes: true } : {}),
+    allow_promotion_codes: true,
     success_url: `${appUrl}?checkout=success`,
     cancel_url: `${appUrl}?checkout=cancel`
   });
@@ -126,10 +125,6 @@ async function previewUpgrade({ userId, targetPlan }) {
   const item = subscription.items.data[0];
   if (!item) return { status: 400, body: { error: "missing_subscription_item" } };
 
-  // Le rabais de durée est déjà porté par l'abonnement (coupon appliqué au
-  // checkout). On n'ajoute le coupon que s'il manque, sans jamais l'écraser.
-  const coupon = couponForDuration(duration);
-  const needsCoupon = Boolean(coupon) && !(subscription.discounts || []).length;
   // Même date de proration à l'aperçu et à la confirmation: le montant facturé
   // est exactement celui affiché.
   const prorationDate = Math.floor(Date.now() / 1000);
@@ -140,8 +135,7 @@ async function previewUpgrade({ userId, targetPlan }) {
       items: [{ id: item.id, price: newPriceId }],
       proration_behavior: "always_invoice",
       proration_date: prorationDate
-    },
-    ...(needsCoupon ? { discounts: [{ coupon }] } : {})
+    }
   });
 
   return {
@@ -179,8 +173,6 @@ async function upgradeSubscription({ userId, targetPlan, prorationDate }) {
   const item = subscription.items.data[0];
   if (!item) return { status: 400, body: { error: "missing_subscription_item" } };
 
-  const coupon = couponForDuration(duration);
-  const needsCoupon = Boolean(coupon) && !(subscription.discounts || []).length;
   // proration_date renvoyée par l'aperçu (tolérance 1 h), sinon maintenant
   const now = Math.floor(Date.now() / 1000);
   const validProrationDate = Number.isInteger(prorationDate) && prorationDate <= now && now - prorationDate < 3600
@@ -191,8 +183,7 @@ async function upgradeSubscription({ userId, targetPlan, prorationDate }) {
     proration_behavior: "always_invoice",
     proration_date: validProrationDate,
     payment_behavior: "pending_if_incomplete",
-    metadata: { ...subscription.metadata, plan: targetPlan, duration, app_user_id: userId },
-    ...(needsCoupon ? { discounts: [{ coupon }] } : {})
+    metadata: { ...subscription.metadata, plan: targetPlan, duration, app_user_id: userId }
   });
 
   await syncSubscription(updated.id);

@@ -697,14 +697,19 @@ function renderPricing() {
   const months = durationMonths[state.billingDuration];
   grid.innerHTML = planDefinitions.map((plan) => {
     const features = planFeatures[plan.id][state.lang];
+    const fr = state.lang === "fr";
     const discount = durationDiscounts[state.billingDuration] || 0;
     const fullPrice = plan.price * months;
     const total = plan.id === "free" ? 0 : planTotal(plan);
-    const durationText = plan.id === "free" ? t("noBilling") : durationLabel(state.billingDuration);
-    const savings = plan.id === "free" ? 0 : Math.max(0, fullPrice - total);
-    const priceLine = planMoney(total);
-    const savingsLine = savings > 0 ? planMoney(savings) : t("noSavings");
-    const discountLine = plan.id === "free" ? `0% ${t("discountSuffix")}` : `${discount}% ${t("discountSuffix")}`;
+    const hasDiscount = plan.id !== "free" && months > 1 && discount > 0;
+    // 1 mois: prix + "/mois" seulement. Durées plus longues: prix final gros,
+    // ancien prix barré et "X — Y% de rabais".
+    const priceLine = months === 1 || plan.id === "free"
+      ? `${planMoney(total)} <small>${t("month")}</small>`
+      : `${planMoney(total)}${hasDiscount ? ` <s class="price-strike">${planMoney(fullPrice)}</s>` : ""}`;
+    const discountLine = hasDiscount
+      ? `<p class="price-discount">${durationLabel(state.billingDuration)} — ${discount}% ${fr ? "de rabais" : "off"}</p>`
+      : "";
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
@@ -713,15 +718,9 @@ function renderPricing() {
           <h3>${plan.name}</h3>
         </div>
         <div>
-          <span class="price-meta">${t("priceLabel")}</span>
           <div class="price">${priceLine}</div>
+          ${discountLine}
         </div>
-        <div class="pricing-facts">
-          <p><span>${t("durationLabel")}</span><strong>${durationText}</strong></p>
-          <p><span>${t("savingsLabel")}</span><strong>${savingsLine}</strong></p>
-          <p><span>${t("savePercentLabel")}</span><strong>${discountLine}</strong></p>
-        </div>
-        ${plan.id !== "free" && months > 1 ? `<p class="price-detail">${t("insteadOfLabel")} ${planMoney(fullPrice)} · ${planMoney(plan.price)} ${t("month")}</p>` : ""}
         <p class="price-meta">${t("includedLabel")}</p>
         <ul>${features.map((feature) => `<li>${feature}</li>`).join("")}</ul>
         ${plan.id !== "free" ? `<p class="form-note">${state.lang === "fr"
@@ -1015,6 +1014,31 @@ async function loadUserData() {
   };
   loadMonthData(state.selectedMonth === currentMonthKey() ? seed : emptyMonthData());
   renderView();
+}
+
+// Recharge depuis Supabase/API les données pertinentes pour l'onglet ouvert,
+// avec un anti-spam de 5 s par vue (changer d'onglet ne doit jamais exiger F5).
+const viewRefreshTimes = {};
+
+async function refreshViewData(view) {
+  if (!state.user) return; // démo: tout est local
+  const now = Date.now();
+  if (viewRefreshTimes[view] && now - viewRefreshTimes[view] < 5000) return;
+  viewRefreshTimes[view] = now;
+
+  try {
+    if (["dashboard", "debts", "strategy", "budget", "transactions", "goals", "family"].includes(view)) {
+      await loadUserData();
+    } else if (view === "account") {
+      await loadProfilePlan();
+    } else if (view === "admin") {
+      await adminLoadUsers(state.admin.page);
+      if (state.admin.selected) await adminLoadUser(state.admin.selected.id);
+      renderView();
+    }
+  } catch (_error) {
+    // Hors ligne: on garde l'affichage actuel
+  }
 }
 
 async function dbInsert(table, payload) {
@@ -2991,6 +3015,7 @@ function boot() {
     state.currentView = "account";
     showView("app");
     renderView();
+    refreshViewData("account");
   });
   // Au retour d'un paiement Stripe (autre onglet), re-synchroniser le plan
   window.addEventListener("focus", () => {
@@ -3102,6 +3127,7 @@ function boot() {
     state.currentView = button.dataset.view;
     state.editing = { table: null, id: null };
     renderView();
+    refreshViewData(button.dataset.view);
   }));
 
   // Rafraîchit l'épargne des objectifs en temps réel (croissance par cotisation)

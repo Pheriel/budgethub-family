@@ -42,12 +42,11 @@ The mapping is defined by environment variable names in `config/billing.prices.j
 ## Expected Stripe Live structure
 
 - Products: 3
-- Prices used by checkout: 12 full-price recurring Prices
-- Coupons used by checkout/upgrades: 3 automatic duration coupons
+- Prices used by checkout: 12 FINAL recurring Prices (duration discount already included in the amount)
 - Currencies: CAD as base currency, USD and EUR as `currency_options`
 - Discounts by billing cycle: monthly 0%, quarterly 5%, semiannual 10%, yearly 15%
 
-Discount architecture: Stripe receives full-price Prices and an automatic coupon for 3m/6m/12m durations. This makes the discount visible in Stripe Checkout, invoices and receipts instead of hiding it inside a net Price amount.
+Discount architecture: the Prices contain the final discounted amount, so Stripe Checkout displays exactly the amount shown on the site (UI = Stripe, guaranteed). The discount is communicated on the site with the crossed-out full price and a "duration — X% off" line. The previous duration coupons were deleted; `allow_promotion_codes` stays enabled for real promo campaigns.
 
 ## Expected displayed and Checkout amounts
 
@@ -59,22 +58,6 @@ Each amount is identical in CAD, USD and EUR because Stripe Prices use CAD as th
 | Family | 15.00 | 42.75 | 81.00 | 153.00 |
 | Family Plus | 20.00 | 57.00 | 108.00 | 204.00 |
 
-## Required coupon variables
-
-```text
-STRIPE_COUPON_QUARTERLY=
-STRIPE_COUPON_SEMIANNUAL=
-STRIPE_COUPON_YEARLY=
-```
-
-Current Live coupons:
-
-```text
-STRIPE_COUPON_QUARTERLY=PcisuySV
-STRIPE_COUPON_SEMIANNUAL=M7ZRJhVk
-STRIPE_COUPON_YEARLY=uhYsAx0v
-```
-
 ## Upgrade rules
 
 The backend only allows upgrades while keeping the same billing duration:
@@ -83,7 +66,7 @@ The backend only allows upgrades while keeping the same billing duration:
 - Solo -> Family Plus
 - Family -> Family Plus
 
-Downgrades and cancellation-to-free are not handled as upgrades. Stripe calculates the prorated difference with `proration_behavior=always_invoice`; the preview and the confirmation share the same `proration_date`, so the charged amount equals the previewed amount. The duration coupon is only attached when the subscription does not already carry a discount (existing discounts are never overwritten). Supabase syncs from the updated Stripe subscription/webhooks; when a subscription runs on an archived/legacy Price that is no longer in the environment variables, the plan is resolved from `subscription.metadata.plan`.
+Downgrades and cancellation-to-free are not handled as upgrades. Stripe calculates the prorated difference with `proration_behavior=always_invoice`; the preview and the confirmation share the same `proration_date`, so the charged amount equals the previewed amount. Supabase syncs from the updated Stripe subscription/webhooks; when a subscription runs on an archived/legacy Price that is no longer in the environment variables, the plan is resolved from `subscription.metadata.plan`. Super admin plan overrides (`admin_granted`/`admin_free`) are never overwritten by a Stripe resync older than the admin decision.
 
 ## Webhook endpoint
 
