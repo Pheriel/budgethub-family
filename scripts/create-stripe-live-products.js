@@ -41,9 +41,8 @@ function envName(plan, duration) {
   return `STRIPE_PRICE_${plan.envName}_${duration.envSuffix}`;
 }
 
-function discountedAmount(plan, duration) {
-  const base = plan.monthlyAmount * duration.months;
-  return Math.round(base * (100 - duration.discountPercent) / 100);
+function fullAmount(plan, duration) {
+  return plan.monthlyAmount * duration.months;
 }
 
 function currencyOptions(amount) {
@@ -140,7 +139,7 @@ async function createPrice(stripe, product, plan, duration, key, amount) {
 
 async function findOrCreatePrice(stripe, product, plan, duration) {
   const key = lookupKey(plan.key, duration.label);
-  const amount = discountedAmount(plan, duration);
+  const amount = fullAmount(plan, duration);
   const found = await stripe.prices.list({
     lookup_keys: [key, `${key}_correct`],
     limit: 10,
@@ -197,6 +196,43 @@ async function findOrCreatePrice(stripe, product, plan, duration) {
   return { price, action: "created" };
 }
 
+function couponEnvName(duration) {
+  return `STRIPE_COUPON_${duration.envSuffix}`;
+}
+
+function couponKey(duration) {
+  return `budgethub_${duration.label}_${duration.discountPercent}_percent`;
+}
+
+async function findOrCreateCoupon(stripe, duration) {
+  if (!duration.discountPercent) return null;
+  const key = couponKey(duration);
+  const existing = await stripe.coupons.list({ limit: 100 });
+  const match = existing.data.find((coupon) => (
+    coupon.metadata
+    && coupon.metadata.app === appName
+    && coupon.metadata.duration === duration.key
+    && Number(coupon.percent_off) === duration.discountPercent
+    && coupon.valid
+  ));
+  if (match) {
+    console.log(`= Coupon reused: ${key} (${match.id})`);
+    return { coupon: match, action: "reused" };
+  }
+  if (dryRun) {
+    console.log(`+ [dry-run] Coupon to create: ${key} - ${duration.discountPercent}%`);
+    return { coupon: { id: `dry-run-${key}` }, action: "dry-run" };
+  }
+  const coupon = await stripe.coupons.create({
+    name: `BudgetHub ${duration.discountPercent}% ${duration.label}`,
+    percent_off: duration.discountPercent,
+    duration: "forever",
+    metadata: { app: appName, duration: duration.key, lookup_key: key }
+  });
+  console.log(`+ Coupon created: ${key} (${coupon.id}) - ${duration.discountPercent}%`);
+  return { coupon, action: "created" };
+}
+
 async function main() {
   const secretKey = (process.env.STRIPE_SECRET_KEY || "").trim();
   if (!secretKey) {
@@ -214,6 +250,7 @@ async function main() {
   const envLines = [];
   const products = [];
   const prices = [];
+  const coupons = [];
 
   for (const plan of plans) {
     const { product, action: productAction } = await findOrCreateProduct(stripe, plan);
@@ -232,6 +269,12 @@ async function main() {
     }
   }
 
+  for (const duration of durations.filter((item) => item.discountPercent > 0)) {
+    const { coupon, action } = await findOrCreateCoupon(stripe, duration);
+    coupons.push({ env: couponEnvName(duration), id: coupon.id, action });
+    envLines.push(`${couponEnvName(duration)}=${coupon.id}`);
+  }
+
   console.log("\n--- Products ---\n");
   for (const product of products) {
     console.log(`${product.action.toUpperCase()} ${product.name}: ${product.id}`);
@@ -242,9 +285,14 @@ async function main() {
     console.log(`${price.action.toUpperCase()} ${price.env}: ${price.id}`);
   }
 
+  console.log("\n--- Coupons ---\n");
+  for (const coupon of coupons) {
+    console.log(`${coupon.action.toUpperCase()} ${coupon.env}: ${coupon.id}`);
+  }
+
   console.log("\n--- Copy these variables into .env and Hostinger ---\n");
   console.log(envLines.join("\n"));
-  console.log("\nDone: 3 products, 12 prices (CAD base + USD/EUR currency_options).");
+  console.log("\nDone: 3 products, 12 full prices (CAD base + USD/EUR currency_options) and 3 automatic duration coupons.");
 }
 
 main().catch((error) => {

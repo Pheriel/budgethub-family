@@ -144,6 +144,28 @@
   font-size: 0.95rem;
 }
 
+.upgrade-preview {
+  display: grid;
+  gap: 0.55rem;
+  margin: 1rem 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+}
+
+.upgrade-preview p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.upgrade-preview span {
+  color: var(--muted);
+}
+
 .income-panel {
   margin-bottom: 18px;
 }

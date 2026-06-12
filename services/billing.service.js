@@ -4,10 +4,24 @@ const {
   getMissingStripePriceEnv,
   getPriceIdToPlan,
   getStripePrices,
-  validCurrencies
+  validCurrencies,
+  couponForDuration,
+  isUpgrade
 } = require("../config/billing.prices");
 
 const durationToLabel = { "1m": "1 mois", "3m": "3 mois", "6m": "6 mois", "12m": "1 an" };
+const knownPlans = ["solo", "family", "familyPlus"];
+
+// Plan d'un abonnement: par price id, sinon par metadata.plan (prix archivés
+// ou legacy qui ne sont plus dans les variables d'environnement)
+function planFromSubscription(subscription) {
+  const priceId = subscription.items.data[0]?.price?.id;
+  const plan = getPriceIdToPlan()[priceId];
+  if (plan) return plan;
+  const metadataPlan = subscription.metadata && subscription.metadata.plan;
+  return knownPlans.includes(metadataPlan) ? metadataPlan : null;
+}
+const planLabels = { free: "Free", solo: "Solo", family: "Family", familyPlus: "Family Plus" };
 const productionUrl = "https://budgethubfamily.com";
 
 function clientUrl() {
@@ -32,6 +46,7 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
   const cur = validCurrencies.includes(currency) ? currency : "cad";
   const appUrl = clientUrl();
   const planName = `${plan} ${durationToLabel[duration] || duration}`.trim();
+  const coupon = couponForDuration(duration);
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -39,6 +54,7 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
     customer_email: email,
     line_items: [{ price: priceId, quantity: 1 }],
     currency: cur,
+    ...(coupon ? { discounts: [{ coupon }] } : {}),
     metadata: { plan, duration, app_user_id: userId },
     subscription_data: {
       description: `BudgetHub Family - ${planName}`,
@@ -49,12 +65,127 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
         message: "Refunds may be requested within 7 days after the initial purchase. After 7 days, subscriptions can be canceled before renewal with access kept until the paid period ends."
       }
     },
-    allow_promotion_codes: true,
+    ...(!coupon ? { allow_promotion_codes: true } : {}),
     success_url: `${appUrl}?checkout=success`,
     cancel_url: `${appUrl}?checkout=cancel`
   });
 
   return { status: 200, body: { url: session.url } };
+}
+
+async function loadProfileForBilling(userId) {
+  const supabase = createSupabaseAdminClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan,billing_duration,stripe_subscription_id,current_period_end,subscription_status")
+    .eq("id", userId)
+    .single();
+  return profile || null;
+}
+
+async function previewUpgrade({ userId, targetPlan }) {
+  const stripe = createStripeClient();
+  if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
+  const profile = await loadProfileForBilling(userId);
+  if (!profile || !profile.stripe_subscription_id) return { status: 404, body: { error: "no_active_subscription" } };
+  const currentPlan = profile.plan || "free";
+  const duration = profile.billing_duration;
+  if (!isUpgrade(currentPlan, targetPlan)) return { status: 400, body: { error: "upgrade_only" } };
+  if (!duration) return { status: 400, body: { error: "missing_billing_duration" } };
+
+  const stripePrices = getStripePrices();
+  const newPriceId = stripePrices[targetPlan] && stripePrices[targetPlan][duration];
+  if (!newPriceId) return { status: 400, body: { error: "invalid_target_plan" } };
+
+  const subscription = await stripe.subscriptions.retrieve(profile.stripe_subscription_id);
+  const item = subscription.items.data[0];
+  if (!item) return { status: 400, body: { error: "missing_subscription_item" } };
+
+  // Le rabais de durée est déjà porté par l'abonnement (coupon appliqué au
+  // checkout). On n'ajoute le coupon que s'il manque, sans jamais l'écraser.
+  const coupon = couponForDuration(duration);
+  const needsCoupon = Boolean(coupon) && !(subscription.discounts || []).length;
+  // Même date de proration à l'aperçu et à la confirmation: le montant facturé
+  // est exactement celui affiché.
+  const prorationDate = Math.floor(Date.now() / 1000);
+  const preview = await stripe.invoices.createPreview({
+    customer: subscription.customer,
+    subscription: subscription.id,
+    subscription_details: {
+      items: [{ id: item.id, price: newPriceId }],
+      proration_behavior: "always_invoice",
+      proration_date: prorationDate
+    },
+    ...(needsCoupon ? { discounts: [{ coupon }] } : {})
+  });
+
+  return {
+    status: 200,
+    body: {
+      currentPlan,
+      targetPlan,
+      duration,
+      currency: preview.currency,
+      amountDue: preview.amount_due,
+      subtotal: preview.subtotal,
+      total: preview.total,
+      prorationDate,
+      currentPlanLabel: planLabels[currentPlan] || currentPlan,
+      targetPlanLabel: planLabels[targetPlan] || targetPlan
+    }
+  };
+}
+
+async function upgradeSubscription({ userId, targetPlan, prorationDate }) {
+  const stripe = createStripeClient();
+  if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
+  const profile = await loadProfileForBilling(userId);
+  if (!profile || !profile.stripe_subscription_id) return { status: 404, body: { error: "no_active_subscription" } };
+  const currentPlan = profile.plan || "free";
+  const duration = profile.billing_duration;
+  if (!isUpgrade(currentPlan, targetPlan)) return { status: 400, body: { error: "upgrade_only" } };
+  if (!duration) return { status: 400, body: { error: "missing_billing_duration" } };
+
+  const stripePrices = getStripePrices();
+  const newPriceId = stripePrices[targetPlan] && stripePrices[targetPlan][duration];
+  if (!newPriceId) return { status: 400, body: { error: "invalid_target_plan" } };
+
+  const subscription = await stripe.subscriptions.retrieve(profile.stripe_subscription_id);
+  const item = subscription.items.data[0];
+  if (!item) return { status: 400, body: { error: "missing_subscription_item" } };
+
+  const coupon = couponForDuration(duration);
+  const needsCoupon = Boolean(coupon) && !(subscription.discounts || []).length;
+  // proration_date renvoyée par l'aperçu (tolérance 1 h), sinon maintenant
+  const now = Math.floor(Date.now() / 1000);
+  const validProrationDate = Number.isInteger(prorationDate) && prorationDate <= now && now - prorationDate < 3600
+    ? prorationDate
+    : now;
+  const updated = await stripe.subscriptions.update(subscription.id, {
+    items: [{ id: item.id, price: newPriceId }],
+    proration_behavior: "always_invoice",
+    proration_date: validProrationDate,
+    payment_behavior: "pending_if_incomplete",
+    metadata: { ...subscription.metadata, plan: targetPlan, duration, app_user_id: userId },
+    ...(needsCoupon ? { discounts: [{ coupon }] } : {})
+  });
+
+  await syncSubscription(updated.id);
+  const latestInvoice = updated.latest_invoice
+    ? await stripe.invoices.retrieve(typeof updated.latest_invoice === "string" ? updated.latest_invoice : updated.latest_invoice.id)
+    : null;
+
+  return {
+    status: 200,
+    body: {
+      upgraded: true,
+      plan: targetPlan,
+      duration,
+      subscriptionStatus: updated.status,
+      invoiceUrl: latestInvoice ? latestInvoice.hosted_invoice_url : null,
+      paymentStatus: latestInvoice ? latestInvoice.status : null
+    }
+  };
 }
 
 // Lit l'abonnement Stripe et écrit l'état complet dans le profil
@@ -94,9 +225,7 @@ async function handleCheckoutCompleted(session) {
 
   const stripe = createStripeClient();
   const subscription = await stripe.subscriptions.retrieve(session.subscription);
-  const priceId = subscription.items.data[0]?.price?.id;
-  const priceIdToPlan = getPriceIdToPlan();
-  const plan = priceIdToPlan[priceId];
+  const plan = planFromSubscription(subscription);
   if (!plan) return { updated: false, reason: "unknown_price" };
 
   const ok = await writeSubscriptionToProfile(userId, subscription, plan);
@@ -111,9 +240,7 @@ async function syncSubscription(subscriptionId) {
   const userId = subscription.metadata && subscription.metadata.app_user_id;
   if (!userId) return { updated: false, reason: "missing_app_user_id" };
 
-  const priceId = subscription.items.data[0]?.price?.id;
-  const priceIdToPlan = getPriceIdToPlan();
-  const plan = priceIdToPlan[priceId];
+  const plan = planFromSubscription(subscription);
   if (!plan) return { updated: false, reason: "unknown_price" };
 
   if (subscription.status === "canceled") {
@@ -175,9 +302,7 @@ async function syncUserPlan(userId) {
   if (!completed) return { updated: false, reason: "no_completed_checkout" };
 
   const subscription = await stripe.subscriptions.retrieve(completed.subscription);
-  const priceId = subscription.items.data[0]?.price?.id;
-  const priceIdToPlan = getPriceIdToPlan();
-  const plan = priceIdToPlan[priceId];
+  const plan = planFromSubscription(subscription);
   if (!plan) return { updated: false, reason: "unknown_price" };
 
   // Si l'abonnement a été résilié et la période est terminée, repasser en free
@@ -253,6 +378,8 @@ async function cancelSubscription(userId) {
 
 module.exports = {
   createCheckoutSession,
+  previewUpgrade,
+  upgradeSubscription,
   handleCheckoutCompleted,
   handleInvoicePaid,
   handleInvoicePaymentFailed,

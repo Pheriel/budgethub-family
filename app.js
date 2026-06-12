@@ -354,6 +354,7 @@ const planDefinitions = [
   { id: "family", name: "Family", price: 15, members: 5, debts: Infinity, featured: true },
   { id: "familyPlus", name: "Family Plus", price: 20, members: 10, debts: Infinity, featured: false }
 ];
+const planRank = { free: 0, solo: 1, family: 2, familyPlus: 3 };
 
 // Taux de secours si l'API de taux de change est injoignable
 const currencyMeta = {
@@ -571,6 +572,17 @@ function planMoney(value) {
     minimumFractionDigits: hasCents ? 2 : 0,
     maximumFractionDigits: hasCents ? 2 : 0
   }).format(value);
+}
+
+function minorMoney(amount, currency) {
+  const upper = (currency || state.currency || "CAD").toUpperCase();
+  const locale = currencyMeta[upper]?.locale || (state.lang === "fr" ? "fr-CA" : "en-US");
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: upper,
+    minimumFractionDigits: amount % 100 ? 2 : 0,
+    maximumFractionDigits: amount % 100 ? 2 : 0
+  }).format(amount / 100);
 }
 
 function persistPreferences() {
@@ -1642,6 +1654,7 @@ function renderSubscriptionDetails(plan) {
 function renderAccount() {
   const plan = planDefinitions.find((item) => item.id === state.plan) || planDefinitions[0];
   const fr = state.lang === "fr";
+  const targets = state.subscription ? upgradeTargets() : [];
   return `
     <section class="panel">
       <h3>${fr ? "Mon compte" : "My account"}</h3>
@@ -1661,6 +1674,19 @@ function renderAccount() {
         : "Only the family owner can manage the Stripe subscription."}</p>`}
       <p class="form-note" id="subNote" hidden></p>
     </section>
+    ${can("manageBilling") && targets.length ? `
+    <section class="panel">
+      <h3>${fr ? "Mettre à niveau" : "Upgrade"}</h3>
+      <form class="form-grid upgrade-grid" id="upgradePreviewForm">
+        <label><span>${fr ? "Plan actuel" : "Current plan"}</span><input value="${plan.name}" disabled /></label>
+        <label><span>${fr ? "Nouveau plan" : "New plan"}</span><select name="targetPlan">
+          ${targets.map((target) => `<option value="${target}">${planName(target)}</option>`).join("")}
+        </select></label>
+        <label><span>${fr ? "Durée conservée" : "Kept billing cycle"}</span><input value="${state.subscription.duration ? durationLabel(state.subscription.duration) : "—"}" disabled /></label>
+        <button class="primary-button" type="submit">${fr ? "Calculer le coût supplémentaire" : "Preview additional cost"}</button>
+      </form>
+      <div id="upgradePreviewBox"></div>
+    </section>` : ""}
     <section class="panel">
       <h3>${fr ? "Changer le mot de passe" : "Change password"}</h3>
       <form class="form-grid" id="passwordForm">
@@ -1683,6 +1709,12 @@ function fmtDate(value) {
 
 function planName(planId) {
   return planDefinitions.find((plan) => plan.id === planId)?.name || planId || "Free";
+}
+
+function upgradeTargets() {
+  return planDefinitions
+    .filter((plan) => plan.id !== "free" && planRank[plan.id] > planRank[state.plan])
+    .map((plan) => plan.id);
 }
 
 function adminUserSummary(user) {
@@ -1919,6 +1951,57 @@ async function adminPost(path, payload) {
 }
 
 function bindViewActions() {
+  const upgradePreviewForm = $("#upgradePreviewForm");
+  if (upgradePreviewForm) {
+    upgradePreviewForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const box = $("#upgradePreviewBox");
+      const targetPlan = new FormData(upgradePreviewForm).get("targetPlan");
+      box.innerHTML = `<p class="form-note">${state.lang === "fr" ? "Calcul en cours..." : "Calculating..."}</p>`;
+      try {
+        const response = await authFetch("/api/billing/upgrade/preview", {
+          method: "POST",
+          body: JSON.stringify({ targetPlan })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "upgrade_preview_failed");
+        box.innerHTML = `
+          <div class="upgrade-preview">
+            <p><span>${state.lang === "fr" ? "Plan actuel" : "Current plan"}</span><strong>${result.currentPlanLabel}</strong></p>
+            <p><span>${state.lang === "fr" ? "Nouveau plan" : "New plan"}</span><strong>${result.targetPlanLabel}</strong></p>
+            <p><span>${state.lang === "fr" ? "Durée" : "Billing cycle"}</span><strong>${durationLabel(result.duration)}</strong></p>
+            <p><span>${state.lang === "fr" ? "Coût supplémentaire" : "Additional cost"}</span><strong>${minorMoney(result.amountDue, result.currency)}</strong></p>
+          </div>
+          <button class="primary-button" id="confirmUpgradeButton" data-target-plan="${result.targetPlan}" data-proration-date="${result.prorationDate || ""}" type="button">${state.lang === "fr" ? "Confirmer la mise à niveau" : "Confirm upgrade"}</button>
+          <p class="form-note">${state.lang === "fr"
+            ? "Stripe facture seulement la différence proratisée pour la période restante."
+            : "Stripe charges only the prorated difference for the remaining period."}</p>
+        `;
+        $("#confirmUpgradeButton").addEventListener("click", async () => {
+          const button = $("#confirmUpgradeButton");
+          button.disabled = true;
+          try {
+            const upgradeResponse = await authFetch("/api/billing/upgrade", {
+              method: "POST",
+              body: JSON.stringify({
+                targetPlan: button.dataset.targetPlan,
+                prorationDate: Number(button.dataset.prorationDate) || undefined
+              })
+            });
+            const upgrade = await upgradeResponse.json();
+            if (!upgradeResponse.ok) throw new Error(upgrade.error || "upgrade_failed");
+            await loadProfilePlan();
+            box.innerHTML = `<p class="form-note success">${state.lang === "fr" ? "Mise à niveau appliquée." : "Upgrade applied."}</p>${upgrade.invoiceUrl ? `<a class="secondary-link" href="${upgrade.invoiceUrl}" target="_blank" rel="noopener">${state.lang === "fr" ? "Voir la facture Stripe" : "View Stripe invoice"}</a>` : ""}`;
+          } catch (error) {
+            box.innerHTML = `<p class="form-note role-note">${error.message}</p>`;
+          }
+        });
+      } catch (error) {
+        box.innerHTML = `<p class="form-note role-note">${error.message}</p>`;
+      }
+    });
+  }
+
   const adminSearchForm = $("#adminSearchForm");
   if (adminSearchForm) {
     adminSearchForm.addEventListener("submit", async (event) => {

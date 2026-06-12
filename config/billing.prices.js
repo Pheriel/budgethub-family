@@ -21,15 +21,23 @@ const planPriceEnv = {
 
 const validDurations = ["1m", "3m", "6m", "12m"];
 const validCurrencies = ["cad", "usd", "eur"];
+const durationCouponEnv = {
+  "3m": "STRIPE_COUPON_QUARTERLY",
+  "6m": "STRIPE_COUPON_SEMIANNUAL",
+  "12m": "STRIPE_COUPON_YEARLY"
+};
+const planRank = { free: 0, solo: 1, family: 2, familyPlus: 3 };
 
 function readPriceId(envKey) {
   return (process.env[envKey] || "").trim();
 }
 
 function getMissingStripePriceEnv() {
-  return Object.values(planPriceEnv)
+  const priceEnv = Object.values(planPriceEnv)
     .flatMap((durations) => Object.values(durations))
     .filter((envKey) => !readPriceId(envKey));
+  const couponEnv = Object.values(durationCouponEnv).filter((envKey) => !readPriceId(envKey));
+  return [...priceEnv, ...couponEnv];
 }
 
 function getStripePrices() {
@@ -53,11 +61,30 @@ function getPriceIdToPlan() {
   return Object.fromEntries(entries);
 }
 
+function getStripeCoupons() {
+  return Object.fromEntries(
+    Object.entries(durationCouponEnv).map(([duration, envKey]) => [duration, readPriceId(envKey)])
+  );
+}
+
+function couponForDuration(duration) {
+  return getStripeCoupons()[duration] || null;
+}
+
+function isUpgrade(currentPlan, targetPlan) {
+  return (planRank[targetPlan] || 0) > (planRank[currentPlan] || 0);
+}
+
 module.exports = {
   planPriceEnv,
+  durationCouponEnv,
+  planRank,
   validDurations,
   validCurrencies,
   getMissingStripePriceEnv,
   getStripePrices,
-  getPriceIdToPlan
+  getPriceIdToPlan,
+  getStripeCoupons,
+  couponForDuration,
+  isUpgrade
 };
