@@ -1,6 +1,7 @@
 const express = require("express");
 
 const { createStripeClient } = require("../config/stripe");
+const { requireAuth, requirePermission } = require("../middleware/auth");
 const {
   handleCheckoutCompleted,
   handleInvoicePaid,
@@ -53,13 +54,18 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 // avant express.json() global pour préserver le corps brut du webhook.
 router.use(express.json());
 
-// Crée une session de paiement (plan + durée + devise) et renvoie l'URL Stripe
-router.post("/checkout", async (req, res) => {
-  const { userId, email, plan, duration, currency } = req.body || {};
-  if (!isUuid(userId)) return res.status(400).json({ error: "Invalid user id." });
+// Seul le Owner de la famille peut gérer l'abonnement Stripe
+router.post("/checkout", requireAuth, requirePermission("manageBilling"), async (req, res) => {
+  const { plan, duration, currency } = req.body || {};
   if (!plan || !duration) return res.status(400).json({ error: "Missing plan or duration." });
   try {
-    const result = await createCheckoutSession({ userId, email, plan, duration, currency });
+    const result = await createCheckoutSession({
+      userId: req.user.id,
+      email: req.user.email,
+      plan,
+      duration,
+      currency
+    });
     res.status(result.status).json(result.body);
   } catch (error) {
     console.error("Checkout creation failed:", error.message);
@@ -68,11 +74,10 @@ router.post("/checkout", async (req, res) => {
 });
 
 // Active ou désactive le renouvellement automatique
-router.post("/auto-renew", async (req, res) => {
-  const { userId, autoRenew } = req.body || {};
-  if (!isUuid(userId)) return res.status(400).json({ error: "Invalid user id." });
+router.post("/auto-renew", requireAuth, requirePermission("manageBilling"), async (req, res) => {
+  const { autoRenew } = req.body || {};
   try {
-    const result = await setAutoRenew(userId, autoRenew !== false);
+    const result = await setAutoRenew(req.user.id, autoRenew !== false);
     res.status(result.status).json(result.body);
   } catch (error) {
     console.error("Auto-renew update failed:", error.message);
@@ -81,11 +86,9 @@ router.post("/auto-renew", async (req, res) => {
 });
 
 // Résilie immédiatement l'abonnement
-router.post("/cancel", async (req, res) => {
-  const { userId } = req.body || {};
-  if (!isUuid(userId)) return res.status(400).json({ error: "Invalid user id." });
+router.post("/cancel", requireAuth, requirePermission("manageBilling"), async (req, res) => {
   try {
-    const result = await cancelSubscription(userId);
+    const result = await cancelSubscription(req.user.id);
     res.status(result.status).json(result.body);
   } catch (error) {
     console.error("Cancellation failed:", error.message);
@@ -94,10 +97,14 @@ router.post("/cancel", async (req, res) => {
 });
 
 // Vérifie les achats Stripe d'un utilisateur et met à jour son plan
-router.get("/sync/:userId", async (req, res) => {
+router.get("/sync/:userId", requireAuth, async (req, res) => {
   const { userId } = req.params;
-  if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+  if (!isUuid(userId)) {
     return res.status(400).json({ error: "Invalid user id." });
+  }
+  // Un utilisateur ne peut synchroniser que son propre plan (ou celui de sa famille)
+  if (userId !== req.user.id && userId !== req.user.familyOwnerId) {
+    return res.status(403).json({ error: "forbidden", action: "manageBilling" });
   }
   try {
     const result = await syncUserPlan(userId);

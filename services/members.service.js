@@ -1,4 +1,5 @@
 const { createSupabaseAdminClient } = require("../config/supabase");
+const { ASSIGNABLE_ROLES, normalizeRole, can, canRemoveMember } = require("./permissions");
 
 const planMemberLimits = { free: 1, solo: 1, family: 5, familyPlus: 10 };
 const productionUrl = "https://budgethubfamily.com";
@@ -8,34 +9,36 @@ function clientUrl() {
   return value.includes("localhost") || value.includes("127.0.0.1") ? productionUrl : value;
 }
 
-// Invite un membre: crée son compte Supabase (courriel d'invitation avec choix
-// du mot de passe), le relie au plan de l'invitant et l'ajoute à la famille.
-async function inviteMember({ inviterId, email, name, role, lang = "en" }) {
+// Invite un membre: crée son compte Supabase (courriel d'invitation menant à
+// l'écran "Créer votre mot de passe"), le relie au plan du propriétaire de la
+// famille et l'ajoute à la famille. `inviter` vient du jeton vérifié.
+async function inviteMember({ inviter, email, name, role, lang = "en" }) {
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
     return { status: 503, body: { error: "Supabase admin client unavailable." } };
   }
 
-  const { data: inviterProfile, error: profileError } = await supabase
+  const familyOwnerId = inviter.familyOwnerId;
+  const { data: ownerProfile, error: profileError } = await supabase
     .from("profiles")
-    .select("plan, family_owner_id")
-    .eq("id", inviterId)
+    .select("plan")
+    .eq("id", familyOwnerId)
     .single();
 
-  if (profileError || !inviterProfile) {
-    return { status: 404, body: { error: "Inviter profile not found." } };
+  if (profileError || !ownerProfile) {
+    return { status: 404, body: { error: "Owner profile not found." } };
   }
 
-  const limit = planMemberLimits[inviterProfile.plan] ?? 1;
+  const limit = planMemberLimits[ownerProfile.plan] ?? 1;
   const { count } = await supabase
     .from("family_members")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", inviterId);
+    .eq("user_id", familyOwnerId);
 
   if ((count ?? 0) >= limit) {
     return {
       status: 403,
-      body: { error: "member_limit_reached", plan: inviterProfile.plan, limit }
+      body: { error: "member_limit_reached", plan: ownerProfile.plan, limit }
     };
   }
 
@@ -53,10 +56,14 @@ async function inviteMember({ inviterId, email, name, role, lang = "en" }) {
     invitedUserId = existingProfile.id;
     linkedExisting = true;
 
+    if (invitedUserId === familyOwnerId || invitedUserId === inviter.id) {
+      return { status: 409, body: { error: "already_in_family" } };
+    }
+
     const { data: alreadyMember } = await supabase
       .from("family_members")
       .select("id")
-      .eq("user_id", inviterId)
+      .eq("user_id", familyOwnerId)
       .eq("invited_user_id", invitedUserId)
       .maybeSingle();
 
@@ -67,7 +74,7 @@ async function inviteMember({ inviterId, email, name, role, lang = "en" }) {
     const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${clientUrl()}/auth/confirm`,
       data: {
-        invited_by: inviterId,
+        invited_by: inviter.id,
         display_name: name,
         lang,
         language: lang,
@@ -88,22 +95,22 @@ async function inviteMember({ inviterId, email, name, role, lang = "en" }) {
     invitedUserId = invited.user.id;
   }
 
-  // Le membre hérite du plan ET rejoint la famille de l'invitant (données partagées)
-  const familyOwnerId = inviterProfile.family_owner_id || inviterId;
+  // Le membre hérite du plan ET rejoint la famille du propriétaire (données partagées)
   await supabase
     .from("profiles")
     .update({
-      plan: inviterProfile.plan,
-      invited_by: inviterId,
+      plan: ownerProfile.plan,
+      invited_by: inviter.id,
       family_owner_id: familyOwnerId,
       display_name: name,
       updated_at: new Date().toISOString()
     })
     .eq("id", invitedUserId);
 
+  // user_id = propriétaire de la famille pour une liste de membres cohérente
   const { data: memberRow, error: memberError } = await supabase
     .from("family_members")
-    .insert({ user_id: inviterId, name, role, email, invited_user_id: invitedUserId })
+    .insert({ user_id: familyOwnerId, name, role, email, invited_user_id: invitedUserId })
     .select()
     .single();
 
@@ -114,4 +121,93 @@ async function inviteMember({ inviterId, email, name, role, lang = "en" }) {
   return { status: 200, body: { invited: true, linkedExisting, member: memberRow } };
 }
 
-module.exports = { inviteMember };
+// Retire un membre de la famille (Owner: tout le monde, Admin: Viewer/Editor)
+async function removeMember({ actor, memberId }) {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) {
+    return { status: 503, body: { error: "Supabase admin client unavailable." } };
+  }
+
+  const { data: member } = await supabase
+    .from("family_members")
+    .select("id, user_id, role, invited_user_id")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (!member) {
+    return { status: 404, body: { error: "member_not_found" } };
+  }
+  // Le membre doit appartenir à la même famille que l'acteur
+  if (member.user_id !== actor.familyOwnerId) {
+    return { status: 403, body: { error: "forbidden", action: "removeMembers" } };
+  }
+  if (!canRemoveMember(actor.role, member.role)) {
+    return { status: 403, body: { error: "forbidden", action: "removeMembers", targetRole: normalizeRole(member.role) } };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("family_members")
+    .delete()
+    .eq("id", memberId);
+
+  if (deleteError) {
+    return { status: 500, body: { error: "member_delete_failed" } };
+  }
+
+  // Détache le compte invité de la famille (il redevient un compte indépendant)
+  if (member.invited_user_id) {
+    await supabase
+      .from("profiles")
+      .update({
+        family_owner_id: null,
+        invited_by: null,
+        plan: "free",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", member.invited_user_id);
+  }
+
+  return { status: 200, body: { removed: true } };
+}
+
+// Change le rôle d'un membre (Owner uniquement, jamais vers Owner)
+async function changeMemberRole({ actor, memberId, role }) {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) {
+    return { status: 503, body: { error: "Supabase admin client unavailable." } };
+  }
+  if (!can(actor.role, "changeRoles")) {
+    return { status: 403, body: { error: "forbidden", action: "changeRoles" } };
+  }
+  if (!ASSIGNABLE_ROLES.includes(role)) {
+    return { status: 400, body: { error: "invalid_role" } };
+  }
+
+  const { data: member } = await supabase
+    .from("family_members")
+    .select("id, user_id")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (!member) {
+    return { status: 404, body: { error: "member_not_found" } };
+  }
+  if (member.user_id !== actor.familyOwnerId) {
+    return { status: 403, body: { error: "forbidden", action: "changeRoles" } };
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("family_members")
+    .update({ role })
+    .eq("id", memberId)
+    .select()
+    .single();
+
+  if (updateError) {
+    return { status: 500, body: { error: "member_update_failed" } };
+  }
+
+  return { status: 200, body: { updated: true, member: updated } };
+}
+
+module.exports = { inviteMember, removeMember, changeMemberRole };
