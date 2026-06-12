@@ -240,10 +240,23 @@ const BACKEND_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname
   ? "http://localhost:3000"
   : "";
 
+// Un lien de paiement par plan et par devise: le client paie 10/15/20 dans SA devise
 const stripePaymentLinks = {
-  solo: "https://buy.stripe.com/test_7sYeVedo8gUwaU89Kr9Ve00",
-  family: "https://buy.stripe.com/test_4gM28sdo847KbYc5ub9Ve01",
-  familyPlus: "https://buy.stripe.com/test_14A9AU6ZK1ZC8M04q79Ve02"
+  solo: {
+    CAD: "https://buy.stripe.com/test_7sYeVedo8gUwaU89Kr9Ve00",
+    USD: "https://buy.stripe.com/test_bJe14o1FqcEge6k09R9Ve03",
+    EUR: "https://buy.stripe.com/test_00w14o97S1ZC1jybSz9Ve04"
+  },
+  family: {
+    CAD: "https://buy.stripe.com/test_4gM28sdo847KbYc5ub9Ve01",
+    USD: "https://buy.stripe.com/test_3cI00k4RCeMod2g3m39Ve05",
+    EUR: "https://buy.stripe.com/test_cNi3cw3Ny9s4e6k09R9Ve06"
+  },
+  familyPlus: {
+    CAD: "https://buy.stripe.com/test_14A9AU6ZK1ZC8M04q79Ve02",
+    USD: "https://buy.stripe.com/test_7sYfZi4RC5bO8M09Kr9Ve07",
+    EUR: "https://buy.stripe.com/test_00w5kEbg00Vy8M06yf9Ve08"
+  }
 };
 
 const state = {
@@ -310,13 +323,14 @@ function money(value) {
   }).format(value * meta.rate);
 }
 
+// Prix des plans: montant fixe (10/15/20) dans chaque devise, comme dans Stripe
 function planMoney(value) {
   const meta = currencyMeta[state.currency];
   return new Intl.NumberFormat(meta.locale, {
     style: "currency",
     currency: state.currency,
-    maximumFractionDigits: state.currency === "CAD" ? 0 : 2
-  }).format(value * meta.rate);
+    maximumFractionDigits: 0
+  }).format(value);
 }
 
 function persistPreferences() {
@@ -431,8 +445,8 @@ function renderPricing() {
   }).join("");
   if (state.currency !== "CAD") {
     grid.innerHTML += `<p class="form-note pricing-note">${state.lang === "fr"
-      ? `Prix convertis en ${state.currency} au taux du jour à titre indicatif. La facturation Stripe est en dollars canadiens (CAD).`
-      : `Prices shown in ${state.currency} at today's rate for reference. Stripe billing is in Canadian dollars (CAD).`}</p>`;
+      ? `Vous serez facturé en ${state.currency} via Stripe.`
+      : `You will be billed in ${state.currency} via Stripe.`}</p>`;
   }
   $$("[data-plan]").forEach((button) => button.addEventListener("click", () => selectPlan(button.dataset.plan)));
 }
@@ -544,7 +558,8 @@ async function dbDelete(table, id) {
 }
 
 function selectPlan(planId) {
-  const paymentLink = stripePaymentLinks[planId];
+  const planLinks = stripePaymentLinks[planId];
+  const paymentLink = planLinks ? (planLinks[state.currency] || planLinks.CAD) : null;
   if (paymentLink) {
     if (!state.user) {
       openAuth("register");
