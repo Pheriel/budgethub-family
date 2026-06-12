@@ -10,19 +10,19 @@ const plans = [
     key: "solo",
     name: "BudgetHub Solo",
     envName: "SOLO",
-    amounts: { monthly: 1000, quarterly: 3000, semiannual: 6000, yearly: 10000 }
+    amounts: { monthly: 1000, quarterly: 3000, semiannual: 6000, yearly: 12000 }
   },
   {
     key: "family",
     name: "BudgetHub Family",
     envName: "FAMILY",
-    amounts: { monthly: 1500, quarterly: 4500, semiannual: 9000, yearly: 15000 }
+    amounts: { monthly: 1500, quarterly: 4500, semiannual: 9000, yearly: 18000 }
   },
   {
     key: "familyPlus",
     name: "BudgetHub Family Plus",
     envName: "FAMILY_PLUS",
-    amounts: { monthly: 2000, quarterly: 6000, semiannual: 12000, yearly: 20000 }
+    amounts: { monthly: 2000, quarterly: 6000, semiannual: 12000, yearly: 24000 }
   }
 ];
 
@@ -48,10 +48,9 @@ function currencyOptions(amount) {
   };
 }
 
-function priceMatches(price, amount, duration) {
+function priceConfigMatches(price, amount, duration) {
   const options = price.currency_options || {};
-  return price.active
-    && price.currency === "cad"
+  return price.currency === "cad"
     && price.unit_amount === amount
     && price.recurring
     && price.recurring.interval === duration.recurring.interval
@@ -60,6 +59,10 @@ function priceMatches(price, amount, duration) {
     && options.usd.unit_amount === amount
     && options.eur
     && options.eur.unit_amount === amount;
+}
+
+function priceMatches(price, amount, duration) {
+  return price.active && priceConfigMatches(price, amount, duration);
 }
 
 async function findOrCreateProduct(stripe, plan) {
@@ -144,6 +147,35 @@ async function findOrCreatePrice(stripe, product, plan, duration) {
   const mismatched = found.data.find((price) => price.active);
   if (mismatched) {
     await archiveMismatchedPrice(stripe, mismatched, key);
+  }
+
+  const inactive = await stripe.prices.list({
+    product: product.id,
+    active: false,
+    limit: 100,
+    expand: ["data.currency_options"]
+  });
+  const reactivatable = inactive.data.find((price) => (
+    priceConfigMatches(price, amount, duration)
+    && price.metadata
+    && price.metadata.budgethub_plan === plan.key
+    && price.metadata.duration === duration.key
+  ));
+  if (reactivatable) {
+    if (dryRun) {
+      console.log(`= [dry-run] Price would be reactivated: ${key} (${reactivatable.id})`);
+      return { price: reactivatable, action: "dry-run" };
+    }
+    const price = await stripe.prices.update(reactivatable.id, {
+      active: true,
+      lookup_key: key,
+      metadata: {
+        ...reactivatable.metadata,
+        budgethub_archived_reason: ""
+      }
+    });
+    console.log(`= Price reactivated: ${key} (${price.id})`);
+    return { price, action: "reactivated" };
   }
 
   if (dryRun) {
