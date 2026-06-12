@@ -85,6 +85,13 @@ const translations = {
     darkMode: "Mode sombre",
     language: "Langue",
     currency: "Devise",
+    durationLabel: "Durée",
+    planLabel: "Plan",
+    priceLabel: "Prix",
+    savingsLabel: "Économie réalisée",
+    noSavings: "Aucune économie",
+    noBilling: "Sans facturation",
+    includedLabel: "Inclus",
     snowball: "Snowball",
     avalanche: "Avalanche",
     recommended: "Recommandé",
@@ -183,6 +190,13 @@ const translations = {
     darkMode: "Dark mode",
     language: "Language",
     currency: "Currency",
+    durationLabel: "Billing cycle",
+    planLabel: "Plan",
+    priceLabel: "Price",
+    savingsLabel: "Savings",
+    noSavings: "No savings",
+    noBilling: "No billing",
+    includedLabel: "Included",
     snowball: "Snowball",
     avalanche: "Avalanche",
     recommended: "Recommended",
@@ -524,7 +538,7 @@ loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthD
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
-const t = (key) => translations[state.lang][key] || key;
+const t = (key) => translations[state.lang][key] || translations.en[key] || "";
 
 function money(value) {
   const meta = currencyMeta[state.currency];
@@ -564,7 +578,8 @@ function applyTheme() {
 function applyTranslations() {
   document.documentElement.lang = state.lang;
   $$("[data-i18n]").forEach((node) => {
-    node.textContent = t(node.dataset.i18n);
+    const text = t(node.dataset.i18n);
+    if (text) node.textContent = text;
   });
   $$(".language-select").forEach((select) => { select.value = state.lang; });
   $$(".currency-select").forEach((select) => { select.value = state.currency; });
@@ -639,17 +654,17 @@ function renderPricing() {
     familyPlus: {
       fr: [
         "Jusqu’à 10 membres",
-        "Prévisions avancées",
-        "Rapports",
-        "Export PDF",
-        "Fonctionnalités premium"
+        "Dettes illimitées",
+        "Budgets illimités",
+        "Objectifs illimités",
+        "Suivi par membre"
       ],
       en: [
         "Up to 10 members",
-        "Advanced forecasts",
-        "Reports",
-        "PDF export",
-        "Premium features"
+        "Unlimited debts",
+        "Unlimited budgets",
+        "Unlimited goals",
+        "Track by member"
       ]
     }
   };
@@ -657,15 +672,28 @@ function renderPricing() {
   grid.innerHTML = planDefinitions.map((plan) => {
     const features = planFeatures[plan.id][state.lang];
     const total = plan.price * months;
-    const priceLine = plan.id === "free"
-      ? `${planMoney(0)} <small>${t("month")}</small>`
-      : `${planMoney(total)} <small>${durationSuffix()}</small>`;
+    const durationText = plan.id === "free" ? t("noBilling") : durationLabel(state.billingDuration);
+    const monthlyEquivalent = plan.price * months;
+    const savings = plan.id === "free" ? 0 : Math.max(0, monthlyEquivalent - total);
+    const priceLine = planMoney(total);
+    const savingsLine = savings > 0 ? planMoney(savings) : t("noSavings");
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
-        <h3>${plan.name}</h3>
-        <div class="price">${priceLine}</div>
+        <div>
+          <span class="price-meta">${t("planLabel")}</span>
+          <h3>${plan.name}</h3>
+        </div>
+        <div>
+          <span class="price-meta">${t("priceLabel")}</span>
+          <div class="price">${priceLine}</div>
+        </div>
+        <div class="pricing-facts">
+          <p><span>${t("durationLabel")}</span><strong>${durationText}</strong></p>
+          <p><span>${t("savingsLabel")}</span><strong>${savingsLine}</strong></p>
+        </div>
         ${plan.id !== "free" && months > 1 ? `<p class="price-detail">${planMoney(plan.price)} ${t("month")}</p>` : ""}
+        <p class="price-meta">${t("includedLabel")}</p>
         <ul>${features.map((feature) => `<li>${feature}</li>`).join("")}</ul>
         ${plan.id !== "free" ? `<p class="form-note">${state.lang === "fr"
           ? `Remboursement possible dans les 7 jours suivant l'achat initial. `

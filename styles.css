@@ -703,6 +703,38 @@ h3 {
   line-height: 1.8;
 }
 
+.price-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pricing-facts {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+}
+
+.pricing-facts p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  color: var(--muted);
+}
+
+.pricing-facts strong {
+  color: var(--text);
+  text-align: right;
+}
+
 .pricing-note {
   grid-column: 1 / -1;
 }

@@ -28,7 +28,7 @@ BudgetHub Family est une interface SaaS moderne pour organiser les finances du f
 - Free: 0$, 1 membre, 2 dettes, données locales dans le navigateur
 - Solo: 10$/mois, 1 utilisateur, dettes, budgets et objectifs illimités
 - Family: 15$/mois, jusqu’à 5 membres, budget familial et objectifs communs
-- Family Plus: 20$/mois, jusqu’à 10 membres, prévisions avancées, rapports et export PDF
+- Family Plus: 20$/mois, jusqu’à 10 membres, dettes, budgets, objectifs et suivi par membre illimités
 
 ## Lancer localement
 
