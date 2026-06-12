@@ -6,13 +6,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
 
-const authRoutes = require("./routes/auth.routes");
-const familyRoutes = require("./routes/families.routes");
 const memberRoutes = require("./routes/members.routes");
-const debtRoutes = require("./routes/debts.routes");
-const budgetRoutes = require("./routes/budgets.routes");
-const transactionRoutes = require("./routes/transactions.routes");
-const goalRoutes = require("./routes/goals.routes");
 const billingRoutes = require("./routes/billing.routes");
 const diagnosticsRoutes = require("./routes/diagnostics.routes");
 
@@ -41,13 +35,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "budgethub-family" });
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/families", familyRoutes);
 app.use("/api/members", memberRoutes);
-app.use("/api/debts", debtRoutes);
-app.use("/api/budgets", budgetRoutes);
-app.use("/api/transactions", transactionRoutes);
-app.use("/api/goals", goalRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
 
 const staticRoot = __dirname;

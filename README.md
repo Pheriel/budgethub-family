@@ -32,22 +32,15 @@ BudgetHub Family est une interface SaaS moderne pour organiser les finances du f
 
 ## Lancer localement
 
-Ouvrir directement:
-
 ```bash
-index.html
-```
-
-Ou servir le dossier:
-
-```bash
+npm install
 npm run dev
 ```
 
 Puis ouvrir:
 
 ```text
-http://localhost:5173
+http://localhost:3000
 ```
 
 ## Environnement
@@ -110,16 +103,17 @@ Les visiteurs sans compte voient des données de démonstration locales. Les uti
 ├── styles.css
 ├── app.js
 ├── server.js
+├── assets
 ├── config
 ├── controllers
 ├── routes
 ├── services
+├── scripts
+├── supabase
 ├── package.json
 ├── .gitignore
 ├── .env.example
 ├── README.md
-├── ROADMAP.md
-├── DEPLOYMENT_HOME_SERVER.md
-├── DATABASE_SCHEMA_DRAFT.md
-└── API_DOCUMENTATION_DRAFT.md
+├── DEPLOYMENT_HOSTINGER.md
+└── STRIPE_CHECKOUT_SETUP.md
 ```

@@ -473,14 +473,6 @@ const demoData = {
   members: [{ name: "Alex", role: "Admin" }]
 };
 
-function loadDemoData() {
-  state.debts = demoData.debts.map((item) => ({ ...item }));
-  state.budget = demoData.budget.map((item) => ({ ...item }));
-  state.transactions = demoData.transactions.map((item) => ({ ...item }));
-  state.goals = demoData.goals.map((item) => ({ ...item }));
-  state.members = demoData.members.map((item) => ({ ...item }));
-}
-
 function emptyMonthData() {
   return { income: 0, debts: [], budget: [], transactions: [], goals: [] };
 }
@@ -2118,7 +2110,26 @@ function boot() {
   $("#themeToggle").addEventListener("click", () => updatePreference("theme", state.theme === "dark" ? "light" : "dark"));
   $("#appThemeToggle").addEventListener("click", () => updatePreference("theme", state.theme === "dark" ? "light" : "dark"));
   $("#appMonthSelect").addEventListener("change", (event) => changeSelectedMonth(event.target.value));
-  $("#menuToggle").addEventListener("click", () => $(".topbar").classList.toggle("menu-open"));
+  const setMobileMenu = (open) => {
+    $(".topbar").classList.toggle("menu-open", open);
+    $("#menuToggle").setAttribute("aria-expanded", String(open));
+  };
+  $("#menuToggle").addEventListener("click", () => {
+    setMobileMenu(!$(".topbar").classList.contains("menu-open"));
+  });
+  // Fermer le menu mobile après un choix (lien ou bouton d'action, pas les préférences)
+  $("#topbarMenu").addEventListener("click", (event) => {
+    if (event.target.closest("a, #openWorkspace, #openLogin, #topRegister, #startDemo")) {
+      setMobileMenu(false);
+    }
+  });
+  // Fermer le menu mobile au clic à l'extérieur de la barre
+  document.addEventListener("click", (event) => {
+    const topbar = $(".topbar");
+    if (topbar.classList.contains("menu-open") && !topbar.contains(event.target)) {
+      setMobileMenu(false);
+    }
+  });
   $("#startDemo").addEventListener("click", openApp);
   $("#heroDemo").addEventListener("click", openApp);
 

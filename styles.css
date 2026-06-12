@@ -348,6 +348,12 @@ a {
   margin-bottom: 1rem;
 }
 
+/* Sur desktop, le wrapper du menu est transparent pour le layout flex de la topbar */
+.topbar-menu,
+.pref-group {
+  display: contents;
+}
+
 .landing-nav {
   display: flex;
   align-items: center;
@@ -1013,29 +1019,70 @@ label select {
 }
 
 @media (max-width: 1060px) {
-  .landing-nav,
-  .top-actions {
+  .topbar-menu {
     display: none;
   }
 
-  .topbar.menu-open .landing-nav,
-  .topbar.menu-open .top-actions {
+  /* Panneau mobile unique: nav + préférences + actions, sans espace mort */
+  .topbar.menu-open .topbar-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
     position: absolute;
-    left: 1rem;
-    right: 1rem;
-    top: calc(100% + 0.5rem);
-    display: grid;
-    gap: 0.75rem;
-    padding: 1rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
+    top: 100%;
+    left: 0;
+    right: 0;
+    padding: 0.5rem 1rem 1rem;
     background: var(--surface);
+    border-bottom: 1px solid var(--line);
     box-shadow: var(--shadow);
+    max-height: calc(100dvh - 5.25rem);
+    overflow-y: auto;
+  }
+
+  .topbar.menu-open .landing-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .topbar.menu-open .landing-nav a {
+    padding: 0.7rem 0.15rem;
+    color: var(--text);
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   }
 
   .topbar.menu-open .top-actions {
-    top: calc(100% + 12.5rem);
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+
+  .topbar.menu-open .pref-group {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 0.6rem;
+  }
+
+  .topbar.menu-open .pref-group .icon-button {
+    min-width: 2.6rem;
+  }
+
+  .topbar.menu-open #startDemo,
+  .topbar.menu-open #openWorkspace:not([hidden]) {
+    grid-column: 1 / -1;
+  }
+
+  .topbar.menu-open .top-actions .primary-button,
+  .topbar.menu-open .top-actions .ghost-button,
+  .topbar.menu-open .top-actions .icon-button,
+  .topbar.menu-open .top-actions select {
+    min-height: 2.6rem;
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+    white-space: nowrap;
   }
 
   .menu-button {
@@ -1125,18 +1172,8 @@ label select {
     grid-column: auto;
   }
 
-  .topbar.menu-open .top-actions {
-    grid-template-columns: 1fr;
-  }
-
   .workspace {
     padding: 1rem;
-  }
-
-  .topbar.menu-open .landing-nav,
-  .topbar.menu-open .top-actions {
-    left: 0.75rem;
-    right: 0.75rem;
   }
 
   .hero-actions,
@@ -1172,6 +1209,10 @@ label select {
 }
 
 @media (max-width: 380px) {
+  .topbar.menu-open .top-actions {
+    grid-template-columns: 1fr;
+  }
+
   .brand-logo,
   .brand-mark {
     width: 2.1rem;

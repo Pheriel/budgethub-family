@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=12" />
+    <link rel="stylesheet" href="/styles.css?v=13" />
   </head>
   <body>
     <div class="app-shell">
@@ -31,31 +31,35 @@
           </span>
         </a>
 
-        <nav class="landing-nav" aria-label="Navigation principale">
-          <a href="#features" data-i18n="navFeatures">Fonctions</a>
-          <a href="#pricing" data-i18n="navPricing">Tarifs</a>
-          <a href="#security" data-i18n="navSecurity">Sécurité</a>
-          <a href="/legal" data-legal-link="legal" data-i18n="navLegal">Légal</a>
-        </nav>
+        <div class="topbar-menu" id="topbarMenu">
+          <nav class="landing-nav" aria-label="Navigation principale">
+            <a href="#features" data-i18n="navFeatures">Fonctions</a>
+            <a href="#pricing" data-i18n="navPricing">Tarifs</a>
+            <a href="#security" data-i18n="navSecurity">Sécurité</a>
+            <a href="/legal" data-legal-link="legal" data-i18n="navLegal">Légal</a>
+          </nav>
 
-        <div class="top-actions">
-          <select id="languageSelect" class="language-select" aria-label="Langue">
-            <option value="fr">FR</option>
-            <option value="en">EN</option>
-          </select>
-          <select id="currencySelect" class="currency-select" aria-label="Devise">
-            <option value="CAD">CAD</option>
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-          </select>
-          <button class="icon-button" id="themeToggle" type="button" aria-label="Changer le thème">☾</button>
-          <button class="primary-button" id="openWorkspace" type="button" hidden></button>
-          <button class="ghost-button" id="openLogin" type="button" data-i18n="login">Connexion</button>
-          <button class="ghost-button" id="topRegister" type="button" data-i18n="createAccount">Créer un compte</button>
-          <button class="primary-button" id="startDemo" type="button" data-i18n="freeDemo">Démo gratuite</button>
+          <div class="top-actions">
+            <div class="pref-group">
+              <select id="languageSelect" class="language-select" aria-label="Langue">
+                <option value="fr">FR</option>
+                <option value="en">EN</option>
+              </select>
+              <select id="currencySelect" class="currency-select" aria-label="Devise">
+                <option value="CAD">CAD</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </select>
+              <button class="icon-button" id="themeToggle" type="button" aria-label="Changer le thème">☾</button>
+            </div>
+            <button class="primary-button" id="openWorkspace" type="button" hidden></button>
+            <button class="ghost-button" id="openLogin" type="button" data-i18n="login">Connexion</button>
+            <button class="ghost-button" id="topRegister" type="button" data-i18n="createAccount">Créer un compte</button>
+            <button class="primary-button" id="startDemo" type="button" data-i18n="freeDemo">Démo gratuite</button>
+          </div>
         </div>
 
-        <button class="menu-button" id="menuToggle" type="button" aria-label="Ouvrir le menu">☰</button>
+        <button class="menu-button" id="menuToggle" type="button" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="topbarMenu">☰</button>
       </header>
 
       <main id="landingView">
@@ -275,6 +279,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="/app.js?v=19"></script>
+    <script src="/app.js?v=20"></script>
   </body>
 </html>
