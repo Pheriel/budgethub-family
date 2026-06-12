@@ -421,9 +421,9 @@ const supabaseClient = window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 
-const BACKEND_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
-  ? "http://localhost:3000"
-  : "";
+// En production, l'API est servie par le même domaine que le frontend
+const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const BACKEND_URL = isLocalHost ? "http://localhost:3000" : window.location.origin;
 const PRODUCTION_URL = "https://budgethubfamily.com";
 const authRedirectUrl = `${PRODUCTION_URL}/auth/confirm`;
 
@@ -750,7 +750,7 @@ function setSessionUser(user) {
 
 // Demande au backend de vérifier les achats Stripe récents et de mettre à jour le plan
 async function syncBillingPlan() {
-  if (!BACKEND_URL || !state.user) return;
+  if (!state.user) return;
   try {
     const response = await fetch(`${BACKEND_URL}/api/billing/sync/${state.user.id}`);
     if (response.ok) {
@@ -889,13 +889,6 @@ async function selectPlan(planId) {
     return;
   }
 
-  if (!BACKEND_URL) {
-    alert(state.lang === "fr"
-      ? "Le serveur de paiement n'est pas joignable. Démarrez le backend (port 3000)."
-      : "Payment server unreachable. Start the backend (port 3000).");
-    return;
-  }
-
   try {
     const response = await fetch(`${BACKEND_URL}/api/billing/checkout`, {
       method: "POST",
@@ -916,8 +909,8 @@ async function selectPlan(planId) {
     }
   } catch (_error) {
     alert(state.lang === "fr"
-      ? "Backend injoignable: démarrez le serveur (port 3000) puis réessayez."
-      : "Backend unreachable: start the server (port 3000) and try again.");
+      ? "Le service de paiement est temporairement indisponible. Réessayez dans quelques instants."
+      : "The payment service is temporarily unavailable. Please try again shortly.");
   }
 }
 
@@ -1504,11 +1497,6 @@ function bindViewActions() {
 
       if (state.user) {
         // Invitation réelle: le backend crée le compte du membre et l'envoie par courriel
-        if (!BACKEND_URL) {
-          return showLimit(state.lang === "fr"
-            ? "Le serveur d'invitations n'est pas joignable depuis cette adresse."
-            : "The invitation server is not reachable from this address.");
-        }
         const submitButton = memberForm.querySelector("button[type=submit]");
         submitButton.disabled = true;
         try {
@@ -1555,13 +1543,13 @@ function bindViewActions() {
               : "This email address is rejected by Supabase.");
           } else {
             showLimit(state.lang === "fr"
-              ? "L'invitation a échoué. Vérifiez que le backend est démarré."
-              : "The invitation failed. Check that the backend is running.");
+              ? "L'invitation a échoué. Réessayez dans quelques instants."
+              : "The invitation failed. Please try again shortly.");
           }
         } catch (_error) {
           showLimit(state.lang === "fr"
-            ? "Backend injoignable: démarrez le serveur (port 3000) puis réessayez."
-            : "Backend unreachable: start the server (port 3000) and try again.");
+            ? "Le service d'invitations est temporairement indisponible. Réessayez dans quelques instants."
+            : "The invitation service is temporarily unavailable. Please try again shortly.");
         } finally {
           submitButton.disabled = false;
         }
@@ -1757,8 +1745,8 @@ function bindViewActions() {
       } catch (_error) {
         event.target.checked = !autoRenew;
         note.textContent = state.lang === "fr"
-          ? "Échec. Vérifiez que le backend est démarré."
-          : "Failed. Check that the backend is running.";
+          ? "Le service de paiement est temporairement indisponible. Réessayez dans quelques instants."
+          : "The payment service is temporarily unavailable. Please try again shortly.";
         note.hidden = false;
       } finally {
         event.target.disabled = false;
@@ -1789,8 +1777,8 @@ function bindViewActions() {
         }
       } catch (_error) {
         note.textContent = state.lang === "fr"
-          ? "Échec de la résiliation. Vérifiez que le backend est démarré."
-          : "Cancellation failed. Check that the backend is running.";
+          ? "Le service de paiement est temporairement indisponible. Réessayez dans quelques instants."
+          : "The payment service is temporarily unavailable. Please try again shortly.";
         note.hidden = false;
         cancelSubButton.disabled = false;
       }
