@@ -3,6 +3,9 @@ const express = require("express");
 const { createStripeClient } = require("../config/stripe");
 const {
   handleCheckoutCompleted,
+  handleInvoicePaid,
+  handleInvoicePaymentFailed,
+  syncSubscription,
   syncUserPlan,
   createCheckoutSession,
   setAutoRenew,
@@ -32,9 +35,12 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
   try {
     if (event.type === "checkout.session.completed") {
       await handleCheckoutCompleted(event.data.object);
+    } else if (event.type === "invoice.paid") {
+      await handleInvoicePaid(event.data.object);
+    } else if (event.type === "invoice.payment_failed") {
+      await handleInvoicePaymentFailed(event.data.object);
     } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
-      const userId = event.data.object.metadata && event.data.object.metadata.app_user_id;
-      if (userId) await syncUserPlan(userId);
+      await syncSubscription(event.data.object.id);
     }
     res.json({ received: true });
   } catch (error) {

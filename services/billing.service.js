@@ -20,6 +20,7 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
 
   const cur = validCurrencies.includes(currency) ? currency : "cad";
   const appUrl = clientUrl();
+  const planName = `${plan} ${durationToLabel[duration] || duration}`.trim();
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -27,7 +28,17 @@ async function createCheckoutSession({ userId, email, plan, duration, currency }
     customer_email: email,
     line_items: [{ price: priceId, quantity: 1 }],
     currency: cur,
-    subscription_data: { metadata: { plan, duration, app_user_id: userId } },
+    metadata: { plan, duration, app_user_id: userId },
+    subscription_data: {
+      description: `BudgetHub Family - ${planName}`,
+      metadata: { plan, duration, app_user_id: userId }
+    },
+    custom_text: {
+      submit: {
+        message: "Refunds may be requested within 7 days after the initial purchase. After 7 days, subscriptions can be canceled before renewal with access kept until the paid period ends."
+      }
+    },
+    allow_promotion_codes: true,
     success_url: `${appUrl}?checkout=success`,
     cancel_url: `${appUrl}?checkout=cancel`
   });
@@ -78,6 +89,64 @@ async function handleCheckoutCompleted(session) {
 
   const ok = await writeSubscriptionToProfile(userId, subscription, plan);
   return { updated: ok, plan };
+}
+
+async function syncSubscription(subscriptionId) {
+  const stripe = createStripeClient();
+  if (!stripe || !subscriptionId) return { updated: false, reason: "missing_subscription" };
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const userId = subscription.metadata && subscription.metadata.app_user_id;
+  if (!userId) return { updated: false, reason: "missing_app_user_id" };
+
+  const priceId = subscription.items.data[0]?.price?.id;
+  const plan = priceIdToPlan[priceId];
+  if (!plan) return { updated: false, reason: "unknown_price" };
+
+  if (subscription.status === "canceled") {
+    const supabase = createSupabaseAdminClient();
+    await supabase.from("profiles").update({
+      plan: "free",
+      subscription_status: "canceled",
+      stripe_subscription_id: null,
+      cancel_at_period_end: false,
+      current_period_end: null,
+      billing_duration: null,
+      plan_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq("id", userId);
+    return { updated: true, plan: "free" };
+  }
+
+  const ok = await writeSubscriptionToProfile(userId, subscription, plan);
+  return { updated: ok, plan };
+}
+
+async function invoiceSubscriptionId(invoice) {
+  return invoice.subscription || invoice.parent?.subscription_details?.subscription || null;
+}
+
+async function handleInvoicePaid(invoice) {
+  return syncSubscription(await invoiceSubscriptionId(invoice));
+}
+
+async function handleInvoicePaymentFailed(invoice) {
+  const subscriptionId = await invoiceSubscriptionId(invoice);
+  const stripe = createStripeClient();
+  const supabase = createSupabaseAdminClient();
+  if (!stripe || !supabase || !subscriptionId) return { updated: false, reason: "missing_subscription" };
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const userId = subscription.metadata && subscription.metadata.app_user_id;
+  if (!userId) return { updated: false, reason: "missing_app_user_id" };
+
+  await supabase.from("profiles").update({
+    subscription_status: subscription.status || "past_due",
+    cancel_at_period_end: subscription.cancel_at_period_end,
+    updated_at: new Date().toISOString()
+  }).eq("id", userId);
+
+  return { updated: true, status: subscription.status };
 }
 
 // Fallback quand le webhook n'est pas joignable: cherche l'abonnement le plus récent
@@ -139,7 +208,7 @@ async function setAutoRenew(userId, autoRenew) {
   return { status: 200, body: { autoRenew, cancel_at_period_end: subscription.cancel_at_period_end } };
 }
 
-// Résiliation immédiate de l'abonnement
+// Annule le renouvellement; l'accès reste actif jusqu'à la fin de la période payée
 async function cancelSubscription(userId) {
   const stripe = createStripeClient();
   const supabase = createSupabaseAdminClient();
@@ -155,20 +224,25 @@ async function cancelSubscription(userId) {
     return { status: 404, body: { error: "no_active_subscription" } };
   }
 
-  await stripe.subscriptions.cancel(profile.stripe_subscription_id);
+  const subscription = await stripe.subscriptions.update(profile.stripe_subscription_id, {
+    cancel_at_period_end: true
+  });
 
   await supabase.from("profiles").update({
-    plan: "free", subscription_status: "canceled", stripe_subscription_id: null,
-    cancel_at_period_end: false, current_period_end: null, billing_duration: null,
-    plan_updated_at: new Date().toISOString(), updated_at: new Date().toISOString()
+    subscription_status: subscription.status,
+    cancel_at_period_end: true,
+    updated_at: new Date().toISOString()
   }).eq("id", userId);
 
-  return { status: 200, body: { canceled: true } };
+  return { status: 200, body: { canceled: true, cancel_at_period_end: true } };
 }
 
 module.exports = {
   createCheckoutSession,
   handleCheckoutCompleted,
+  handleInvoicePaid,
+  handleInvoicePaymentFailed,
+  syncSubscription,
   syncUserPlan,
   setAutoRenew,
   cancelSubscription,

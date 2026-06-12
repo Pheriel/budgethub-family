@@ -7,7 +7,9 @@ function createStripeClient() {
     return null;
   }
 
-  return Stripe(STRIPE_SECRET_KEY);
+  return Stripe(STRIPE_SECRET_KEY, {
+    apiVersion: "2026-02-25.clover"
+  });
 }
 
 module.exports = {

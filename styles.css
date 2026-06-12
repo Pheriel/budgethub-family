@@ -266,6 +266,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
     radial-gradient(circle at top left, rgba(36, 107, 254, 0.12), transparent 34rem),
@@ -307,14 +308,25 @@ a {
   display: flex;
   align-items: center;
   gap: 0.7rem;
+  min-width: 0;
 }
 
+.brand-logo,
 .brand-mark {
   display: inline-grid;
   width: 2.45rem;
   height: 2.45rem;
+  flex: 0 0 auto;
   place-items: center;
   border-radius: var(--radius);
+}
+
+.brand-logo {
+  display: block;
+  object-fit: contain;
+}
+
+.brand-mark {
   background: linear-gradient(135deg, var(--primary), var(--accent));
   color: white;
   font-weight: 800;
@@ -327,6 +339,13 @@ a {
   color: var(--muted);
   font-size: 0.77rem;
   margin-top: 0.05rem;
+}
+
+.auth-logo {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 14px;
+  margin-bottom: 1rem;
 }
 
 .landing-nav {
@@ -636,6 +655,7 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  min-width: 0;
 }
 
 .price-card.featured {
@@ -658,6 +678,62 @@ h3 {
   padding-left: 1.1rem;
   color: var(--muted);
   line-height: 1.8;
+}
+
+.pricing-note {
+  grid-column: 1 / -1;
+}
+
+.site-footer {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.5rem clamp(1rem, 4vw, 4rem) 2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.footer-brand strong {
+  color: var(--text);
+}
+
+.footer-brand small {
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  font-weight: 750;
+}
+
+.footer-copy {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.legal-page {
+  min-height: 58vh;
+}
+
+.legal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .security-band {
@@ -709,6 +785,7 @@ h3 {
   display: grid;
   grid-template-columns: 17rem minmax(0, 1fr);
   min-height: calc(100vh - 4.75rem);
+  max-width: 100vw;
 }
 
 .sidebar {
@@ -721,6 +798,8 @@ h3 {
   padding: 1rem;
   border-right: 1px solid var(--line);
   background: var(--surface);
+  min-width: 0;
+  max-width: 100vw;
 }
 
 .app-nav {
@@ -749,6 +828,8 @@ h3 {
 
 .workspace {
   padding: clamp(1rem, 3vw, 2rem);
+  min-width: 0;
+  max-width: 100vw;
 }
 
 .workspace-head {
@@ -789,8 +870,17 @@ h3 {
   margin-top: 0;
 }
 
+.panel,
+.card-grid > *,
+.stats-grid > *,
+.form-grid > *,
+.split > * {
+  min-width: 0;
+}
+
 .table-wrap {
   overflow-x: auto;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
@@ -799,7 +889,7 @@ h3 {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 46rem;
+  min-width: 44rem;
 }
 
 th,
@@ -939,7 +1029,7 @@ label select {
   }
 
   .topbar.menu-open .top-actions {
-    top: calc(100% + 10rem);
+    top: calc(100% + 12.5rem);
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -973,12 +1063,20 @@ label select {
   .sidebar {
     position: static;
     height: auto;
+    width: 100%;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .app-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    max-width: 100%;
+  }
+
+  .app-nav button {
+    flex: 0 0 8rem;
   }
 
   .workspace-head {
@@ -989,8 +1087,14 @@ label select {
   .form-grid,
   .card-grid,
   .split,
-  .auth-panel {
+  .auth-panel,
+  .legal-grid,
+  .site-footer {
     grid-template-columns: 1fr;
+  }
+
+  .footer-links {
+    justify-content: flex-start;
   }
 }
 
@@ -1022,5 +1126,58 @@ label select {
 
   .workspace {
     padding: 1rem;
+  }
+
+  .topbar.menu-open .landing-nav,
+  .topbar.menu-open .top-actions {
+    left: 0.75rem;
+    right: 0.75rem;
+  }
+
+  .hero-actions,
+  .workspace-actions,
+  .account-actions,
+  .duration-picker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .secondary-button,
+  .icon-button,
+  .menu-button,
+  select,
+  input {
+    min-height: 2.85rem;
+  }
+
+  .brand span {
+    max-width: 10rem;
+  }
+
+  .product-frame,
+  .table-wrap {
+    max-width: 100%;
+  }
+
+  table {
+    min-width: 38rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .brand-logo,
+  .brand-mark {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .brand span {
+    max-width: 8rem;
+  }
+
+  h1 {
+    font-size: 2.15rem;
   }
 }

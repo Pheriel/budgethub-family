@@ -87,7 +87,15 @@ const translations = {
     currency: "Devise",
     snowball: "Snowball",
     avalanche: "Avalanche",
-    recommended: "Recommandé"
+    recommended: "Recommandé",
+    navLegal: "Légal",
+    footerTerms: "Conditions",
+    footerPrivacy: "Confidentialité",
+    footerRefund: "Remboursements",
+    footerCookies: "Cookies",
+    footerLegal: "Mentions légales",
+    footerOperator: "BudgetHub Family est exploité par Yannick Côté / Le Diagnosticien Informatique.",
+    footerCopyright: "© 2026 BudgetHub Family. Tous droits réservés."
   },
   en: {
     navFeatures: "Features",
@@ -177,7 +185,142 @@ const translations = {
     currency: "Currency",
     snowball: "Snowball",
     avalanche: "Avalanche",
-    recommended: "Recommended"
+    recommended: "Recommended",
+    navLegal: "Legal",
+    footerTerms: "Terms",
+    footerPrivacy: "Privacy",
+    footerRefund: "Refunds",
+    footerCookies: "Cookies",
+    footerLegal: "Legal notice",
+    footerOperator: "BudgetHub Family is operated by Yannick Côté / Le Diagnosticien Informatique.",
+    footerCopyright: "© 2026 BudgetHub Family. All rights reserved."
+  }
+};
+
+const legalPages = {
+  terms: {
+    fr: {
+      title: "Conditions d'utilisation",
+      intro: "Ces conditions encadrent l'utilisation de BudgetHub Family, une application d'organisation de budget personnel et familial.",
+      sections: [
+        ["Service", "BudgetHub Family aide les utilisateurs a organiser budgets, dettes, transactions, objectifs et membres de famille. L'application ne fournit pas de conseil financier, fiscal, juridique ou d'investissement professionnel."],
+        ["Compte", "Vous devez fournir des renseignements exacts, proteger vos identifiants et utiliser le service conformement aux lois applicables au Canada, aux Etats-Unis, dans l'Union europeenne et dans votre pays de residence."],
+        ["Abonnements", "Les abonnements payants sont traites par Stripe. Les prix, devises CAD/USD/EUR, taxes applicables et statuts de paiement sont affiches dans Stripe Checkout avant confirmation."],
+        ["Annulation", "Vous pouvez annuler le renouvellement automatique avant la prochaine echeance. L'acces paye reste disponible jusqu'a la fin de la periode deja payee."],
+        ["Responsabilite", "BudgetHub Family est fourni comme outil d'organisation. Vous restez responsable de vos decisions financieres, paiements, budgets, dettes, declarations et obligations."],
+        ["Contact", "Pour toute question: support@budgethubfamily.com."]
+      ]
+    },
+    en: {
+      title: "Terms of Service",
+      intro: "These terms govern use of BudgetHub Family, an app for personal and family budget organization.",
+      sections: [
+        ["Service", "BudgetHub Family helps users organize budgets, debts, transactions, goals and family members. The app does not provide professional financial, tax, legal or investment advice."],
+        ["Account", "You must provide accurate information, protect your credentials and use the service in compliance with laws that apply in Canada, the United States, the European Union and your country of residence."],
+        ["Subscriptions", "Paid subscriptions are processed by Stripe. Prices, CAD/USD/EUR currencies, applicable taxes and payment status are shown in Stripe Checkout before confirmation."],
+        ["Cancellation", "You may cancel automatic renewal before the next billing date. Paid access remains available until the end of the already paid period."],
+        ["Liability", "BudgetHub Family is provided as an organization tool. You remain responsible for your financial decisions, payments, budgets, debts, filings and obligations."],
+        ["Contact", "Questions: support@budgethubfamily.com."]
+      ]
+    }
+  },
+  privacy: {
+    fr: {
+      title: "Politique de confidentialité",
+      intro: "Cette politique resume les donnees traitees pour fournir BudgetHub Family.",
+      sections: [
+        ["Donnees collectees", "Nous traitons les donnees de compte, courriel, langue, preferences, plan, donnees financieres saisies par l'utilisateur, budgets, dettes, transactions, objectifs et membres de famille."],
+        ["Fournisseurs", "Supabase est utilise pour l'authentification et la base de donnees. Stripe est utilise pour les paiements, abonnements, factures et recus. Ces fournisseurs peuvent traiter des donnees selon leurs propres politiques."],
+        ["Utilisation", "Les donnees servent a fournir le service, securiser les comptes, synchroniser les abonnements, envoyer des emails transactionnels et repondre au support."],
+        ["Stockage local", "Le site peut utiliser localStorage pour la langue, la devise, le theme, les donnees de demo et certaines preferences. Des cookies techniques peuvent etre utilises par les services tiers."],
+        ["Droits", "Vous pouvez demander l'acces, la correction ou la suppression de vos donnees, sous reserve des obligations legales ou comptables applicables."],
+        ["Utilisateurs internationaux", "Les donnees peuvent etre traitees hors de votre province, etat ou pays. En utilisant le service, vous acceptez ces transferts raisonnables pour fournir l'application."]
+      ]
+    },
+    en: {
+      title: "Privacy Policy",
+      intro: "This policy summarizes the data processed to provide BudgetHub Family.",
+      sections: [
+        ["Data collected", "We process account data, email, language, preferences, plan, user-entered financial data, budgets, debts, transactions, goals and family members."],
+        ["Providers", "Supabase is used for authentication and database services. Stripe is used for payments, subscriptions, invoices and receipts. These providers may process data under their own policies."],
+        ["Use", "Data is used to provide the service, secure accounts, sync subscriptions, send transactional emails and respond to support."],
+        ["Local storage", "The site may use localStorage for language, currency, theme, demo data and certain preferences. Technical cookies may be used by third-party services."],
+        ["Rights", "You may request access, correction or deletion of your data, subject to applicable legal or accounting obligations."],
+        ["International users", "Data may be processed outside your province, state or country. By using the service, you accept reasonable transfers needed to provide the app."]
+      ]
+    }
+  },
+  "refund-policy": {
+    fr: {
+      title: "Politique de remboursement",
+      intro: "Nous voulons une politique simple et claire pour les abonnements BudgetHub Family.",
+      sections: [
+        ["Delai de 7 jours", "Un remboursement peut etre demande seulement dans les 7 jours suivant l'achat initial d'un abonnement."],
+        ["Apres 7 jours", "Apres ce delai de 7 jours, aucun remboursement n'est offert, sauf obligation legale applicable."],
+        ["Annulation", "Vous pouvez annuler le renouvellement de votre abonnement avant la prochaine echeance."],
+        ["Acces conserve", "L'annulation conserve l'acces paye jusqu'a la fin de la periode deja payee."],
+        ["Pas de prorata", "Aucun remboursement au prorata n'est offert pour une periode partiellement utilisee, sauf obligation legale applicable."],
+        ["Demande", "Pour demander un remboursement admissible, ecrivez a support@budgethubfamily.com avec le courriel du compte, le plan achete, la devise et la date d'achat."]
+      ]
+    },
+    en: {
+      title: "Refund Policy",
+      intro: "We want a simple and clear policy for BudgetHub Family subscriptions.",
+      sections: [
+        ["7-day window", "A refund may be requested only within 7 days after the initial subscription purchase."],
+        ["After 7 days", "After this 7-day period, no refund is offered, except where required by applicable law."],
+        ["Cancellation", "You may cancel subscription renewal before the next billing date."],
+        ["Access retained", "Cancellation keeps paid access available until the end of the already paid period."],
+        ["No prorating", "No prorated refund is offered for a partially used period, except where required by applicable law."],
+        ["Request", "To request an eligible refund, email support@budgethubfamily.com with the account email, purchased plan, currency and purchase date."]
+      ]
+    }
+  },
+  cookies: {
+    fr: {
+      title: "Politique des cookies",
+      intro: "BudgetHub Family utilise des technologies limitees pour faire fonctionner le site et memoriser vos preferences.",
+      sections: [
+        ["localStorage", "Nous utilisons localStorage pour la langue, la devise, le theme, le mois selectionne, les donnees de demo et le cache temporaire de taux de change."],
+        ["Cookies essentiels", "Supabase, Stripe ou le navigateur peuvent utiliser des cookies ou stockages essentiels pour l'authentification, la securite, Checkout et la prevention de fraude."],
+        ["Analyse", "Aucun outil d'analyse marketing n'est requis par le code actuel. Si un outil est ajoute plus tard, cette politique devra etre mise a jour."],
+        ["Controle", "Vous pouvez effacer les donnees du navigateur dans les reglages de votre navigateur. Cela peut deconnecter votre session ou supprimer les donnees de demo locales."]
+      ]
+    },
+    en: {
+      title: "Cookie Policy",
+      intro: "BudgetHub Family uses limited technologies to operate the site and remember preferences.",
+      sections: [
+        ["localStorage", "We use localStorage for language, currency, theme, selected month, demo data and temporary exchange-rate cache."],
+        ["Essential cookies", "Supabase, Stripe or the browser may use essential cookies or storage for authentication, security, Checkout and fraud prevention."],
+        ["Analytics", "No marketing analytics tool is required by the current code. If one is added later, this policy should be updated."],
+        ["Control", "You can clear browser data in your browser settings. This may sign you out or remove local demo data."]
+      ]
+    }
+  },
+  legal: {
+    fr: {
+      title: "Mentions légales",
+      intro: "Informations generales sur BudgetHub Family.",
+      sections: [
+        ["Exploitant", "BudgetHub Family est exploite par Yannick Cote / Le Diagnosticien Informatique, pour un petit SaaS canadien."],
+        ["Contact support", "support@budgethubfamily.com"],
+        ["Hebergement et services", "Le backend Node.js/Express est heberge sur Hostinger. Supabase fournit l'authentification et la base de donnees. Stripe fournit les paiements et factures."],
+        ["Portee", "Le service est accessible a des utilisateurs au Canada, aux Etats-Unis, dans l'Union europeenne et ailleurs, sous reserve des lois applicables."],
+        ["Avis", "Ces pages sont des politiques de depart raisonnables et ne constituent pas un avis juridique officiel."]
+      ]
+    },
+    en: {
+      title: "Legal Notice",
+      intro: "General information about BudgetHub Family.",
+      sections: [
+        ["Operator", "BudgetHub Family is operated by Yannick Cote / Le Diagnosticien Informatique for a small Canadian SaaS."],
+        ["Support contact", "support@budgethubfamily.com"],
+        ["Hosting and services", "The Node.js/Express backend is hosted on Hostinger. Supabase provides authentication and database services. Stripe provides payments and invoices."],
+        ["Scope", "The service may be accessed by users in Canada, the United States, the European Union and elsewhere, subject to applicable law."],
+        ["Notice", "These pages are reasonable starter policies and are not official legal advice."]
+      ]
+    }
   }
 };
 
@@ -443,6 +586,7 @@ function applyTranslations() {
   $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan).name;
   renderPricing();
   renderMoneyTags();
+  renderLegalPage();
   renderView();
 }
 
@@ -530,6 +674,11 @@ function renderPricing() {
         <div class="price">${priceLine}</div>
         ${plan.id !== "free" && months > 1 ? `<p class="price-detail">${planMoney(plan.price)} ${t("month")}</p>` : ""}
         <ul>${features.map((feature) => `<li>${feature}</li>`).join("")}</ul>
+        ${plan.id !== "free" ? `<p class="form-note">${state.lang === "fr"
+          ? `Remboursement possible dans les 7 jours suivant l'achat initial. `
+          : `Refund available within 7 days after the initial purchase. `}
+          <a class="secondary-link" href="/refund-policy" data-legal-link="refund-policy">${state.lang === "fr" ? "Politique" : "Policy"}</a>
+        </p>` : ""}
         <button class="${plan.id === state.plan ? "secondary-button" : "primary-button"}" data-plan="${plan.id}">
           ${plan.id === state.plan ? t("current") : t("choosePlan")}
         </button>
@@ -542,6 +691,7 @@ function renderPricing() {
       : `You will be billed in ${state.currency} via Stripe.`}</p>`;
   }
   $$("[data-plan]").forEach((button) => button.addEventListener("click", () => selectPlan(button.dataset.plan)));
+  bindLegalLinks();
   const durationSelect = $("#durationSelect");
   if (durationSelect) {
     [...durationSelect.options].forEach((opt) => { opt.textContent = durationLabel(opt.value); });
@@ -790,17 +940,54 @@ function showView(name) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-const landingPages = ["home", "features", "pricing", "security"];
+const landingPages = ["home", "features", "pricing", "security", "terms", "privacy", "refund-policy", "cookies", "legal"];
+
+function renderLegalPage(page = state.legalPage || "legal") {
+  const target = legalPages[page] ? page : "legal";
+  const container = $("#legalPage");
+  if (!container) return;
+  const doc = legalPages[target][state.lang] || legalPages[target].en;
+  container.innerHTML = `
+    <div class="section-heading">
+      <p class="eyebrow">BudgetHub Family</p>
+      <h2>${doc.title}</h2>
+      <p class="hero-copy">${doc.intro}</p>
+    </div>
+    <div class="legal-grid">
+      ${doc.sections.map(([title, body]) => `
+        <article class="panel">
+          <h3>${title}</h3>
+          <p>${body.replace("support@budgethubfamily.com", `<a class="secondary-link" href="mailto:support@budgethubfamily.com">support@budgethubfamily.com</a>`)}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function bindLegalLinks() {
+  $$("[data-legal-link]").forEach((link) => {
+    link.onclick = (event) => {
+      event.preventDefault();
+      const page = link.dataset.legalLink;
+      history.pushState(null, "", `/${page}`);
+      showLandingPage(page);
+    };
+  });
+}
 
 function showLandingPage(page) {
   const target = landingPages.includes(page) ? page : "home";
   showView("landing");
-  landingPages.forEach((id) => {
-    $(`#${id}`).hidden = id !== target && target !== "home";
+  state.legalPage = legalPages[target] ? target : null;
+  renderLegalPage(target);
+  ["home", "features", "pricing", "security"].forEach((id) => {
+    $(`#${id}`).hidden = state.legalPage || (id !== target && target !== "home");
   });
+  $("#legalPage").hidden = !state.legalPage;
   $$(".landing-nav a").forEach((link) => {
-    link.classList.toggle("active", link.getAttribute("href") === `#${target}`);
+    link.classList.toggle("active", link.getAttribute("href") === `#${target}` || link.dataset.legalLink === target);
   });
+  bindLegalLinks();
 }
 
 function openApp() {
@@ -1231,7 +1418,7 @@ function renderAccount() {
       ${renderSubscriptionDetails(plan)}
       <div class="account-actions">
         <button class="primary-button" id="changePlanButton" type="button">${fr ? "Changer de plan" : "Change plan"}</button>
-        ${state.subscription ? `<button class="secondary-button" id="cancelSubButton" type="button">${fr ? "Résilier l'abonnement" : "Cancel subscription"}</button>` : ""}
+        ${state.subscription ? `<button class="secondary-button" id="cancelSubButton" type="button">${fr ? "Annuler le renouvellement" : "Cancel renewal"}</button>` : ""}
       </div>
       <p class="form-note" id="subNote" hidden></p>
     </section>
@@ -1591,8 +1778,8 @@ function bindViewActions() {
   if (cancelSubButton) {
     cancelSubButton.addEventListener("click", async () => {
       const confirmMsg = state.lang === "fr"
-        ? "Résilier votre abonnement maintenant ? Vous repasserez au plan gratuit."
-        : "Cancel your subscription now? You will return to the free plan.";
+        ? "Annuler le renouvellement ? Vous garderez l'accès jusqu'à la fin de la période déjà payée."
+        : "Cancel renewal? You will keep access until the end of the already paid period.";
       if (!confirm(confirmMsg)) return;
       const note = $("#subNote");
       cancelSubButton.disabled = true;
@@ -1603,11 +1790,7 @@ function bindViewActions() {
           body: JSON.stringify({ userId: state.user.id })
         });
         if (response.ok) {
-          state.plan = "free";
-          state.subscription = null;
-          $("#activePlanLabel").textContent = "Free";
-          updateUpgradeButton();
-          renderPricing();
+          if (state.subscription) state.subscription.cancelAtPeriodEnd = true;
           renderView();
         } else {
           throw new Error("failed");
@@ -1884,12 +2067,14 @@ function boot() {
   // Navigation multi-pages: Fonctions / Tarifs / Sécurité sont des pages distinctes
   $$(".landing-nav a").forEach((link) => {
     link.addEventListener("click", (event) => {
+      if (link.dataset.legalLink) return;
       event.preventDefault();
       const page = link.getAttribute("href").replace("#", "");
       history.replaceState(null, "", `#${page}`);
       showLandingPage(page);
     });
   });
+  bindLegalLinks();
   document.querySelector(".brand").addEventListener("click", (event) => {
     event.preventDefault();
     history.replaceState(null, "", "#home");
@@ -2089,6 +2274,16 @@ function boot() {
   }
 
   // Page d'atterrissage selon le hash (ex: #pricing), sans casser les liens de confirmation Supabase
+  window.addEventListener("popstate", () => {
+    const page = window.location.pathname.replace("/", "");
+    if (legalPages[page]) showLandingPage(page);
+    else showLandingPage(window.location.hash.replace("#", "") || "home");
+  });
+  const pathPage = window.location.pathname.replace("/", "");
+  if (legalPages[pathPage]) {
+    showLandingPage(pathPage);
+    return;
+  }
   const initialHash = window.location.hash.replace("#", "");
   if (landingPages.includes(initialHash) && initialHash !== "home") {
     showLandingPage(initialHash);

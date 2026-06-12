@@ -60,6 +60,8 @@ app.get(["/app.js", "/styles.css"], (req, res) => {
   res.sendFile(path.join(staticRoot, req.path.slice(1)));
 });
 
+app.use("/assets", express.static(path.join(staticRoot, "assets")));
+
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) {
     return res.status(404).json({ error: "Route not found" });

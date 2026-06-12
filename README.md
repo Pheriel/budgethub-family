@@ -20,6 +20,8 @@ BudgetHub Family est une interface SaaS moderne pour organiser les finances du f
 - CAD, USD et EUR
 - Mode sombre
 - Responsive mobile, tablette et desktop
+- Footer complet avec pages légales bilingues
+- Stripe Checkout avec webhooks abonnements/factures
 
 ## Plans
 
@@ -92,7 +94,9 @@ curl http://localhost:3000/api/diagnostics/stripe
 
 Le frontend est connecté à Supabase Auth: la création de compte et la connexion utilisent la clé publishable (sûre côté client). Les nouveaux comptes reçoivent un courriel de confirmation et un lien « Mot de passe oublié » permet la réinitialisation. Le changement de mot de passe se fait dans Paramètres une fois connecté.
 
-Les boutons de plans ouvrent des Stripe Payment Links en mode test, avec l'identifiant utilisateur (`client_reference_id`). Aucun vrai paiement n'est possible. Pour tester un paiement, utiliser la carte de test Stripe `4242 4242 4242 4242` avec une date future et un CVC quelconque. Le webhook `POST /api/billing/webhook` enregistre le plan acheté dans la table `profiles`.
+Les boutons de plans ouvrent Stripe Checkout en mode abonnement avec l'identifiant utilisateur (`client_reference_id`) et le courriel du compte connecté (`customer_email`). Pour tester un paiement, utiliser la carte de test Stripe `4242 4242 4242 4242` avec une date future et un CVC quelconque. Le webhook `POST /api/billing/webhook` synchronise le plan, les factures payées, les paiements échoués et les annulations dans la table `profiles`.
+
+Voir `STRIPE_CHECKOUT_SETUP.md` pour les réglages manuels à activer dans Stripe: emails de reçus/factures, branding, URLs légales et événements webhook.
 
 ## Données utilisateur
 
