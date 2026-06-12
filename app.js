@@ -89,6 +89,9 @@ const translations = {
     planLabel: "Plan",
     priceLabel: "Prix",
     savingsLabel: "Économie réalisée",
+    savePercentLabel: "Économisez",
+    discountSuffix: "de rabais",
+    insteadOfLabel: "Au lieu de",
     noSavings: "Aucune économie",
     noBilling: "Sans facturation",
     includedLabel: "Inclus",
@@ -194,6 +197,9 @@ const translations = {
     planLabel: "Plan",
     priceLabel: "Price",
     savingsLabel: "Savings",
+    savePercentLabel: "Save",
+    discountSuffix: "off",
+    insteadOfLabel: "Instead of",
     noSavings: "No savings",
     noBilling: "No billing",
     includedLabel: "Included",
@@ -552,10 +558,12 @@ function money(value) {
 // Prix des plans: montant fixe (10/15/20) dans chaque devise, comme dans Stripe
 function planMoney(value) {
   const meta = currencyMeta[state.currency];
+  const hasCents = Math.round(value * 100) % 100 !== 0;
   return new Intl.NumberFormat(meta.locale, {
     style: "currency",
     currency: state.currency,
-    maximumFractionDigits: 0
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0
   }).format(value);
 }
 
@@ -671,12 +679,14 @@ function renderPricing() {
   const months = durationMonths[state.billingDuration];
   grid.innerHTML = planDefinitions.map((plan) => {
     const features = planFeatures[plan.id][state.lang];
-    const total = plan.price * months;
+    const discount = durationDiscounts[state.billingDuration] || 0;
+    const fullPrice = plan.price * months;
+    const total = plan.id === "free" ? 0 : planTotal(plan);
     const durationText = plan.id === "free" ? t("noBilling") : durationLabel(state.billingDuration);
-    const monthlyEquivalent = plan.price * months;
-    const savings = plan.id === "free" ? 0 : Math.max(0, monthlyEquivalent - total);
+    const savings = plan.id === "free" ? 0 : Math.max(0, fullPrice - total);
     const priceLine = planMoney(total);
     const savingsLine = savings > 0 ? planMoney(savings) : t("noSavings");
+    const discountLine = plan.id === "free" ? `0% ${t("discountSuffix")}` : `${discount}% ${t("discountSuffix")}`;
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
@@ -691,8 +701,9 @@ function renderPricing() {
         <div class="pricing-facts">
           <p><span>${t("durationLabel")}</span><strong>${durationText}</strong></p>
           <p><span>${t("savingsLabel")}</span><strong>${savingsLine}</strong></p>
+          <p><span>${t("savePercentLabel")}</span><strong>${discountLine}</strong></p>
         </div>
-        ${plan.id !== "free" && months > 1 ? `<p class="price-detail">${planMoney(plan.price)} ${t("month")}</p>` : ""}
+        ${plan.id !== "free" && months > 1 ? `<p class="price-detail">${t("insteadOfLabel")} ${planMoney(fullPrice)} · ${planMoney(plan.price)} ${t("month")}</p>` : ""}
         <p class="price-meta">${t("includedLabel")}</p>
         <ul>${features.map((feature) => `<li>${feature}</li>`).join("")}</ul>
         ${plan.id !== "free" ? `<p class="form-note">${state.lang === "fr"
@@ -725,6 +736,13 @@ function renderPricing() {
 }
 
 const durationMonths = { "1m": 1, "3m": 3, "6m": 6, "12m": 12 };
+const durationDiscounts = { "1m": 0, "3m": 5, "6m": 10, "12m": 15 };
+
+function planTotal(plan, duration = state.billingDuration) {
+  const months = durationMonths[duration] || 1;
+  const discount = durationDiscounts[duration] || 0;
+  return plan.price * months * (100 - discount) / 100;
+}
 
 function durationLabel(key) {
   const fr = state.lang === "fr";

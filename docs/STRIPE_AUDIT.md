@@ -44,6 +44,17 @@ The mapping is defined by environment variable names in `config/billing.prices.j
 - Products: 3
 - Prices used by checkout: 12
 - Currencies: CAD as base currency, USD and EUR as `currency_options`
+- Discounts by billing cycle: monthly 0%, quarterly 5%, semiannual 10%, yearly 15%
+
+## Expected displayed and Checkout amounts
+
+Each amount is identical in CAD, USD and EUR because Stripe Prices use CAD as the base currency with USD/EUR `currency_options`.
+
+| Plan | Monthly | Quarterly | Semiannual | Yearly |
+|---|---:|---:|---:|---:|
+| Solo | 10.00 | 28.50 | 54.00 | 102.00 |
+| Family | 15.00 | 42.75 | 81.00 | 153.00 |
+| Family Plus | 20.00 | 57.00 | 108.00 | 204.00 |
 
 ## Webhook endpoint
 

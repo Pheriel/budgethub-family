@@ -10,27 +10,27 @@ const plans = [
     key: "solo",
     name: "BudgetHub Solo",
     envName: "SOLO",
-    amounts: { monthly: 1000, quarterly: 3000, semiannual: 6000, yearly: 12000 }
+    monthlyAmount: 1000
   },
   {
     key: "family",
     name: "BudgetHub Family",
     envName: "FAMILY",
-    amounts: { monthly: 1500, quarterly: 4500, semiannual: 9000, yearly: 18000 }
+    monthlyAmount: 1500
   },
   {
     key: "familyPlus",
     name: "BudgetHub Family Plus",
     envName: "FAMILY_PLUS",
-    amounts: { monthly: 2000, quarterly: 6000, semiannual: 12000, yearly: 24000 }
+    monthlyAmount: 2000
   }
 ];
 
 const durations = [
-  { key: "1m", envSuffix: "MONTHLY", label: "monthly", recurring: { interval: "month", interval_count: 1 } },
-  { key: "3m", envSuffix: "QUARTERLY", label: "quarterly", recurring: { interval: "month", interval_count: 3 } },
-  { key: "6m", envSuffix: "SEMIANNUAL", label: "semiannual", recurring: { interval: "month", interval_count: 6 } },
-  { key: "12m", envSuffix: "YEARLY", label: "yearly", recurring: { interval: "year", interval_count: 1 } }
+  { key: "1m", envSuffix: "MONTHLY", label: "monthly", months: 1, discountPercent: 0, recurring: { interval: "month", interval_count: 1 } },
+  { key: "3m", envSuffix: "QUARTERLY", label: "quarterly", months: 3, discountPercent: 5, recurring: { interval: "month", interval_count: 3 } },
+  { key: "6m", envSuffix: "SEMIANNUAL", label: "semiannual", months: 6, discountPercent: 10, recurring: { interval: "month", interval_count: 6 } },
+  { key: "12m", envSuffix: "YEARLY", label: "yearly", months: 12, discountPercent: 15, recurring: { interval: "year", interval_count: 1 } }
 ];
 
 function lookupKey(planKey, durationLabel) {
@@ -41,11 +41,20 @@ function envName(plan, duration) {
   return `STRIPE_PRICE_${plan.envName}_${duration.envSuffix}`;
 }
 
+function discountedAmount(plan, duration) {
+  const base = plan.monthlyAmount * duration.months;
+  return Math.round(base * (100 - duration.discountPercent) / 100);
+}
+
 function currencyOptions(amount) {
   return {
     usd: { unit_amount: amount },
     eur: { unit_amount: amount }
   };
+}
+
+function displayAmount(amount) {
+  return (amount / 100).toFixed(amount % 100 ? 2 : 0);
 }
 
 function priceConfigMatches(price, amount, duration) {
@@ -131,7 +140,7 @@ async function createPrice(stripe, product, plan, duration, key, amount) {
 
 async function findOrCreatePrice(stripe, product, plan, duration) {
   const key = lookupKey(plan.key, duration.label);
-  const amount = plan.amounts[duration.label];
+  const amount = discountedAmount(plan, duration);
   const found = await stripe.prices.list({
     lookup_keys: [key, `${key}_correct`],
     limit: 10,
@@ -179,12 +188,12 @@ async function findOrCreatePrice(stripe, product, plan, duration) {
   }
 
   if (dryRun) {
-    console.log(`+ [dry-run] Price to create: ${key} - ${(amount / 100).toFixed(0)} CAD/USD/EUR`);
+    console.log(`+ [dry-run] Price to create: ${key} - ${displayAmount(amount)} CAD/USD/EUR`);
     return { price: { id: `dry-run-${key}` }, action: "dry-run" };
   }
 
   const price = await createPrice(stripe, product, plan, duration, key, amount);
-  console.log(`+ Price created: ${key} (${price.id}) - ${(amount / 100).toFixed(0)} CAD/USD/EUR`);
+  console.log(`+ Price created: ${key} (${price.id}) - ${displayAmount(amount)} CAD/USD/EUR`);
   return { price, action: "created" };
 }
 
