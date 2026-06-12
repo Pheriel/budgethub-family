@@ -982,6 +982,11 @@ label select {
   font-size: 0.9rem;
 }
 
+.form-note.success {
+  color: #11a683;
+  font-weight: 600;
+}
+
 .pill-good,
 .pill-warn,
 .pill-danger {

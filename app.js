@@ -1912,6 +1912,7 @@ function openAuth(mode) {
   const message = $("#authMessage");
   message.hidden = true;
   message.textContent = "";
+  message.classList.remove("success");
   $("#authSwitch").textContent = mode === "register"
     ? (state.lang === "fr" ? "Déjà un compte ? Se connecter" : "Already have an account? Sign in")
     : (state.lang === "fr" ? "Pas de compte ? Créer un compte" : "No account? Create one");
@@ -1986,40 +1987,120 @@ function showEmailModal(email) {
   $("#emailModal").hidden = false;
 }
 
+function showLoginMessage(text, success) {
+  openAuth("login");
+  const message = $("#authMessage");
+  message.textContent = text;
+  message.classList.toggle("success", Boolean(success));
+  message.hidden = false;
+}
+
+async function openRecoverySession(user) {
+  setSessionUser(user);
+  await loadProfilePlan();
+  await syncBillingPlan();
+  await loadUserData();
+  state.currentView = "settings";
+  openApp();
+}
+
+// Vrai pendant le traitement d'un lien courriel pour neutraliser le handler SIGNED_IN
+let handlingEmailLink = false;
+
 async function handleAuthEmailLink() {
   if (!supabaseClient) return false;
   const params = new URLSearchParams(window.location.search);
-  const tokenHash = params.get("token_hash");
-  const type = params.get("type");
-  if (!tokenHash || !type) return false;
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const onConfirmPage = window.location.pathname.startsWith("/auth/confirm");
+  handlingEmailLink = onConfirmPage || Boolean(params.get("token_hash"))
+    || Boolean(hashParams.get("access_token")) || Boolean(hashParams.get("error"))
+    || Boolean(hashParams.get("error_description"));
+  const confirmedMessage = state.lang === "fr"
+    ? "Email confirmé, vous pouvez vous connecter."
+    : "Email confirmed, you can sign in.";
 
-  const message = $("#authMessage");
-  const { data, error } = await supabaseClient.auth.verifyOtp({
-    token_hash: tokenHash,
-    type
-  });
-
-  history.replaceState(null, "", window.location.pathname);
-
-  if (error) {
-    openAuth("login");
-    message.textContent = state.lang === "fr"
-      ? "Ce lien n'est plus valide. Demandez un nouveau courriel et réessayez."
-      : "This link is no longer valid. Request a new email and try again.";
-    message.hidden = false;
+  // Erreur renvoyée par Supabase après vérification du lien (expiré, déjà utilisé...)
+  const linkError = hashParams.get("error_description") || params.get("error_description")
+    || hashParams.get("error") || params.get("error");
+  if (linkError) {
+    history.replaceState(null, "", "/");
+    showLoginMessage(state.lang === "fr"
+      ? `Ce lien n'est plus valide (${linkError}). Demandez un nouveau courriel et réessayez.`
+      : `This link is no longer valid (${linkError}). Request a new email and try again.`);
     return true;
   }
 
-  if (data.user) {
-    setSessionUser(data.user);
-    await loadProfilePlan();
-    await syncBillingPlan();
-    await loadUserData();
+  // Lien avec token_hash + type: vérifier le jeton côté client
+  const tokenHash = params.get("token_hash");
+  const type = params.get("type");
+  if (tokenHash && type) {
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      token_hash: tokenHash,
+      type
+    });
+
+    if (error) {
+      history.replaceState(null, "", "/");
+      showLoginMessage(state.lang === "fr"
+        ? "Ce lien n'est plus valide. Demandez un nouveau courriel et réessayez."
+        : "This link is no longer valid. Request a new email and try again.");
+      return true;
+    }
+
+    if (type === "recovery") {
+      // L'utilisateur doit rester connecté pour choisir un nouveau mot de passe
+      history.replaceState(null, "", "/");
+      if (data.user) await openRecoverySession(data.user);
+      return true;
+    }
+
+    // Courriel confirmé: retour à l'écran de connexion avec message de succès
+    await supabaseClient.auth.signOut();
+    history.replaceState(null, "", "/?confirmed=true");
+    showLoginMessage(confirmedMessage, true);
+    return true;
   }
 
-  state.currentView = type === "recovery" ? "settings" : "dashboard";
-  openApp();
-  return true;
+  // Lien {{ .ConfirmationURL }}: Supabase a déjà vérifié et renvoie la session dans le hash
+  if (hashParams.get("access_token") || hashParams.get("refresh_token")) {
+    const hashType = hashParams.get("type");
+    const { data } = await supabaseClient.auth.getSession();
+    history.replaceState(null, "", "/");
+
+    if (data.session && hashType === "recovery") {
+      await openRecoverySession(data.session.user);
+      return true;
+    }
+
+    if (data.session) {
+      await supabaseClient.auth.signOut();
+    }
+    history.replaceState(null, "", "/?confirmed=true");
+    showLoginMessage(confirmedMessage, true);
+    return true;
+  }
+
+  // Rechargement de /?confirmed=true sans session: réafficher le message
+  if (params.get("confirmed") === "true") {
+    history.replaceState(null, "", "/");
+    const { data } = await supabaseClient.auth.getSession();
+    if (!data.session) {
+      showLoginMessage(confirmedMessage, true);
+      return true;
+    }
+    return false;
+  }
+
+  // /auth/confirm sans paramètres: ne pas rester sur cette URL
+  if (onConfirmPage) {
+    history.replaceState(null, "", "/");
+    showLoginMessage(state.lang === "fr"
+      ? "Lien de confirmation incomplet. Ouvrez le lien reçu par courriel ou connectez-vous."
+      : "Incomplete confirmation link. Open the link from your email or sign in.");
+    return true;
+  }
+
+  return false;
 }
 
 function boot() {
@@ -2142,7 +2223,7 @@ function boot() {
         openApp();
         renderView();
       }
-      if (event === "SIGNED_IN" && session && !state.user) {
+      if (event === "SIGNED_IN" && session && !state.user && !handlingEmailLink) {
         // Connexion via lien de confirmation courriel
         setSessionUser(session.user);
         loadProfilePlan();
@@ -2211,6 +2292,7 @@ function boot() {
 
     submitButton.disabled = true;
     message.hidden = true;
+    message.classList.remove("success");
 
     try {
       if (state.authMode === "register") {
