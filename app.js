@@ -240,29 +240,12 @@ const BACKEND_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname
   ? "http://localhost:3000"
   : "";
 
-// Un lien de paiement par plan et par devise: le client paie 10/15/20 dans SA devise
-const stripePaymentLinks = {
-  solo: {
-    CAD: "https://buy.stripe.com/test_7sYeVedo8gUwaU89Kr9Ve00",
-    USD: "https://buy.stripe.com/test_bJe14o1FqcEge6k09R9Ve03",
-    EUR: "https://buy.stripe.com/test_00w14o97S1ZC1jybSz9Ve04"
-  },
-  family: {
-    CAD: "https://buy.stripe.com/test_4gM28sdo847KbYc5ub9Ve01",
-    USD: "https://buy.stripe.com/test_3cI00k4RCeMod2g3m39Ve05",
-    EUR: "https://buy.stripe.com/test_cNi3cw3Ny9s4e6k09R9Ve06"
-  },
-  familyPlus: {
-    CAD: "https://buy.stripe.com/test_14A9AU6ZK1ZC8M04q79Ve02",
-    USD: "https://buy.stripe.com/test_7sYfZi4RC5bO8M09Kr9Ve07",
-    EUR: "https://buy.stripe.com/test_00w5kEbg00Vy8M06yf9Ve08"
-  }
-};
-
 const state = {
   lang: localStorage.getItem("bh_lang") || "fr",
   authMode: "login",
   user: null,
+  subscription: null,
+  billingDuration: "1m",
   currency: localStorage.getItem("bh_currency") || "CAD",
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
@@ -429,13 +412,19 @@ function renderPricing() {
       ]
     }
   };
+  const months = durationMonths[state.billingDuration];
   grid.innerHTML = planDefinitions.map((plan) => {
     const features = planFeatures[plan.id][state.lang];
+    const total = plan.price * months;
+    const priceLine = plan.id === "free"
+      ? `${planMoney(0)} <small>${t("month")}</small>`
+      : `${planMoney(total)} <small>${durationSuffix()}</small>`;
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
         <h3>${plan.name}</h3>
-        <div class="price">${planMoney(plan.price)} <small>${t("month")}</small></div>
+        <div class="price">${priceLine}</div>
+        ${plan.id !== "free" && months > 1 ? `<p class="price-detail">${planMoney(plan.price)} ${t("month")}</p>` : ""}
         <ul>${features.map((feature) => `<li>${feature}</li>`).join("")}</ul>
         <button class="${plan.id === state.plan ? "secondary-button" : "primary-button"}" data-plan="${plan.id}">
           ${plan.id === state.plan ? t("current") : t("choosePlan")}
@@ -449,6 +438,37 @@ function renderPricing() {
       : `You will be billed in ${state.currency} via Stripe.`}</p>`;
   }
   $$("[data-plan]").forEach((button) => button.addEventListener("click", () => selectPlan(button.dataset.plan)));
+  const durationSelect = $("#durationSelect");
+  if (durationSelect) {
+    [...durationSelect.options].forEach((opt) => { opt.textContent = durationLabel(opt.value); });
+    durationSelect.value = state.billingDuration;
+    durationSelect.onchange = (event) => {
+      state.billingDuration = event.target.value;
+      renderPricing();
+    };
+  }
+}
+
+const durationMonths = { "1m": 1, "3m": 3, "6m": 6, "12m": 12 };
+
+function durationLabel(key) {
+  const fr = state.lang === "fr";
+  return {
+    "1m": fr ? "1 mois" : "1 month",
+    "3m": fr ? "3 mois" : "3 months",
+    "6m": fr ? "6 mois" : "6 months",
+    "12m": fr ? "1 an" : "1 year"
+  }[key];
+}
+
+function durationSuffix() {
+  const fr = state.lang === "fr";
+  return {
+    "1m": fr ? "/mois" : "/month",
+    "3m": fr ? "/3 mois" : "/3 months",
+    "6m": fr ? "/6 mois" : "/6 months",
+    "12m": fr ? "/an" : "/year"
+  }[state.billingDuration];
 }
 
 function setSessionUser(user) {
@@ -500,11 +520,17 @@ async function loadProfilePlan() {
   if (!supabaseClient || !state.user) return;
   const { data, error } = await supabaseClient
     .from("profiles")
-    .select("plan")
+    .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration")
     .eq("id", state.user.id)
     .single();
   if (!error && data && data.plan) {
     state.plan = data.plan;
+    state.subscription = data.plan === "free" ? null : {
+      status: data.subscription_status,
+      cancelAtPeriodEnd: data.cancel_at_period_end,
+      currentPeriodEnd: data.current_period_end,
+      duration: data.billing_duration
+    };
     $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan)?.name || data.plan;
     updateUpgradeButton();
     renderPricing();
@@ -557,30 +583,56 @@ async function dbDelete(table, id) {
   if (error) console.error(`Delete from ${table} failed:`, error.message);
 }
 
-function selectPlan(planId) {
-  const planLinks = stripePaymentLinks[planId];
-  const paymentLink = planLinks ? (planLinks[state.currency] || planLinks.CAD) : null;
-  if (paymentLink) {
-    if (!state.user) {
-      openAuth("register");
-      const message = $("#authMessage");
-      message.textContent = state.lang === "fr"
-        ? "Créez un compte ou connectez-vous avant de choisir un plan payant."
-        : "Create an account or sign in before choosing a paid plan.";
-      message.hidden = false;
-      return;
-    }
-    const url = new URL(paymentLink);
-    url.searchParams.set("client_reference_id", state.user.id);
-    url.searchParams.set("prefilled_email", state.user.email);
-    window.open(url.toString(), "_blank", "noopener");
+async function selectPlan(planId) {
+  if (planId === "free") {
+    state.plan = "free";
+    $("#activePlanLabel").textContent = "Free";
+    renderPricing();
+    renderView();
+    openApp();
     return;
   }
-  state.plan = planId;
-  $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan).name;
-  renderPricing();
-  renderView();
-  openApp();
+
+  if (!state.user) {
+    openAuth("register");
+    const message = $("#authMessage");
+    message.textContent = state.lang === "fr"
+      ? "Créez un compte ou connectez-vous avant de choisir un plan payant."
+      : "Create an account or sign in before choosing a paid plan.";
+    message.hidden = false;
+    return;
+  }
+
+  if (!BACKEND_URL) {
+    alert(state.lang === "fr"
+      ? "Le serveur de paiement n'est pas joignable. Démarrez le backend (port 3000)."
+      : "Payment server unreachable. Start the backend (port 3000).");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/billing/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: state.user.id,
+        email: state.user.email,
+        plan: planId,
+        duration: state.billingDuration,
+        currency: state.currency.toLowerCase()
+      })
+    });
+    const result = await response.json();
+    if (response.ok && result.url) {
+      window.open(result.url, "_blank", "noopener");
+    } else {
+      alert(state.lang === "fr" ? "Impossible de créer la session de paiement." : "Could not create the checkout session.");
+    }
+  } catch (_error) {
+    alert(state.lang === "fr"
+      ? "Backend injoignable: démarrez le serveur (port 3000) puis réessayez."
+      : "Backend unreachable: start the server (port 3000) and try again.");
+  }
 }
 
 // Une seule vue visible à la fois — corrige les superpositions accueil/app
@@ -872,6 +924,31 @@ function renderFamily() {
   `;
 }
 
+function renderSubscriptionDetails(plan) {
+  const fr = state.lang === "fr";
+  if (plan.id === "free" || !state.subscription) {
+    return `<p><strong>${plan.name}</strong></p>
+      <p class="form-note">${fr ? "Vous êtes sur le plan gratuit." : "You are on the free plan."}</p>`;
+  }
+  const sub = state.subscription;
+  const durLabel = sub.duration ? durationLabel(sub.duration) : "";
+  const renewDate = sub.currentPeriodEnd
+    ? new Date(sub.currentPeriodEnd).toLocaleDateString(state.lang === "fr" ? "fr-CA" : "en-CA")
+    : "—";
+  const autoRenew = !sub.cancelAtPeriodEnd;
+  const renewLine = autoRenew
+    ? (fr ? `Renouvellement automatique le ${renewDate}.` : `Auto-renews on ${renewDate}.`)
+    : (fr ? `Se termine le ${renewDate} (non renouvelé).` : `Ends on ${renewDate} (not renewed).`);
+  return `
+    <p><strong>${plan.name}</strong>${durLabel ? ` · ${durLabel}` : ""}</p>
+    <p class="form-note">${renewLine}</p>
+    <label class="toggle-row">
+      <input type="checkbox" id="autoRenewToggle" ${autoRenew ? "checked" : ""} />
+      <span>${fr ? "Renouveler automatiquement à l'échéance" : "Automatically renew at expiry"}</span>
+    </label>
+  `;
+}
+
 function renderAccount() {
   const plan = planDefinitions.find((item) => item.id === state.plan) || planDefinitions[0];
   const fr = state.lang === "fr";
@@ -884,11 +961,12 @@ function renderAccount() {
     </section>
     <section class="panel">
       <h3>${fr ? "Mon abonnement" : "My subscription"}</h3>
-      <p><strong>${plan.name}</strong> · ${planMoney(plan.price)}${t("month")}</p>
-      <p class="form-note">${fr
-        ? (plan.id === "free" ? "Vous êtes sur le plan gratuit." : "Abonnement actif, payé via Stripe.")
-        : (plan.id === "free" ? "You are on the free plan." : "Active subscription, paid via Stripe.")}</p>
-      <button class="primary-button" id="changePlanButton" type="button">${fr ? "Changer de plan" : "Change plan"}</button>
+      ${renderSubscriptionDetails(plan)}
+      <div class="account-actions">
+        <button class="primary-button" id="changePlanButton" type="button">${fr ? "Changer de plan" : "Change plan"}</button>
+        ${state.subscription ? `<button class="secondary-button" id="cancelSubButton" type="button">${fr ? "Résilier l'abonnement" : "Cancel subscription"}</button>` : ""}
+      </div>
+      <p class="form-note" id="subNote" hidden></p>
     </section>
     <section class="panel">
       <h3>${fr ? "Changer le mot de passe" : "Change password"}</h3>
@@ -1120,6 +1198,75 @@ function bindViewActions() {
     changePlanButton.addEventListener("click", () => {
       history.replaceState(null, "", "#pricing");
       showLandingPage("pricing");
+    });
+  }
+
+  const autoRenewToggle = $("#autoRenewToggle");
+  if (autoRenewToggle) {
+    autoRenewToggle.addEventListener("change", async (event) => {
+      const autoRenew = event.target.checked;
+      const note = $("#subNote");
+      event.target.disabled = true;
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/billing/auto-renew`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: state.user.id, autoRenew })
+        });
+        if (response.ok) {
+          if (state.subscription) state.subscription.cancelAtPeriodEnd = !autoRenew;
+          note.textContent = autoRenew
+            ? (state.lang === "fr" ? "Renouvellement automatique activé." : "Auto-renew enabled.")
+            : (state.lang === "fr" ? "Renouvellement désactivé: l'abonnement se terminera à l'échéance." : "Auto-renew disabled: subscription ends at expiry.");
+          note.hidden = false;
+          renderView();
+        } else {
+          throw new Error("failed");
+        }
+      } catch (_error) {
+        event.target.checked = !autoRenew;
+        note.textContent = state.lang === "fr"
+          ? "Échec. Vérifiez que le backend est démarré."
+          : "Failed. Check that the backend is running.";
+        note.hidden = false;
+      } finally {
+        event.target.disabled = false;
+      }
+    });
+  }
+
+  const cancelSubButton = $("#cancelSubButton");
+  if (cancelSubButton) {
+    cancelSubButton.addEventListener("click", async () => {
+      const confirmMsg = state.lang === "fr"
+        ? "Résilier votre abonnement maintenant ? Vous repasserez au plan gratuit."
+        : "Cancel your subscription now? You will return to the free plan.";
+      if (!confirm(confirmMsg)) return;
+      const note = $("#subNote");
+      cancelSubButton.disabled = true;
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/billing/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: state.user.id })
+        });
+        if (response.ok) {
+          state.plan = "free";
+          state.subscription = null;
+          $("#activePlanLabel").textContent = "Free";
+          updateUpgradeButton();
+          renderPricing();
+          renderView();
+        } else {
+          throw new Error("failed");
+        }
+      } catch (_error) {
+        note.textContent = state.lang === "fr"
+          ? "Échec de la résiliation. Vérifiez que le backend est démarré."
+          : "Cancellation failed. Check that the backend is running.";
+        note.hidden = false;
+        cancelSubButton.disabled = false;
+      }
     });
   }
 

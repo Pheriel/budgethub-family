@@ -7,6 +7,48 @@
   cursor: pointer;
 }
 
+.duration-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.duration-picker select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.price-detail {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: -8px 0 8px;
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+}
+
 :root {
   color-scheme: light;
   --bg: #f6f7fb;
