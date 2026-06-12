@@ -939,9 +939,17 @@ function bindViewActions() {
             member.id = result.member.id;
             state.members.push(member);
             renderView();
+            showLimit(result.linkedExisting
+              ? (state.lang === "fr"
+                ? `${member.email} avait déjà un compte: il a été rattaché à votre famille et à votre plan.`
+                : `${member.email} already had an account: it was linked to your family and plan.`)
+              : (state.lang === "fr"
+                ? `Invitation envoyée à ${member.email}.`
+                : `Invitation sent to ${member.email}.`));
+          } else if (result.error === "already_in_family") {
             showLimit(state.lang === "fr"
-              ? `Invitation envoyée à ${member.email}.`
-              : `Invitation sent to ${member.email}.`);
+              ? "Ce membre fait déjà partie de votre famille."
+              : "This member is already part of your family.");
           } else if (result.error === "member_limit_reached") {
             showLimit(planLimitMessage("members"));
           } else if (result.error === "email_already_registered") {
