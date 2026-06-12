@@ -38,6 +38,7 @@ const translations = {
     appTransactions: "Transactions",
     appGoals: "Objectifs",
     appFamily: "Famille",
+    appAdmin: "Super Admin",
     appSettings: "Paramètres",
     backLanding: "Retour accueil",
     createAccount: "Créer un compte",
@@ -58,6 +59,7 @@ const translations = {
     transactionsTitle: "Transactions",
     goalsTitle: "Objectifs",
     familyTitle: "Membres famille",
+    adminTitle: "Super Admin",
     settingsTitle: "Paramètres",
     totalDebt: "Dette totale",
     monthlyCashflow: "Cashflow mensuel",
@@ -146,6 +148,7 @@ const translations = {
     appTransactions: "Transactions",
     appGoals: "Goals",
     appFamily: "Family",
+    appAdmin: "Super Admin",
     appSettings: "Settings",
     backLanding: "Back home",
     createAccount: "Create account",
@@ -166,6 +169,7 @@ const translations = {
     transactionsTitle: "Transactions",
     goalsTitle: "Goals",
     familyTitle: "Family members",
+    adminTitle: "Super Admin",
     settingsTitle: "Settings",
     totalDebt: "Total debt",
     monthlyCashflow: "Monthly cashflow",
@@ -460,6 +464,8 @@ const state = {
   theme: localStorage.getItem("bh_theme") || "light",
   plan: "free",
   role: "Owner",
+  isSuperAdmin: false,
+  admin: { query: "", users: [], selected: null, logs: [], message: "" },
   currentView: "dashboard",
   debts: [],
   budget: [],
@@ -849,7 +855,11 @@ async function loadUserRole(profile) {
 
 function setSessionUser(user) {
   state.user = user;
-  if (!user) state.role = "Owner";
+  if (!user) {
+    state.role = "Owner";
+    state.isSuperAdmin = false;
+    state.admin = { query: "", users: [], selected: null, logs: [], message: "" };
+  }
   const chip = $("#userEmailChip");
   const logoutButton = $("#logoutButton");
   const registerButton = $("#openRegister");
@@ -866,6 +876,7 @@ function setSessionUser(user) {
     const workspaceButton = $("#openWorkspace");
     workspaceButton.textContent = state.lang === "fr" ? "Mon espace" : "My workspace";
     workspaceButton.hidden = false;
+    checkSuperAdminAccess();
   } else {
     chip.hidden = true;
     logoutButton.hidden = true;
@@ -876,7 +887,25 @@ function setSessionUser(user) {
     $("#startDemo").hidden = false;
     $("#openWorkspace").hidden = true;
   }
+  const adminButton = $("#adminNavButton");
+  if (adminButton) adminButton.hidden = !state.isSuperAdmin;
   updateUpgradeButton();
+}
+
+async function checkSuperAdminAccess() {
+  if (!state.user) return;
+  try {
+    const response = await authFetch("/api/admin/me");
+    state.isSuperAdmin = response.ok;
+  } catch (_error) {
+    state.isSuperAdmin = false;
+  }
+  const adminButton = $("#adminNavButton");
+  if (adminButton) {
+    adminButton.hidden = !state.isSuperAdmin;
+    adminButton.textContent = t("appAdmin") || "Super Admin";
+  }
+  if (state.currentView === "admin" && !$("#appView").hidden) renderView();
 }
 
 // Demande au backend de vérifier les achats Stripe récents et de mettre à jour le plan
@@ -895,12 +924,30 @@ async function syncBillingPlan() {
 
 async function loadProfilePlan() {
   if (!supabaseClient || !state.user) return;
-  const { data, error } = await supabaseClient
+  let { data, error } = await supabaseClient
     .from("profiles")
-    .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id")
+    .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id,is_suspended")
     .eq("id", state.user.id)
     .single();
+  if (error && error.code === "42703") {
+    const fallback = await supabaseClient
+      .from("profiles")
+      .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id")
+      .eq("id", state.user.id)
+      .single();
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (!error && data && data.plan) {
+    if (data.is_suspended) {
+      alert(state.lang === "fr"
+        ? "Votre compte est suspendu. Contactez le support si vous pensez qu'il s'agit d'une erreur."
+        : "Your account is suspended. Contact support if you believe this is a mistake.");
+      await supabaseClient.auth.signOut();
+      setSessionUser(null);
+      showLandingPage("home");
+      return;
+    }
     state.plan = data.plan;
     await loadUserRole(data);
     state.subscription = data.plan === "free" ? null : {
@@ -1128,6 +1175,7 @@ function getViewTitle(view) {
     transactions: "transactionsTitle",
     goals: "goalsTitle",
     family: "familyTitle",
+    admin: "adminTitle",
     settings: "settingsTitle"
   };
   return t(keys[view]);
@@ -1146,6 +1194,7 @@ function renderView() {
     transactions: renderTransactions,
     goals: renderGoals,
     family: renderFamily,
+    admin: renderAdmin,
     settings: renderSettings,
     account: renderAccount
   };
@@ -1614,6 +1663,143 @@ function renderAccount() {
   `;
 }
 
+function fmtDate(value) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString(state.lang === "fr" ? "fr-CA" : "en-CA", {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function planName(planId) {
+  return planDefinitions.find((plan) => plan.id === planId)?.name || planId || "Free";
+}
+
+function adminUserSummary(user) {
+  const fr = state.lang === "fr";
+  return `
+    <div class="admin-summary">
+      <div><span>${fr ? "Abonnement actuel" : "Current subscription"}</span><strong>${planName(user.plan)}</strong></div>
+      <div><span>${fr ? "Expiration" : "Expiration"}</span><strong>${fmtDate(user.currentPeriodEnd)}</strong></div>
+      <div><span>Stripe customer</span><strong>${user.stripeCustomerId || "—"}</strong></div>
+      <div><span>Stripe subscription</span><strong>${user.stripeSubscriptionId || "—"}</strong></div>
+      <div><span>${fr ? "Famille" : "Family"}</span><strong>${user.family || "—"}</strong></div>
+      <div><span>${fr ? "Membres" : "Members"}</span><strong>${user.memberCount}</strong></div>
+      <div><span>${fr ? "Statut" : "Status"}</span><strong>${user.isSuspended ? (fr ? "Suspendu" : "Suspended") : (user.subscriptionStatus || "—")}</strong></div>
+      <div><span>${fr ? "Durée" : "Duration"}</span><strong>${user.billingDuration ? durationLabel(user.billingDuration) : "—"}</strong></div>
+    </div>
+  `;
+}
+
+function renderAdmin() {
+  const fr = state.lang === "fr";
+  if (!state.isSuperAdmin) {
+    return `
+      <section class="panel">
+        <h3>Super Admin</h3>
+        <p class="form-note role-note">${fr
+          ? "Accès réservé aux emails configurés dans SUPER_ADMIN_EMAILS."
+          : "Access is restricted to emails configured in SUPER_ADMIN_EMAILS."}</p>
+      </section>
+    `;
+  }
+
+  const selected = state.admin.selected;
+  return `
+    <section class="panel admin-hero">
+      <div>
+        <p class="eyebrow">Owner tools</p>
+        <h3>Super Admin Dashboard</h3>
+        <p class="form-note">${fr
+          ? "Gérez les abonnements, accès gratuits, prolongations et suspensions sans toucher Supabase directement."
+          : "Manage subscriptions, free access, extensions, and suspensions without opening Supabase directly."}</p>
+      </div>
+      <span class="chip">${state.user ? state.user.email : ""}</span>
+    </section>
+
+    <section class="panel">
+      <h3>${fr ? "Recherche utilisateur" : "User search"}</h3>
+      <form class="admin-search" id="adminSearchForm">
+        <input name="query" type="search" value="${state.admin.query}" placeholder="${fr ? "Courriel ou nom" : "Email or name"}" autocomplete="off" required />
+        <button class="primary-button" type="submit">${fr ? "Rechercher" : "Search"}</button>
+      </form>
+      ${state.admin.message ? `<p class="form-note">${state.admin.message}</p>` : ""}
+      <div class="admin-results">
+        ${state.admin.users.map((user) => `
+          <button class="admin-user-row ${selected && selected.id === user.id ? "active" : ""}" data-admin-user="${user.id}" type="button">
+            <span><strong>${user.email || user.id}</strong><small>${user.name || "—"}</small></span>
+            <span>${planName(user.plan)}</span>
+            <span>${user.isSuspended ? (fr ? "Suspendu" : "Suspended") : fmtDate(user.currentPeriodEnd)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+
+    ${selected ? `
+    <section class="panel">
+      <div class="admin-user-head">
+        <div>
+          <h3>${selected.email || selected.id}</h3>
+          <p class="form-note">${selected.name || "—"} · ${selected.id}</p>
+        </div>
+        <button class="secondary-button" id="adminRefreshUser" type="button">${fr ? "Rafraîchir" : "Refresh"}</button>
+      </div>
+      ${adminUserSummary(selected)}
+    </section>
+
+    <section class="panel">
+      <h3>${fr ? "Modifier abonnement" : "Change subscription"}</h3>
+      <form class="form-grid admin-action-grid" id="adminPlanForm">
+        <label><span>Plan</span><select name="plan">
+          <option value="free">Free</option>
+          <option value="solo">Solo</option>
+          <option value="family">Family</option>
+          <option value="familyPlus">Family Plus</option>
+        </select></label>
+        <label><span>${fr ? "Durée" : "Duration"}</span><select name="duration">
+          <option value="1m">${fr ? "1 mois" : "1 month"}</option>
+          <option value="3m">${fr ? "3 mois" : "3 months"}</option>
+          <option value="6m">${fr ? "6 mois" : "6 months"}</option>
+          <option value="12m">${fr ? "12 mois" : "12 months"}</option>
+        </select></label>
+        <button class="primary-button" type="submit">${fr ? "Appliquer sans paiement Stripe" : "Apply without Stripe payment"}</button>
+      </form>
+      <p class="form-note">${fr
+        ? "Cette action vide les IDs Stripe et applique un accès gratuit directement au compte/famille."
+        : "This clears Stripe IDs and grants access directly to the account/family."}</p>
+    </section>
+
+    <section class="panel">
+      <h3>${fr ? "Prolonger abonnement" : "Extend subscription"}</h3>
+      <div class="admin-button-row">
+        ${[30, 90, 180, 365].map((days) => `<button class="secondary-button" data-admin-extend="${days}" type="button">+${days} ${fr ? "jours" : "days"}</button>`).join("")}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>${fr ? "Suspension" : "Suspension"}</h3>
+      <div class="admin-button-row">
+        <button class="secondary-button danger-action" data-admin-suspend="true" type="button">${fr ? "Suspendre utilisateur" : "Suspend user"}</button>
+        <button class="secondary-button" data-admin-suspend="false" type="button">${fr ? "Réactiver utilisateur" : "Reactivate user"}</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>${fr ? "Journal" : "Audit log"}</h3>
+      <div class="admin-log">
+        ${(state.admin.logs || []).map((log) => `
+          <article>
+            <strong>${log.action}</strong>
+            <span>${fmtDate(log.created_at)} · ${log.actor_email}</span>
+            <code>${JSON.stringify(log.after_state || {})}</code>
+          </article>
+        `).join("") || `<p class="form-note">${fr ? "Aucun changement enregistré." : "No changes recorded."}</p>`}
+      </div>
+    </section>` : ""}
+  `;
+}
+
 function updateUpgradeButton() {
   const button = $("#upgradeButton");
   if (state.user && state.plan !== "free") {
@@ -1648,7 +1834,112 @@ function renderSettings() {
   `;
 }
 
+async function adminLoadUser(userId) {
+  const response = await authFetch(`/api/admin/users/${userId}`);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "admin_load_failed");
+  state.admin.selected = result.user;
+  state.admin.logs = result.logs || [];
+}
+
+async function adminPost(path, payload) {
+  const response = await authFetch(path, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "admin_action_failed");
+  state.admin.selected = result.user;
+  state.admin.logs = result.logs || [];
+}
+
 function bindViewActions() {
+  const adminSearchForm = $("#adminSearchForm");
+  if (adminSearchForm) {
+    adminSearchForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const query = new FormData(adminSearchForm).get("query").trim();
+      state.admin.query = query;
+      state.admin.message = "";
+      try {
+        const response = await authFetch(`/api/admin/users?q=${encodeURIComponent(query)}`);
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "search_failed");
+        state.admin.users = result.users || [];
+        state.admin.message = state.admin.users.length
+          ? ""
+          : (state.lang === "fr" ? "Aucun utilisateur trouvé." : "No user found.");
+      } catch (error) {
+        state.admin.message = error.message;
+      }
+      renderView();
+    });
+  }
+
+  $$("[data-admin-user]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.admin.message = "";
+      try {
+        await adminLoadUser(button.dataset.adminUser);
+      } catch (error) {
+        state.admin.message = error.message;
+      }
+      renderView();
+    });
+  });
+
+  const adminRefreshUser = $("#adminRefreshUser");
+  if (adminRefreshUser && state.admin.selected) {
+    adminRefreshUser.addEventListener("click", async () => {
+      await adminLoadUser(state.admin.selected.id);
+      renderView();
+    });
+  }
+
+  const adminPlanForm = $("#adminPlanForm");
+  if (adminPlanForm && state.admin.selected) {
+    adminPlanForm.elements.plan.value = state.admin.selected.plan || "free";
+    adminPlanForm.elements.duration.value = state.admin.selected.billingDuration || "1m";
+    adminPlanForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(adminPlanForm);
+      try {
+        await adminPost(`/api/admin/users/${state.admin.selected.id}/plan`, {
+          plan: form.get("plan"),
+          duration: form.get("duration")
+        });
+        state.admin.message = state.lang === "fr" ? "Abonnement mis à jour." : "Subscription updated.";
+      } catch (error) {
+        state.admin.message = error.message;
+      }
+      renderView();
+    });
+  }
+
+  $$("[data-admin-extend]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await adminPost(`/api/admin/users/${state.admin.selected.id}/extend`, { days: Number(button.dataset.adminExtend) });
+        state.admin.message = state.lang === "fr" ? "Abonnement prolongé." : "Subscription extended.";
+      } catch (error) {
+        state.admin.message = error.message;
+      }
+      renderView();
+    });
+  });
+
+  $$("[data-admin-suspend]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await adminPost(`/api/admin/users/${state.admin.selected.id}/suspension`, { suspended: button.dataset.adminSuspend === "true" });
+        state.admin.message = state.lang === "fr" ? "Statut mis à jour." : "Status updated.";
+      } catch (error) {
+        state.admin.message = error.message;
+      }
+      renderView();
+    });
+  });
+
   const debtForm = $("#debtForm");
   if (debtForm) {
     debtForm.addEventListener("submit", async (event) => {
@@ -2371,6 +2662,7 @@ async function handleAuthEmailLink() {
 }
 
 function boot() {
+  const wantsAdmin = window.location.pathname === "/admin";
   applyTheme();
   renderPricing();
   applyTranslations();
@@ -2492,6 +2784,7 @@ function boot() {
       return supabaseClient.auth.getSession().then(({ data }) => {
       if (data.session) {
         setSessionUser(data.session.user);
+        if (wantsAdmin) state.currentView = "admin";
         loadProfilePlan();
         syncBillingPlan();
         loadUserData();
@@ -2512,6 +2805,7 @@ function boot() {
       if (event === "SIGNED_IN" && session && !state.user && !handlingEmailLink) {
         // Connexion via lien de confirmation courriel
         setSessionUser(session.user);
+        if (wantsAdmin) state.currentView = "admin";
         loadProfilePlan();
         syncBillingPlan();
         loadUserData();
@@ -2588,6 +2882,7 @@ function boot() {
         const { data } = await supabaseClient.auth.getSession();
         if (data.session) {
           setSessionUser(data.session.user);
+          if (wantsAdmin) state.currentView = "admin";
           await loadProfilePlan();
           syncBillingPlan();
           await loadUserData();
@@ -2622,6 +2917,7 @@ function boot() {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
         setSessionUser(data.user);
+        if (wantsAdmin) state.currentView = "admin";
         loadProfilePlan();
         syncBillingPlan();
         loadUserData();
@@ -2663,10 +2959,22 @@ function boot() {
   // Page d'atterrissage selon le hash (ex: #pricing), sans casser les liens de confirmation Supabase
   window.addEventListener("popstate", () => {
     const page = window.location.pathname.replace("/", "");
-    if (legalPages[page]) showLandingPage(page);
+    if (page === "admin") {
+      state.currentView = "admin";
+      if (state.user) openApp();
+      else openAuth("login");
+    } else if (legalPages[page]) showLandingPage(page);
     else showLandingPage(window.location.hash.replace("#", "") || "home");
   });
   const pathPage = window.location.pathname.replace("/", "");
+  if (pathPage === "admin") {
+    if (!state.user) openAuth("login");
+    else {
+      state.currentView = "admin";
+      openApp();
+    }
+    return;
+  }
   if (legalPages[pathPage]) {
     showLandingPage(pathPage);
     return;

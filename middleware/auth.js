@@ -1,6 +1,13 @@
 const { createSupabaseAdminClient } = require("../config/supabase");
 const { normalizeRole, can } = require("../services/permissions");
 
+function superAdminEmails() {
+  return (process.env.SUPER_ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 // Vérifie le jeton Supabase (Authorization: Bearer <access_token>) et attache
 // req.user = { id, email, role, familyOwnerId, plan }. Ne jamais se fier au
 // userId envoyé par le frontend.
@@ -22,11 +29,24 @@ async function requireAuth(req, res, next) {
   }
 
   const userId = data.user.id;
-  const { data: profile } = await supabase
+  let { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("plan, family_owner_id")
+    .select("plan, family_owner_id, is_suspended")
     .eq("id", userId)
     .single();
+
+  if (profileError && profileError.code === "42703") {
+    const fallback = await supabase
+      .from("profiles")
+      .select("plan, family_owner_id")
+      .eq("id", userId)
+      .single();
+    profile = fallback.data;
+  }
+
+  if (profile && profile.is_suspended && !superAdminEmails().includes((data.user.email || "").toLowerCase())) {
+    return res.status(403).json({ error: "account_suspended" });
+  }
 
   const familyOwnerId = (profile && profile.family_owner_id) || userId;
   let role = "Owner";

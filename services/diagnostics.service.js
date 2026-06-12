@@ -14,7 +14,8 @@ const requiredConfigKeys = [
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
   ...stripePriceConfigKeys,
-  "JWT_SECRET"
+  "JWT_SECRET",
+  "SUPER_ADMIN_EMAILS"
 ];
 
 function hasValue(key) {

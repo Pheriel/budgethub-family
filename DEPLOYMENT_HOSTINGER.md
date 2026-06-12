@@ -19,6 +19,14 @@ server.js
 
 Copier `.env.example` vers `.env` sur le serveur et remplir les secrets Supabase/Stripe. Ne jamais commiter `.env`.
 
+Pour le panneau proprietaire `/admin`, ajouter:
+
+```env
+SUPER_ADMIN_EMAILS=owner@example.com
+```
+
+Utiliser une liste separee par des virgules pour plusieurs proprietaires. Avant d'utiliser `/admin`, appliquer `supabase/migrations/20260612_super_admin_dashboard.sql` dans le SQL Editor Supabase.
+
 ## Checklist
 
 - Ne jamais publier `.env`

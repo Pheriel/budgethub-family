@@ -239,6 +239,98 @@
   height: 18px;
 }
 
+.admin-hero,
+.admin-user-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.admin-results,
+.admin-log {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.admin-user-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.admin-user-row.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.admin-user-row small,
+.admin-summary span,
+.admin-log span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.admin-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+
+.admin-summary div,
+.admin-log article {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+}
+
+.admin-summary strong,
+.admin-log code {
+  overflow-wrap: anywhere;
+}
+
+.admin-action-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-button-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.danger-action {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+}
+
+.admin-log code {
+  display: block;
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+  color: var(--muted);
+}
+
 :root {
   color-scheme: light;
   --bg: #f6f7fb;
@@ -1188,6 +1280,7 @@ label select {
   .form-grid,
   .card-grid,
   .split,
+  .admin-action-grid,
   .auth-panel,
   .legal-grid,
   .site-footer {
@@ -1222,9 +1315,19 @@ label select {
 
   .hero-actions,
   .account-actions,
+  .admin-search,
   .duration-picker {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-search,
+  .admin-user-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-button-row .secondary-button {
+    width: 100%;
   }
 
   .primary-button,
