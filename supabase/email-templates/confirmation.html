@@ -36,7 +36,7 @@
                 <table role="presentation" cellspacing="0" cellpadding="0" style="margin:24px 0;">
                   <tr>
                     <td bgcolor="#246bfe" style="border-radius:8px;">
-                      <a href="https://budgethubfamily.com/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email" style="display:inline-block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:800;font-size:16px;">
+                      <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:800;font-size:16px;">
                         {{ if $fr }}Confirmer mon compte{{ else }}Confirm my account{{ end }}
                       </a>
                     </td>
@@ -46,7 +46,7 @@
                   {{ if $fr }}Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :{{ else }}If the button does not work, copy this link into your browser:{{ end }}
                 </p>
                 <p style="margin:0 0 22px;font-size:13px;line-height:1.5;word-break:break-all;color:#246bfe;">
-                  https://budgethubfamily.com/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email
+                  {{ .ConfirmationURL }}
                 </p>
                 <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#667085;">
                   {{ if $fr }}Si vous n'avez pas créé ce compte, vous pouvez ignorer ce courriel en toute sécurité.{{ else }}If you did not create this account, you can safely ignore this email.{{ end }}

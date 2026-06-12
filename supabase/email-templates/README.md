@@ -15,18 +15,21 @@ These templates are bilingual. They render French when Supabase user metadata co
 
 Create a Supabase Management API token, then run:
 
-```bash
+```powershell
 $env:SUPABASE_ACCESS_TOKEN="..."
 npm run apply:auth-emails
 ```
 
-The script targets project `nxlmgbrqzugjemhutfkd` by default. Override it with `SUPABASE_PROJECT_REF` if needed.
+The token can also be placed in `.env` (`SUPABASE_ACCESS_TOKEN=...`) — never commit it. The script targets project `nxlmgbrqzugjemhutfkd` by default. Override it with `SUPABASE_PROJECT_REF` if needed.
+
+Validate the templates without calling the API:
+
+```powershell
+node scripts/apply-supabase-auth-emails.js --dry-run
+```
 
 ## Production checks
 
 - Auth Site URL: `https://budgethubfamily.com`
 - Redirect allow list includes `https://budgethubfamily.com` and `https://budgethubfamily.com/auth/confirm`
-- Signup confirmation email uses `type=email`
-- Password reset email uses `type=recovery`
-- Email change email uses `type=email_change`
-- Invitation email uses `type=invite`
+- All action links (CTA button and fallback text) use `{{ .ConfirmationURL }}` — Supabase builds the verification URL itself; no manually constructed `token_hash`/`type` query strings and no hardcoded confirm/reset/invite URLs.

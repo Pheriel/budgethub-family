@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const fs = require("fs");
 const path = require("path");
 
@@ -41,14 +43,36 @@ async function main() {
   };
 
   if (dryRun) {
-    const hasLocalhost = JSON.stringify(payload).includes("localhost")
-      || JSON.stringify(payload).includes("127.0.0.1");
+    const templates = {
+      confirmation: payload.mailer_templates_confirmation_content,
+      recovery: payload.mailer_templates_recovery_content,
+      email_change: payload.mailer_templates_email_change_content,
+      invite: payload.mailer_templates_invite_content
+    };
+    const checks = {};
+    let hasIssues = false;
+    for (const [name, html] of Object.entries(templates)) {
+      checks[name] = {
+        hasConfirmationURL: html.includes("{{ .ConfirmationURL }}"),
+        hasLocalhost: html.includes("localhost") || html.includes("127.0.0.1"),
+        hasManualTokenHash: html.includes("token_hash="),
+        hasTypeParam: /type=(email|recovery|invite|email_change)/.test(html)
+      };
+      if (!checks[name].hasConfirmationURL || checks[name].hasLocalhost
+        || checks[name].hasManualTokenHash || checks[name].hasTypeParam) {
+        hasIssues = true;
+      }
+    }
     console.log(JSON.stringify({
       projectRef,
-      templateCount: 4,
+      templateCount: Object.keys(templates).length,
       keys: Object.keys(payload),
-      hasLocalhost
+      checks,
+      hasIssues
     }, null, 2));
+    if (hasIssues) {
+      process.exit(1);
+    }
     return;
   }
 
