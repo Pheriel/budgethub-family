@@ -12,6 +12,31 @@ const {
 const durationToLabel = { "1m": "1 mois", "3m": "3 mois", "6m": "6 mois", "12m": "1 an" };
 const knownPlans = ["solo", "family", "familyPlus"];
 
+// Un plan accordé/retiré par le Super Admin (subscription_status admin_granted
+// ou admin_free) ne doit pas être écrasé par une resynchronisation Stripe,
+// sauf si l'activité Stripe est PLUS RÉCENTE que la décision admin.
+function hasAdminOverride(profile) {
+  return Boolean(profile && typeof profile.subscription_status === "string"
+    && profile.subscription_status.startsWith("admin_"));
+}
+
+function adminOverrideBeatsStripe(profile, stripeEpochSeconds) {
+  if (!hasAdminOverride(profile)) return false;
+  const overrideAt = profile.plan_updated_at ? Date.parse(profile.plan_updated_at) : 0;
+  return (stripeEpochSeconds || 0) * 1000 <= overrideAt;
+}
+
+async function loadSyncProfile(userId) {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("profiles")
+    .select("plan,subscription_status,plan_updated_at,stripe_subscription_id")
+    .eq("id", userId)
+    .maybeSingle();
+  return data || null;
+}
+
 // Plan d'un abonnement: par price id, sinon par metadata.plan (prix archivés
 // ou legacy qui ne sont plus dans les variables d'environnement)
 function planFromSubscription(subscription) {
@@ -240,6 +265,15 @@ async function syncSubscription(subscriptionId) {
   const userId = subscription.metadata && subscription.metadata.app_user_id;
   if (!userId) return { updated: false, reason: "missing_app_user_id" };
 
+  // Ne pas écraser une décision Super Admin avec un abonnement Stripe plus
+  // ancien qu'elle (l'admin a détaché stripe_subscription_id du profil)
+  const syncProfile = await loadSyncProfile(userId);
+  if (syncProfile && syncProfile.stripe_subscription_id !== subscription.id
+    && adminOverrideBeatsStripe(syncProfile, subscription.created)) {
+    console.log(`[billing.sync] override admin conservé pour ${userId} (plan=${syncProfile.plan}, statut=${syncProfile.subscription_status}); événement Stripe ${subscription.id} ignoré`);
+    return { updated: false, reason: "admin_override" };
+  }
+
   const plan = planFromSubscription(subscription);
   if (!plan) return { updated: false, reason: "unknown_price" };
 
@@ -300,6 +334,14 @@ async function syncUserPlan(userId) {
     .sort((a, b) => b.created - a.created)[0];
 
   if (!completed) return { updated: false, reason: "no_completed_checkout" };
+
+  // Un plan accordé/retiré par le Super Admin gagne sur tout achat Stripe
+  // ANTÉRIEUR à la décision; seul un nouvel achat la remplace.
+  const syncProfile = await loadSyncProfile(userId);
+  if (adminOverrideBeatsStripe(syncProfile, completed.created)) {
+    console.log(`[billing.sync] override admin conservé pour ${userId} (plan=${syncProfile.plan}, statut=${syncProfile.subscription_status}); resynchronisation Stripe ignorée`);
+    return { updated: false, reason: "admin_override" };
+  }
 
   const subscription = await stripe.subscriptions.retrieve(completed.subscription);
   const plan = planFromSubscription(subscription);
