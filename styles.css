@@ -36,6 +36,11 @@
   margin-top: 12px;
 }
 
+.sub-days {
+  margin: 6px 0;
+  font-size: 0.95rem;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;

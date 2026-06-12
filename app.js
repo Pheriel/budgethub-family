@@ -932,16 +932,26 @@ function renderSubscriptionDetails(plan) {
   }
   const sub = state.subscription;
   const durLabel = sub.duration ? durationLabel(sub.duration) : "";
-  const renewDate = sub.currentPeriodEnd
-    ? new Date(sub.currentPeriodEnd).toLocaleDateString(state.lang === "fr" ? "fr-CA" : "en-CA")
+  const endDate = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
+  const renewDate = endDate
+    ? endDate.toLocaleDateString(state.lang === "fr" ? "fr-CA" : "en-CA")
     : "—";
+  const daysLeft = endDate
+    ? Math.max(0, Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
   const autoRenew = !sub.cancelAtPeriodEnd;
   const renewLine = autoRenew
     ? (fr ? `Renouvellement automatique le ${renewDate}.` : `Auto-renews on ${renewDate}.`)
     : (fr ? `Se termine le ${renewDate} (non renouvelé).` : `Ends on ${renewDate} (not renewed).`);
+  const daysLine = daysLeft !== null
+    ? (fr
+      ? `<p class="sub-days"><strong>${daysLeft}</strong> jour${daysLeft > 1 ? "s" : ""} restant${daysLeft > 1 ? "s" : ""} dans la période en cours.</p>`
+      : `<p class="sub-days"><strong>${daysLeft}</strong> day${daysLeft > 1 ? "s" : ""} left in the current period.</p>`)
+    : "";
   return `
     <p><strong>${plan.name}</strong>${durLabel ? ` · ${durLabel}` : ""}</p>
     <p class="form-note">${renewLine}</p>
+    ${daysLine}
     <label class="toggle-row">
       <input type="checkbox" id="autoRenewToggle" ${autoRenew ? "checked" : ""} />
       <span>${fr ? "Renouveler automatiquement à l'échéance" : "Automatically renew at expiry"}</span>
