@@ -188,11 +188,47 @@ const planDefinitions = [
   { id: "familyPlus", name: "Family Plus", price: 20, members: 10, debts: Infinity, featured: false }
 ];
 
+// Taux de secours si l'API de taux de change est injoignable
 const currencyMeta = {
   CAD: { rate: 1, locale: "fr-CA" },
   USD: { rate: 0.73, locale: "en-US" },
   EUR: { rate: 0.68, locale: "fr-FR" }
 };
+
+// Taux réels du jour (Banque centrale européenne via frankfurter.app), cache 24h
+async function loadExchangeRates() {
+  const cached = localStorage.getItem("bh_rates");
+  if (cached) {
+    try {
+      const { rates, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+        currencyMeta.USD.rate = rates.USD;
+        currencyMeta.EUR.rate = rates.EUR;
+        return;
+      }
+    } catch (_error) { /* cache invalide: on refait l'appel */ }
+  }
+  const sources = [
+    { url: "https://api.frankfurter.app/latest?from=CAD&to=USD,EUR", pick: (data) => data.rates },
+    { url: "https://open.er-api.com/v6/latest/CAD", pick: (data) => data.rates }
+  ];
+  for (const source of sources) {
+    try {
+      const response = await fetch(source.url);
+      if (!response.ok) continue;
+      const rates = source.pick(await response.json());
+      if (rates && rates.USD && rates.EUR) {
+        currencyMeta.USD.rate = rates.USD;
+        currencyMeta.EUR.rate = rates.EUR;
+        localStorage.setItem("bh_rates", JSON.stringify({ rates: { USD: rates.USD, EUR: rates.EUR }, timestamp: Date.now() }));
+        renderPricing();
+        renderMoneyTags();
+        renderView();
+        return;
+      }
+    } catch (_error) { /* essayer la source suivante */ }
+  }
+}
 
 const SUPABASE_URL = "https://nxlmgbrqzugjemhutfkd.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_KJre7SX4n5YYfZ4HBvZNig_s5y0hcCe";
@@ -279,8 +315,8 @@ function planMoney(value) {
   return new Intl.NumberFormat(meta.locale, {
     style: "currency",
     currency: state.currency,
-    maximumFractionDigits: 0
-  }).format(value);
+    maximumFractionDigits: state.currency === "CAD" ? 0 : 2
+  }).format(value * meta.rate);
 }
 
 function persistPreferences() {
@@ -393,6 +429,11 @@ function renderPricing() {
       </article>
     `;
   }).join("");
+  if (state.currency !== "CAD") {
+    grid.innerHTML += `<p class="form-note pricing-note">${state.lang === "fr"
+      ? `Prix convertis en ${state.currency} au taux du jour à titre indicatif. La facturation Stripe est en dollars canadiens (CAD).`
+      : `Prices shown in ${state.currency} at today's rate for reference. Stripe billing is in Canadian dollars (CAD).`}</p>`;
+  }
   $$("[data-plan]").forEach((button) => button.addEventListener("click", () => selectPlan(button.dataset.plan)));
 }
 
@@ -1162,6 +1203,7 @@ function boot() {
   applyTheme();
   renderPricing();
   applyTranslations();
+  loadExchangeRates();
 
   $("#languageSelect").addEventListener("change", (event) => updatePreference("lang", event.target.value));
   $("#currencySelect").addEventListener("change", (event) => updatePreference("currency", event.target.value));
