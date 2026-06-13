@@ -18,13 +18,15 @@ function messageId() {
   return `<${Date.now()}.${Math.random().toString(16).slice(2)}@${host}>`;
 }
 
-function buildMessage({ from, to, subject, text }) {
+function buildMessage({ from, to, replyTo, subject, text }) {
   const safeFrom = sanitizeHeader(from);
   const safeTo = sanitizeHeader(to);
+  const safeReplyTo = sanitizeHeader(replyTo || process.env.SUPPORT_ADMIN_EMAIL || from);
   const safeSubject = sanitizeHeader(subject);
   return [
     `From: ${safeFrom}`,
     `To: ${safeTo}`,
+    `Reply-To: ${safeReplyTo}`,
     `Subject: ${safeSubject}`,
     `Message-ID: ${messageId()}`,
     "MIME-Version: 1.0",
@@ -84,15 +86,15 @@ function connectSmtp() {
   });
 }
 
-async function sendEmail({ to, subject, text }) {
+async function sendEmail({ to, subject, text, label = "support" }) {
   const from = process.env.SUPPORT_FROM_EMAIL || process.env.SMTP_USER;
   if (!to || !from) {
-    console.warn("[email] Missing recipient or SUPPORT_FROM_EMAIL.");
+    console.warn(`[email:${label}] Missing recipient or SUPPORT_FROM_EMAIL.`);
     return { sent: false, skipped: true };
   }
 
   if (!smtpConfigured()) {
-    console.warn(`[email] SMTP not configured. Would send "${subject}" to ${to}.`);
+    console.warn(`[email:${label}] SMTP not configured. Would send "${subject}" to ${to}.`);
     return { sent: false, skipped: true };
   }
 
@@ -117,6 +119,7 @@ async function sendEmail({ to, subject, text }) {
       await readLine(secureSocket);
       await command(secureSocket, "QUIT", [221]);
       secureSocket.end();
+      console.log(`[email:${label}] sent to ${to}`);
       return { sent: true };
     }
 
@@ -129,6 +132,7 @@ async function sendEmail({ to, subject, text }) {
     socket.write(`${buildMessage({ from, to, subject, text })}\r\n.\r\n`);
     await readLine(socket);
     await command(socket, "QUIT", [221]);
+    console.log(`[email:${label}] sent to ${to}`);
     return { sent: true };
   } finally {
     socket.end();

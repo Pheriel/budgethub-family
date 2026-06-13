@@ -9,6 +9,7 @@ const {
   createTicket,
   listMyTickets,
   getMyTicket,
+  addCustomerReply,
   listAdminTickets,
   getAdminTicket,
   updateAdminTicket,
@@ -50,6 +51,16 @@ router.post("/tickets", async (req, res) => {
 router.get("/tickets/:ticketId", async (req, res) => {
   if (!isUuid(req.params.ticketId)) return res.status(400).json({ error: "invalid_ticket_id" });
   const result = await getMyTicket(req.user, req.params.ticketId);
+  res.status(result.status).json(result.body);
+});
+
+router.post("/tickets/:ticketId/replies", async (req, res) => {
+  if (!isUuid(req.params.ticketId)) return res.status(400).json({ error: "invalid_ticket_id" });
+  const result = await addCustomerReply({
+    user: req.user,
+    ticketId: req.params.ticketId,
+    message: req.body.message
+  });
   res.status(result.status).json(result.body);
 });
 
