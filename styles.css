@@ -1359,7 +1359,7 @@ h3 {
 }
 
 .remaining-bars {
-  position: relative; /* contient le tooltip absolu dans la carte des barres */
+  position: relative;
   display: flex;
   align-items: end;
   gap: 0.7rem;
@@ -1367,9 +1367,10 @@ h3 {
   padding: 1rem;
   border-radius: var(--radius);
   background: var(--surface-strong);
+  overflow: visible;
 }
 
-.remaining-bars div {
+.remaining-bars .remaining-bar {
   flex: 1;
   display: grid;
   align-items: end;
@@ -1595,34 +1596,43 @@ h3 {
 /* Tooltip shared by line chart + remaining bars */
 .chart-tooltip {
   position: absolute;
-  z-index: 5;
+  z-index: 30;
+  top: 0;
+  left: 0;
   min-width: 11rem;
-  max-width: min(16rem, calc(100% - 12px));
+  max-width: min(18rem, calc(100% - 1rem));
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-strong, var(--surface));
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
   font-size: 0.8rem;
-  pointer-events: none;
   overflow-wrap: anywhere;
+  pointer-events: none;
+  animation: chartTooltipFade 0.14s ease-out both;
   word-break: break-word;
-  animation: tooltipFade 0.12s ease-out;
 }
 
-@keyframes tooltipFade {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
+.chart-tooltip[hidden] {
+  display: none;
+}
+
+@keyframes chartTooltipFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .chart-tooltip {
     animation: none;
   }
-}
-
-.chart-tooltip[hidden] {
-  display: none;
 }
 
 .chart-tooltip .tip-title {
@@ -2424,7 +2434,7 @@ label select {
     padding: 0.75rem;
   }
 
-  .remaining-bars div {
+  .remaining-bars .remaining-bar {
     height: 9rem;
   }
 
@@ -2496,28 +2506,30 @@ label select {
     font-size: 1.45rem;
   }
 
-  /* Actions du haut en grille 2 colonnes, faciles au pouce */
+  /* Actions du haut en rail compact: évite un header mobile trop haut. */
   .workspace-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    align-items: stretch;
+    flex-wrap: nowrap;
     gap: 0.55rem;
     width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+
+  .workspace-actions > * {
+    flex: 0 0 auto;
   }
 
   .workspace-actions .compact-control {
-    grid-column: 1 / -1;
-    justify-content: space-between;
-  }
-
-  .workspace-actions #userEmailChip:not([hidden]),
-  .workspace-actions #upgradeButton,
-  .workspace-actions #openRegister:not([hidden]) {
-    grid-column: 1 / -1;
+    min-width: 13rem;
   }
 
   .workspace-actions .chip {
     justify-content: center;
     min-height: 2.5rem;
+    max-width: 12rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2648,8 +2660,7 @@ label select {
 /* Très petits écrans (iPhone SE 320px): tout en une colonne */
 @media (max-width: 350px) {
   .stats-grid,
-  .summary-grid,
-  .workspace-actions {
+  .summary-grid {
     grid-template-columns: 1fr;
   }
 }

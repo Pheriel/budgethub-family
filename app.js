@@ -570,6 +570,7 @@ const state = {
     unreadCount: 0
   },
   currentView: "dashboard",
+  viewToken: 0,
   debts: [],
   budget: [],
   transactions: [],
@@ -1180,7 +1181,7 @@ async function loadProfilePlan() {
   }
 }
 
-async function loadUserData() {
+async function loadUserData(shouldRender = true) {
   if (!supabaseClient || !state.user) return;
   const { start, end } = selectedMonthRange();
   const [debts, budget, transactions, goals, members, incomes] = await Promise.all([
@@ -1210,14 +1211,14 @@ async function loadUserData() {
     income: (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0)
   };
   loadMonthData(state.selectedMonth === currentMonthKey() ? seed : emptyMonthData());
-  renderView();
+  if (shouldRender) renderView();
 }
 
 // Recharge depuis Supabase/API les données pertinentes pour l'onglet ouvert,
 // avec un anti-spam de 5 s par vue (changer d'onglet ne doit jamais exiger F5).
 const viewRefreshTimes = {};
 
-async function refreshViewData(view) {
+async function refreshViewData(view, token = state.viewToken) {
   if (!state.user) return; // démo: tout est local
   const now = Date.now();
   if (viewRefreshTimes[view] && now - viewRefreshTimes[view] < 5000) return;
@@ -1225,15 +1226,16 @@ async function refreshViewData(view) {
 
   try {
     if (["dashboard", "debts", "strategy", "budget", "transactions", "goals", "family"].includes(view)) {
-      await loadUserData();
+      await loadUserData(false);
     } else if (view === "support") {
       await loadMySupportTickets();
-      renderView();
     } else if (view === "account") {
       await loadProfilePlan();
     } else if (view === "admin") {
       await adminLoadUsers(state.admin.page);
       if (state.admin.selected) await adminLoadUser(state.admin.selected.id);
+    }
+    if (state.viewToken === token && state.currentView === view) {
       renderView();
     }
   } catch (_error) {
@@ -1432,6 +1434,12 @@ function getViewTitle(view) {
     settings: "settingsTitle"
   };
   return t(keys[view]);
+}
+
+// Replace le contenu principal en haut après un changement d'onglet.
+// (window scrolle dans le layout: sidebar sticky desktop, statique mobile.)
+function scrollWorkspaceToTop() {
+  window.scrollTo({ top: 0, left: 0 });
 }
 
 function renderView() {
@@ -3142,12 +3150,16 @@ function positionStrategyTooltip(tooltip, target, container) {
   tooltip.hidden = false;
   const cRect = container.getBoundingClientRect();
   const tRect = target.getBoundingClientRect();
+  const margin = 8;
   const tw = tooltip.offsetWidth;
   const th = tooltip.offsetHeight;
   let left = tRect.left - cRect.left + tRect.width / 2 - tw / 2;
-  left = Math.max(6, Math.min(left, cRect.width - tw - 6));
+  const maxLeft = Math.max(margin, cRect.width - tw - margin);
+  left = Math.max(margin, Math.min(left, maxLeft));
   let top = tRect.top - cRect.top - th - 10;
-  if (top < 0) top = tRect.top - cRect.top + tRect.height + 10;
+  if (top < margin) top = tRect.top - cRect.top + tRect.height + 10;
+  const maxTop = Math.max(margin, cRect.height - th - margin);
+  top = Math.max(margin, Math.min(top, maxTop));
   tooltip.style.left = `${left}px`;
   tooltip.style.top = `${top}px`;
 }
@@ -3568,10 +3580,14 @@ function bindViewActions() {
 
   $$("[data-view-target]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.currentView = button.dataset.viewTarget;
+      const nextView = button.dataset.viewTarget;
+      const token = state.viewToken + 1;
+      state.viewToken = token;
+      state.currentView = nextView;
       state.editing = { table: null, id: null };
       renderView();
-      refreshViewData(state.currentView);
+      scrollWorkspaceToTop();
+      refreshViewData(nextView, token);
     });
   });
 
@@ -4607,16 +4623,17 @@ function boot() {
     }
   });
   $$("#appNav button").forEach((button) => button.addEventListener("click", () => {
-    state.currentView = button.dataset.view;
+    const nextView = button.dataset.view;
+    const token = state.viewToken + 1;
+    state.viewToken = token;
+    state.currentView = nextView;
     state.editing = { table: null, id: null };
     renderView();
-    refreshViewData(button.dataset.view);
-    if (button.dataset.view === "support") {
-      loadMySupportTickets().then(renderView).catch((error) => {
-        state.support.message = error.message;
-        renderView();
-      });
-    }
+    // Remettre le contenu en haut: sinon, en venant d'une page longue déjà
+    // scrollée, la nouvelle vue (plus courte) laisse un gros vide en haut et
+    // semble ne pas s'être rafraîchie (l'utilisateur regarde sous le contenu).
+    scrollWorkspaceToTop();
+    refreshViewData(nextView, token);
   }));
 
   // Rafraîchit l'épargne des objectifs en temps réel (croissance par cotisation)
