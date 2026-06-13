@@ -1444,6 +1444,7 @@ function scrollWorkspaceToTop() {
 
 function renderView() {
   if ($("#appView").hidden) return;
+  hideDebtChartTooltip();
   $("#workspaceTitle").textContent = getViewTitle(state.currentView);
   $("#workspaceEyebrow").textContent = state.plan === "free" ? "Demo" : planDefinitions.find((plan) => plan.id === state.plan).name;
   $$("#appNav button").forEach((button) => button.classList.toggle("active", button.dataset.view === state.currentView));
@@ -1885,7 +1886,6 @@ function renderBalanceChart(snowball, avalanche, selectedMethod) {
         <line class="chart-cursor" data-balance-cursor x1="0" y1="${padT}" x2="0" y2="${baseY}" hidden></line>
         ${sampled.map((c) => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="13" class="chart-hit" data-balance-month="${c.month}" tabindex="0" role="button" aria-label="${fr ? "Mois" : "Month"} ${c.month}"></circle>`).join("")}
       </svg>
-      <div class="chart-tooltip" data-balance-tooltip hidden></div>
       <div class="chart-legend">
         <span><i class="legend-primary"></i>${selectedMethod === "snowball" ? t("snowball") : t("avalanche")}</span>
         <span><i class="legend-muted"></i>${selectedMethod === "snowball" ? t("avalanche") : t("snowball")}</span>
@@ -1910,7 +1910,6 @@ function renderRemainingDebtBars(plan) {
           <small>M${item.month}</small>
         </div>
       `).join("")}
-      <div class="chart-tooltip" data-remaining-tooltip hidden></div>
     </div>
   `;
 }
@@ -3146,38 +3145,69 @@ function buildRemainingTooltipHtml(month) {
   `;
 }
 
-function positionStrategyTooltip(tooltip, target, container) {
-  tooltip.hidden = false;
-  const cRect = container.getBoundingClientRect();
-  const tRect = target.getBoundingClientRect();
+function getDebtChartTooltip() {
+  let tooltip = document.querySelector("[data-debt-chart-tooltip]");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "debt-chart-tooltip";
+    tooltip.dataset.debtChartTooltip = "true";
+    tooltip.hidden = true;
+    document.body.appendChild(tooltip);
+  }
+  return tooltip;
+}
+
+function hideDebtChartTooltip() {
+  const tooltip = document.querySelector("[data-debt-chart-tooltip]");
+  if (!tooltip) return;
+  tooltip.hidden = true;
+  tooltip.style.display = "none";
+  tooltip.style.opacity = "0";
+}
+
+function tooltipPoint(event, target) {
+  if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+    return { x: event.clientX, y: event.clientY };
+  }
+  const rect = target.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+function positionDebtChartTooltip(tooltip, point) {
+  const offset = 12;
   const margin = 8;
-  const tw = tooltip.offsetWidth;
-  const th = tooltip.offsetHeight;
-  let left = tRect.left - cRect.left + tRect.width / 2 - tw / 2;
-  const maxLeft = Math.max(margin, cRect.width - tw - margin);
-  left = Math.max(margin, Math.min(left, maxLeft));
-  let top = tRect.top - cRect.top - th - 10;
-  if (top < margin) top = tRect.top - cRect.top + tRect.height + 10;
-  const maxTop = Math.max(margin, cRect.height - th - margin);
-  top = Math.max(margin, Math.min(top, maxTop));
+  const width = tooltip.offsetWidth;
+  const height = tooltip.offsetHeight;
+  let left = point.x + offset;
+  let top = point.y + offset;
+  if (left + width + margin > window.innerWidth) left = point.x - width - offset;
+  if (top + height + margin > window.innerHeight) top = point.y - height - offset;
+  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+  top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
   tooltip.style.left = `${left}px`;
   tooltip.style.top = `${top}px`;
+}
+
+function showDebtChartTooltip(html, event, target) {
+  const tooltip = getDebtChartTooltip();
+  tooltip.innerHTML = html;
+  tooltip.hidden = false;
+  tooltip.style.display = "block";
+  tooltip.style.opacity = "1";
+  positionDebtChartTooltip(tooltip, tooltipPoint(event, target));
 }
 
 function bindStrategyInteractions() {
   const chart = $("[data-strategy-chart]");
   if (chart) {
-    const tooltip = chart.querySelector("[data-balance-tooltip]");
     const cursor = chart.querySelector("[data-balance-cursor]");
     const hide = () => {
-      if (tooltip) tooltip.hidden = true;
+      hideDebtChartTooltip();
       if (cursor) cursor.setAttribute("hidden", "true");
     };
     chart.querySelectorAll("[data-balance-month]").forEach((hit) => {
-      const show = () => {
-        if (!tooltip) return;
-        tooltip.innerHTML = buildBalanceTooltipHtml(Number(hit.dataset.balanceMonth));
-        positionStrategyTooltip(tooltip, hit, chart);
+      const show = (event) => {
+        showDebtChartTooltip(buildBalanceTooltipHtml(Number(hit.dataset.balanceMonth)), event, hit);
         if (cursor) {
           const cx = hit.getAttribute("cx");
           cursor.setAttribute("x1", cx);
@@ -3186,6 +3216,7 @@ function bindStrategyInteractions() {
         }
       };
       hit.addEventListener("mouseenter", show);
+      hit.addEventListener("mousemove", show);
       hit.addEventListener("focus", show);
       hit.addEventListener("click", show);
       hit.addEventListener("mouseleave", hide);
@@ -3195,15 +3226,11 @@ function bindStrategyInteractions() {
 
   const bars = $("[data-remaining-bars]");
   if (bars) {
-    const tooltip = bars.querySelector("[data-remaining-tooltip]");
-    const hide = () => { if (tooltip) tooltip.hidden = true; };
+    const hide = () => hideDebtChartTooltip();
     bars.querySelectorAll("[data-remaining-month]").forEach((bar) => {
-      const show = () => {
-        if (!tooltip) return;
-        tooltip.innerHTML = buildRemainingTooltipHtml(Number(bar.dataset.remainingMonth));
-        positionStrategyTooltip(tooltip, bar, bars);
-      };
+      const show = (event) => showDebtChartTooltip(buildRemainingTooltipHtml(Number(bar.dataset.remainingMonth)), event, bar);
       bar.addEventListener("mouseenter", show);
+      bar.addEventListener("mousemove", show);
       bar.addEventListener("focus", show);
       bar.addEventListener("click", show);
       bar.addEventListener("mouseleave", hide);
@@ -3215,17 +3242,16 @@ function bindStrategyInteractions() {
   if (!strategyOutsideBound) {
     strategyOutsideBound = true;
     document.addEventListener("click", (event) => {
+      const isBalanceHit = event.target.closest("[data-balance-month]");
+      const isRemainingHit = event.target.closest("[data-remaining-month]");
       const chartEl = document.querySelector("[data-strategy-chart]");
-      if (chartEl && !event.target.closest("[data-balance-month]")) {
-        const tt = chartEl.querySelector("[data-balance-tooltip]");
+      if (chartEl && !isBalanceHit) {
         const cur = chartEl.querySelector("[data-balance-cursor]");
-        if (tt) tt.hidden = true;
         if (cur) cur.setAttribute("hidden", "true");
       }
       const barsEl = document.querySelector("[data-remaining-bars]");
-      if (barsEl && !event.target.closest("[data-remaining-month]")) {
-        const tt = barsEl.querySelector("[data-remaining-tooltip]");
-        if (tt) tt.hidden = true;
+      if ((chartEl || barsEl) && !isBalanceHit && !isRemainingHit) {
+        hideDebtChartTooltip();
       }
     });
   }

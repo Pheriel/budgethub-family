@@ -1593,14 +1593,15 @@ h3 {
   }
 }
 
-/* Tooltip shared by line chart + remaining bars */
-.chart-tooltip {
-  position: absolute;
-  z-index: 30;
+/* Floating tooltip shared by debt charts. Appended to body, never inside chart flow. */
+.debt-chart-tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
   top: 0;
   left: 0;
   min-width: 11rem;
-  max-width: min(18rem, calc(100% - 1rem));
+  max-width: min(280px, calc(100vw - 1rem));
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1608,12 +1609,11 @@ h3 {
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
   font-size: 0.8rem;
   overflow-wrap: anywhere;
-  pointer-events: none;
   animation: chartTooltipFade 0.14s ease-out both;
   word-break: break-word;
 }
 
-.chart-tooltip[hidden] {
+.debt-chart-tooltip[hidden] {
   display: none;
 }
 
@@ -1630,24 +1630,24 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chart-tooltip {
+  .debt-chart-tooltip {
     animation: none;
   }
 }
 
-.chart-tooltip .tip-title {
+.debt-chart-tooltip .tip-title {
   display: block;
   margin-bottom: 0.4rem;
   font-size: 0.84rem;
 }
 
-.chart-tooltip hr {
+.debt-chart-tooltip hr {
   border: 0;
   border-top: 1px solid var(--line);
   margin: 0.4rem 0;
 }
 
-.chart-tooltip .tip-row {
+.debt-chart-tooltip .tip-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1655,30 +1655,30 @@ h3 {
   margin: 0.15rem 0;
 }
 
-.chart-tooltip .tip-row span {
+.debt-chart-tooltip .tip-row span {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   color: var(--muted);
 }
 
-.chart-tooltip .tip-row i {
+.debt-chart-tooltip .tip-row i {
   width: 0.7rem;
   height: 0.7rem;
   border-radius: 50%;
 }
 
-.chart-tooltip .tip-line {
+.debt-chart-tooltip .tip-line {
   margin: 0.15rem 0;
   color: var(--muted);
 }
 
-.chart-tooltip .tip-line b,
-.chart-tooltip .tip-row b {
+.debt-chart-tooltip .tip-line b,
+.debt-chart-tooltip .tip-row b {
   color: var(--text);
 }
 
-.chart-tooltip .tip-debts {
+.debt-chart-tooltip .tip-debts {
   display: grid;
   gap: 0.1rem;
   max-height: 8rem;
@@ -1841,9 +1841,9 @@ h3 {
     grid-template-columns: 1fr;
   }
 
-  .chart-tooltip {
+  .debt-chart-tooltip {
     min-width: 9rem;
-    max-width: 13rem;
+    max-width: min(13rem, calc(100vw - 1rem));
     font-size: 0.74rem;
   }
 }
