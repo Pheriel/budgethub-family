@@ -18,23 +18,63 @@ function messageId() {
   return `<${Date.now()}.${Math.random().toString(16).slice(2)}@${host}>`;
 }
 
-function buildMessage({ from, to, replyTo, subject, text }) {
+// Encode un sujet contenant des accents/UTF-8 en encoded-word RFC 2047.
+function encodeSubject(value) {
+  const safe = sanitizeHeader(value);
+  if (/^[\x00-\x7F]*$/.test(safe)) return safe;
+  return `=?UTF-8?B?${Buffer.from(safe, "utf8").toString("base64")}?=`;
+}
+
+// Dot-stuffing SMTP: une ligne du corps commençant par "." doit être doublée.
+function dotStuff(message) {
+  return message.replace(/\r\n\./g, "\r\n..");
+}
+
+function buildBoundary() {
+  return `bhf_${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`;
+}
+
+function buildMessage({ from, to, replyTo, subject, text, html }) {
   const safeFrom = sanitizeHeader(from);
   const safeTo = sanitizeHeader(to);
   const safeReplyTo = sanitizeHeader(replyTo || process.env.SUPPORT_ADMIN_EMAIL || from);
-  const safeSubject = sanitizeHeader(subject);
-  return [
+  const headers = [
     `From: ${safeFrom}`,
     `To: ${safeTo}`,
     `Reply-To: ${safeReplyTo}`,
-    `Subject: ${safeSubject}`,
+    `Subject: ${encodeSubject(subject)}`,
     `Message-ID: ${messageId()}`,
-    "MIME-Version: 1.0",
+    "MIME-Version: 1.0"
+  ];
+
+  if (html) {
+    const boundary = buildBoundary();
+    return headers.concat([
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      String(text || ""),
+      "",
+      `--${boundary}`,
+      "Content-Type: text/html; charset=utf-8",
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      String(html),
+      "",
+      `--${boundary}--`,
+      ""
+    ]).join("\r\n");
+  }
+
+  return headers.concat([
     "Content-Type: text/plain; charset=utf-8",
     "Content-Transfer-Encoding: 8bit",
     "",
     String(text || "")
-  ].join("\r\n");
+  ]).join("\r\n");
 }
 
 function readLine(socket) {
@@ -86,7 +126,7 @@ function connectSmtp() {
   });
 }
 
-async function sendEmail({ to, subject, text, label = "support" }) {
+async function sendEmail({ to, subject, text, html, replyTo, label = "support" }) {
   const from = process.env.SUPPORT_FROM_EMAIL || process.env.SMTP_USER;
   if (!to || !from) {
     console.warn(`[email:${label}] Missing recipient or SUPPORT_FROM_EMAIL.`);
@@ -115,7 +155,7 @@ async function sendEmail({ to, subject, text, label = "support" }) {
       await command(secureSocket, `MAIL FROM:<${from}>`, [250]);
       await command(secureSocket, `RCPT TO:<${to}>`, [250, 251]);
       await command(secureSocket, "DATA", [354]);
-      secureSocket.write(`${buildMessage({ from, to, subject, text })}\r\n.\r\n`);
+      secureSocket.write(`${dotStuff(buildMessage({ from, to, replyTo, subject, text, html }))}\r\n.\r\n`);
       await readLine(secureSocket);
       await command(secureSocket, "QUIT", [221]);
       secureSocket.end();
@@ -129,7 +169,7 @@ async function sendEmail({ to, subject, text, label = "support" }) {
     await command(socket, `MAIL FROM:<${from}>`, [250]);
     await command(socket, `RCPT TO:<${to}>`, [250, 251]);
     await command(socket, "DATA", [354]);
-    socket.write(`${buildMessage({ from, to, subject, text })}\r\n.\r\n`);
+    socket.write(`${dotStuff(buildMessage({ from, to, replyTo, subject, text, html }))}\r\n.\r\n`);
     await readLine(socket);
     await command(socket, "QUIT", [221]);
     console.log(`[email:${label}] sent to ${to}`);
@@ -140,5 +180,6 @@ async function sendEmail({ to, subject, text, label = "support" }) {
 }
 
 module.exports = {
-  sendEmail
+  sendEmail,
+  buildMessage
 };
