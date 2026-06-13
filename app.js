@@ -1774,7 +1774,9 @@ function simulateDebtPlan(inputDebts, options = {}) {
       activeCount,
       paid: paidThisMonth,
       interest: interestThisMonth,
-      recovered: payoffEvents.filter((event) => event.month <= month).reduce((sum, event) => sum + event.recovered, 0)
+      cumulativeInterest: totalInterest,
+      recovered: payoffEvents.filter((event) => event.month <= month).reduce((sum, event) => sum + event.recovered, 0),
+      debtBalances: debts.map((debt) => ({ id: debt.id, name: debt.name, balance: Math.max(0, debt.balance) }))
     });
     if (activeCount === 0) break;
   }
@@ -1794,6 +1796,28 @@ function simulateDebtPlan(inputDebts, options = {}) {
   };
 }
 
+// Cache des simulations: renderStrategy lance plusieurs scénarios (snowball,
+// avalanche, minimums) sur les mêmes dettes. La memoization évite de recalculer
+// un scénario identique tant que les dettes/paramètres n'ont pas changé.
+const debtPlanCache = new Map();
+
+function debtPlanSignature(inputDebts, options) {
+  const debtsKey = inputDebts
+    .map((debt, index) => `${debt.id || index}:${clampNumber(debt.balance)}:${clampNumber(debt.rate)}:${clampNumber(debt.minPayment)}`)
+    .join(",");
+  const rollover = options.rollover !== false;
+  return `${options.method === "snowball" ? "snowball" : "avalanche"}|${Math.max(0, clampNumber(options.extraPayment))}|${rollover}|${debtsKey}`;
+}
+
+function simulateDebtPlanCached(inputDebts, options = {}) {
+  const key = debtPlanSignature(inputDebts, options);
+  if (debtPlanCache.has(key)) return debtPlanCache.get(key);
+  if (debtPlanCache.size > 60) debtPlanCache.clear();
+  const result = simulateDebtPlan(inputDebts, options);
+  debtPlanCache.set(key, result);
+  return result;
+}
+
 function chartPoints(timeline, key, width = 640, height = 180) {
   if (!timeline.length) return "";
   const max = Math.max(...timeline.map((item) => item[key]), 1);
@@ -1805,39 +1829,218 @@ function chartPoints(timeline, key, width = 640, height = 180) {
   }).join(" ");
 }
 
-function renderBalanceChart(primary, secondary) {
-  const primaryPoints = chartPoints(primary.timeline, "totalBalance");
-  const secondaryPoints = chartPoints(secondary.timeline, "totalBalance");
+// Données du dernier rendu de la stratégie, partagées avec les gestionnaires
+// d'interaction (tooltips survol/tap) sans encoder de JSON dans le DOM.
+let strategyRenderData = null;
+let strategyOutsideBound = false;
+
+const STRATEGY_CHART = { w: 640, h: 220, padL: 10, padR: 10, padT: 14, padB: 26 };
+
+function renderBalanceChart(snowball, avalanche, selectedMethod) {
+  const fr = state.lang === "fr";
+  const { w, h, padL, padR, padT, padB } = STRATEGY_CHART;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+  const baseY = padT + plotH;
+  const maxMonths = Math.max(snowball.timeline.length, avalanche.timeline.length, 1);
+  const maxBalance = Math.max(snowball.originalBalance, avalanche.originalBalance, 1);
+  const xOf = (m) => padL + Math.min(1, m / maxMonths) * plotW;
+  const yOf = (b) => baseY - (Math.max(0, b) / maxBalance) * plotH;
+  const coordsOf = (plan) => [{ month: 0, totalBalance: plan.originalBalance }]
+    .concat(plan.timeline)
+    .map((item) => ({ month: item.month, x: xOf(item.month), y: yOf(item.totalBalance) }));
+  const snowCoords = coordsOf(snowball);
+  const avaCoords = coordsOf(avalanche);
+  const lineStr = (coords) => coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const areaStr = (coords) => `${coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(" ")} L${coords[coords.length - 1].x.toFixed(1)} ${baseY.toFixed(1)} L${coords[0].x.toFixed(1)} ${baseY.toFixed(1)} Z`;
+
+  const selectedCoords = selectedMethod === "snowball" ? snowCoords : avaCoords;
+  const otherCoords = selectedMethod === "snowball" ? avaCoords : snowCoords;
+  const monthCoords = selectedCoords.filter((c) => c.month >= 1);
+  const step = Math.max(1, Math.ceil(monthCoords.length / 24));
+  const sampled = monthCoords.filter((c, i) => i % step === 0 || i === monthCoords.length - 1);
+
   return `
-    <div class="strategy-chart">
-      <svg viewBox="0 0 640 220" role="img" aria-label="${state.lang === "fr" ? "Graphique du solde total" : "Total balance chart"}">
-        <line x1="0" y1="190" x2="640" y2="190" class="chart-axis"></line>
-        <polyline points="${secondaryPoints}" class="chart-line muted-line"></polyline>
-        <polyline points="${primaryPoints}" class="chart-line primary-line"></polyline>
+    <div class="strategy-chart" data-strategy-chart>
+      <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${fr ? "Évolution du solde total Snowball et Avalanche" : "Total balance over time, Snowball and Avalanche"}">
+        <defs>
+          <linearGradient id="balanceArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" class="area-stop-top"></stop>
+            <stop offset="100%" class="area-stop-bottom"></stop>
+          </linearGradient>
+        </defs>
+        <line x1="${padL}" y1="${baseY}" x2="${w - padR}" y2="${baseY}" class="chart-axis"></line>
+        <path d="${areaStr(selectedCoords)}" class="chart-area" fill="url(#balanceArea)"></path>
+        <polyline points="${lineStr(otherCoords)}" class="chart-line muted-line chart-line-anim"></polyline>
+        <polyline points="${lineStr(selectedCoords)}" class="chart-line primary-line chart-line-anim"></polyline>
+        ${sampled.map((c) => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" class="chart-dot"></circle>`).join("")}
+        <line class="chart-cursor" data-balance-cursor x1="0" y1="${padT}" x2="0" y2="${baseY}" hidden></line>
+        ${sampled.map((c) => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="13" class="chart-hit" data-balance-month="${c.month}" tabindex="0" role="button" aria-label="${fr ? "Mois" : "Month"} ${c.month}"></circle>`).join("")}
       </svg>
+      <div class="chart-tooltip" data-balance-tooltip hidden></div>
       <div class="chart-legend">
-        <span><i class="legend-primary"></i>${primary.method === "snowball" ? t("snowball") : t("avalanche")}</span>
-        <span><i class="legend-muted"></i>${secondary.method === "snowball" ? t("snowball") : t("avalanche")}</span>
+        <span><i class="legend-primary"></i>${selectedMethod === "snowball" ? t("snowball") : t("avalanche")}</span>
+        <span><i class="legend-muted"></i>${selectedMethod === "snowball" ? t("avalanche") : t("snowball")}</span>
       </div>
     </div>
   `;
 }
 
 function renderRemainingDebtBars(plan) {
-  const step = Math.max(1, Math.ceil(plan.timeline.length / 8));
-  const samples = plan.timeline.filter((_, index) => index % step === 0).slice(0, 8);
-  if (!samples.length) return "";
+  const fr = state.lang === "fr";
+  if (!plan.timeline.length) return `<p class="form-note">${fr ? "Aucune donnée à afficher." : "No data to display."}</p>`;
+  const last = plan.timeline[plan.timeline.length - 1];
+  const step = Math.max(1, Math.ceil(plan.timeline.length / 10));
+  const samples = plan.timeline.filter((_, index) => index % step === 0);
+  if (samples[samples.length - 1] !== last) samples.push(last);
   const max = Math.max(...samples.map((item) => item.activeCount), 1);
   return `
-    <div class="remaining-bars" aria-label="${state.lang === "fr" ? "Dettes restantes dans le temps" : "Remaining debts over time"}">
+    <div class="remaining-bars" data-remaining-bars aria-label="${fr ? "Dettes restantes dans le temps" : "Remaining debts over time"}">
       ${samples.map((item) => `
-        <div>
-          <span style="height:${Math.max(8, (item.activeCount / max) * 100)}%"></span>
+        <div class="remaining-bar" data-remaining-month="${item.month}" tabindex="0" role="button" aria-label="${fr ? "Mois" : "Month"} ${item.month}">
+          <span style="height:${Math.max(8, (item.activeCount / max) * 100)}%"><b>${item.activeCount}</b></span>
           <small>M${item.month}</small>
         </div>
       `).join("")}
+      <div class="chart-tooltip" data-remaining-tooltip hidden></div>
     </div>
   `;
+}
+
+// Prochaine dette qui disparaît à partir d'aujourd'hui.
+function nextDebtToClear(plan) {
+  if (!plan.payoffEvents || !plan.payoffEvents.length) return null;
+  return plan.payoffEvents.slice().sort((a, b) => a.month - b.month)[0];
+}
+
+// Mensualité totale libérée une fois toutes les dettes remboursées.
+function freedMonthlyPayment(plan, extraPayment) {
+  return (plan.recoveredMonthly || 0) + Math.max(0, clampNumber(extraPayment));
+}
+
+function renderPremiumCards(context) {
+  const { fr, selected, snowball, avalanche, extraPayment, startMonth } = context;
+  const debtFree = Number.isFinite(selected.months)
+    ? `${formatMonthOffset(startMonth, selected.months)}`
+    : (fr ? "Non calculable" : "Not calculable");
+  const interestDiff = Math.abs(snowball.totalInterest - avalanche.totalInterest);
+  const cheaper = snowball.totalInterest <= avalanche.totalInterest ? "snowball" : "avalanche";
+  const cheaperLabel = cheaper === "snowball" ? t("snowball") : t("avalanche");
+  const freed = freedMonthlyPayment(selected, extraPayment);
+  const next = nextDebtToClear(selected);
+  const nextDate = next ? formatMonthOffset(startMonth, next.month) : "—";
+  return `
+    <div class="premium-cards">
+      <article class="premium-card">
+        <span class="premium-icon">🎯</span>
+        <small>${fr ? "Date libre de dettes" : "Debt-free date"}</small>
+        <strong>${debtFree}</strong>
+        <span class="premium-sub">${Number.isFinite(selected.months) ? monthCountLabel(selected.months) : (fr ? "Ajuste les paiements" : "Adjust payments")}</span>
+      </article>
+      <article class="premium-card">
+        <span class="premium-icon">💰</span>
+        <small>${fr ? "Intérêts économisés" : "Interest saved"}</small>
+        <strong>${money(interestDiff)}</strong>
+        <span class="premium-sub">${fr ? `${cheaperLabel} est le moins cher` : `${cheaperLabel} is cheaper`}</span>
+      </article>
+      <article class="premium-card">
+        <span class="premium-icon">📈</span>
+        <small>${fr ? "Paiement récupéré" : "Payment recovered"}</small>
+        <strong>${money(freed)}<span class="premium-unit">/${fr ? "mois" : "mo"}</span></strong>
+        <span class="premium-sub">${fr ? "Libéré après la dernière dette" : "Freed after the last debt"}</span>
+      </article>
+      <article class="premium-card">
+        <span class="premium-icon">⚡</span>
+        <small>${fr ? "Prochaine dette à disparaître" : "Next debt to clear"}</small>
+        <strong class="premium-strong-sm">${next ? next.name : (fr ? "—" : "—")}</strong>
+        <span class="premium-sub">${next ? nextDate : (fr ? "Aucune échéance" : "No payoff yet")}</span>
+      </article>
+    </div>
+  `;
+}
+
+function renderDebtTimeline(plan, startMonth) {
+  const fr = state.lang === "fr";
+  const events = (plan.payoffEvents || []).slice().sort((a, b) => a.month - b.month);
+  const debtFreeStep = Number.isFinite(plan.months) && plan.months > 0
+    ? `<li class="timeline-step timeline-step-final">
+        <span class="timeline-dot">🏁</span>
+        <div class="timeline-body">
+          <strong>${fr ? "Libre de dettes" : "Debt-free"}</strong>
+          <span class="timeline-meta">${formatMonthOffset(startMonth, plan.months)}</span>
+        </div>
+      </li>`
+    : "";
+  return `
+    <ol class="debt-timeline">
+      <li class="timeline-step timeline-step-start">
+        <span class="timeline-dot">📍</span>
+        <div class="timeline-body">
+          <strong>${fr ? "Aujourd'hui" : "Today"}</strong>
+          <span class="timeline-meta">${money(plan.originalBalance)} · ${plan.debts.length} ${fr ? "dettes" : "debts"}</span>
+        </div>
+      </li>
+      ${events.map((event, index) => `
+        <li class="timeline-step">
+          <span class="timeline-dot">${index + 1}</span>
+          <div class="timeline-body">
+            <strong>${event.name}</strong>
+            <span class="timeline-meta">${formatMonthOffset(startMonth, event.month)} · +${money(event.recovered)}/${fr ? "mois" : "mo"} ${fr ? "récupéré" : "freed"}</span>
+          </div>
+        </li>
+      `).join("")}
+      ${debtFreeStep}
+    </ol>
+  `;
+}
+
+// Architecture d'export réutilisable (PDF futur). Construit un modèle structuré
+// à partir des plans déjà calculés; l'export PDF complet n'est pas implémenté.
+function buildStrategyExportModel(context) {
+  const { selected, snowball, avalanche, extraPayment, startMonth, fr } = context;
+  return {
+    generatedAt: new Date().toISOString(),
+    locale: fr ? "fr-CA" : "en-CA",
+    currency: state.currency,
+    method: selected.method,
+    extraPayment: Math.max(0, clampNumber(extraPayment)),
+    startMonth,
+    summary: {
+      debtFreeDate: Number.isFinite(selected.months) ? formatMonthOffset(startMonth, selected.months) : null,
+      months: Number.isFinite(selected.months) ? selected.months : null,
+      totalPaid: selected.totalPaid,
+      totalInterest: selected.totalInterest,
+      freedMonthly: freedMonthlyPayment(selected, extraPayment)
+    },
+    comparison: {
+      snowball: { months: snowball.months, totalInterest: snowball.totalInterest },
+      avalanche: { months: avalanche.months, totalInterest: avalanche.totalInterest },
+      interestDifference: Math.abs(snowball.totalInterest - avalanche.totalInterest),
+      cheaper: snowball.totalInterest <= avalanche.totalInterest ? "snowball" : "avalanche"
+    },
+    payoffOrder: (selected.payoffEvents || []).slice().sort((a, b) => a.month - b.month).map((event) => ({
+      name: event.name,
+      month: event.month,
+      date: formatMonthOffset(startMonth, event.month),
+      recovered: event.recovered
+    })),
+    debts: selected.debts.map((debt) => ({
+      name: debt.name,
+      originalBalance: debt.originalBalance,
+      rate: debt.rate,
+      minPayment: debt.minPayment,
+      payoffMonth: debt.payoffMonth
+    }))
+  };
+}
+
+// Point d'entrée réutilisable pour un futur export PDF/CSV. Aujourd'hui il
+// prépare seulement le modèle et le journalise (aucun rendu PDF ici).
+function prepareStrategyExport() {
+  if (!strategyRenderData) return null;
+  const model = buildStrategyExportModel(strategyRenderData);
+  console.info("[strategy] export model prepared", model);
+  return model;
 }
 
 function renderPayoffTable(plan) {
@@ -1888,14 +2091,20 @@ function renderStrategy() {
   const selectedMethod = state.debtStrategy.method === "snowball" ? "snowball" : "avalanche";
   const otherMethod = selectedMethod === "snowball" ? "avalanche" : "snowball";
   const extraPayment = Math.max(0, clampNumber(state.debtStrategy.extraPayment));
-  const selected = simulateDebtPlan(debts, { method: selectedMethod, extraPayment });
-  const comparison = simulateDebtPlan(debts, { method: otherMethod, extraPayment });
-  const snowballPlan = simulateDebtPlan(debts, { method: "snowball", extraPayment });
-  const avalanchePlan = simulateDebtPlan(debts, { method: "avalanche", extraPayment });
-  const minimumOnly = simulateDebtPlan(debts, { method: selectedMethod, extraPayment: 0, rollover: false });
+  const startMonth = state.debtStrategy.startMonth;
+  // Calculs réels memoïsés: snowball/avalanche calculés une fois, les scénarios
+  // sélectionné/comparaison ne sont que des références (aucun recalcul).
+  const snowballPlan = simulateDebtPlanCached(debts, { method: "snowball", extraPayment });
+  const avalanchePlan = simulateDebtPlanCached(debts, { method: "avalanche", extraPayment });
+  const selected = selectedMethod === "snowball" ? snowballPlan : avalanchePlan;
+  const comparison = otherMethod === "snowball" ? snowballPlan : avalanchePlan;
+  const minimumOnly = simulateDebtPlanCached(debts, { method: selectedMethod, extraPayment: 0, rollover: false });
   const interestSaved = Number.isFinite(minimumOnly.totalInterest) && Number.isFinite(selected.totalInterest)
     ? Math.max(0, minimumOnly.totalInterest - selected.totalInterest)
     : 0;
+
+  // Partagé avec les gestionnaires d'interaction (tooltips) et l'export futur.
+  strategyRenderData = { fr, startMonth, extraPayment, selectedMethod, selected, comparison, snowball: snowballPlan, avalanche: avalanchePlan };
 
   if (!debts.length) {
     return `
@@ -1945,6 +2154,7 @@ function renderStrategy() {
       </form>
     </section>
     ${warning}
+    ${renderPremiumCards({ fr, selected, snowball: snowballPlan, avalanche: avalanchePlan, extraPayment, startMonth })}
     <div class="strategy-summary-grid">
       ${stat(fr ? "Date debt free estimée" : "Estimated debt-free date", debtFreeDate, selected.invalid ? "pill-danger" : "pill-good", selected.invalid ? (fr ? "À ajuster" : "Adjust") : monthCountLabel(selected.months))}
       ${stat(fr ? "Total payé" : "Total paid", money(selected.totalPaid), "pill-warn", fr ? "Capital + intérêts" : "Principal + interest")}
@@ -1960,7 +2170,7 @@ function renderStrategy() {
           </div>
           <strong>${money(selected.originalBalance)}</strong>
         </div>
-        ${renderBalanceChart(selected, comparison)}
+        ${renderBalanceChart(snowballPlan, avalanchePlan, selectedMethod)}
       </section>
       <section class="panel">
         <div class="strategy-panel-head">
@@ -1981,10 +2191,25 @@ function renderStrategy() {
           ? `${comparisonWinner.method === "avalanche" ? "Avalanche" : "Snowball"} est le scénario le moins coûteux avec ces données.`
           : `${comparisonWinner.method === "avalanche" ? "Avalanche" : "Snowball"} is the lower-cost scenario with this data.`}</p>
       </div>
+      <div class="comparison-readout">
+        <div><small>${fr ? "Termine le plus vite" : "Finishes fastest"}</small><strong>${(snowballPlan.months <= avalanchePlan.months ? t("snowball") : t("avalanche"))} · ${monthCountLabel(Math.min(snowballPlan.months, avalanchePlan.months))}</strong></div>
+        <div><small>${fr ? "Coûte le moins cher" : "Costs the least"}</small><strong>${comparisonWinner.method === "snowball" ? t("snowball") : t("avalanche")} · ${money(comparisonWinner.totalInterest)}</strong></div>
+        <div class="comparison-saving"><small>${fr ? "Différence d'intérêts" : "Interest difference"}</small><strong>${money(Math.abs(snowballPlan.totalInterest - avalanchePlan.totalInterest))}</strong></div>
+      </div>
       <div class="comparison-grid">
         ${renderComparisonCard(snowballPlan, minimumOnly)}
         ${renderComparisonCard(avalanchePlan, minimumOnly)}
       </div>
+    </section>
+    <section class="panel">
+      <div class="strategy-panel-head">
+        <div>
+          <span class="chip">${fr ? "Parcours" : "Journey"}</span>
+          <h3>${fr ? "Timeline vers la liberté" : "Timeline to debt freedom"}</h3>
+        </div>
+        <button class="secondary-button" id="strategyExportBtn" type="button">${fr ? "📄 Préparer l'export (PDF bientôt)" : "📄 Prepare export (PDF soon)"}</button>
+      </div>
+      ${renderDebtTimeline(selected, startMonth)}
     </section>
     <section class="panel">
       <div class="strategy-panel-head">
@@ -2852,6 +3077,140 @@ async function adminPost(path, payload) {
   await adminLoadUsers(state.admin.page);
 }
 
+function strategyTimelineEntry(plan, month) {
+  return plan.timeline[month - 1] || null;
+}
+
+function buildBalanceTooltipHtml(month) {
+  const data = strategyRenderData;
+  if (!data) return "";
+  const fr = data.fr;
+  const snowEntry = strategyTimelineEntry(data.snowball, month);
+  const avaEntry = strategyTimelineEntry(data.avalanche, month);
+  const selEntry = strategyTimelineEntry(data.selected, month);
+  const snowBal = snowEntry ? snowEntry.totalBalance : 0;
+  const avaBal = avaEntry ? avaEntry.totalBalance : 0;
+  const selBal = selEntry ? selEntry.totalBalance : 0;
+  const done = data.selected.debts.filter((debt) => debt.payoffMonth && debt.payoffMonth <= month).map((debt) => debt.name);
+  const lastEntry = data.selected.timeline[data.selected.timeline.length - 1];
+  const cumInterest = selEntry ? selEntry.cumulativeInterest : (lastEntry ? lastEntry.cumulativeInterest : 0);
+  const paid = selEntry ? selEntry.paid : 0;
+  const progress = data.selected.originalBalance
+    ? Math.min(100, Math.max(0, (1 - selBal / data.selected.originalBalance) * 100))
+    : 0;
+  return `
+    <strong class="tip-title">${fr ? "Mois" : "Month"} ${month} · ${formatMonthOffset(data.startMonth, month)}</strong>
+    <div class="tip-row"><span><i class="legend-primary"></i>${t("snowball")}</span><b>${money(snowBal)}</b></div>
+    <div class="tip-row"><span><i class="legend-muted"></i>${t("avalanche")}</span><b>${money(avaBal)}</b></div>
+    <hr/>
+    <div class="tip-line">${fr ? "Dettes terminées" : "Debts cleared"}: <b>${done.length ? done.join(", ") : "—"}</b></div>
+    <div class="tip-line">${fr ? "Paiement mensuel" : "Monthly payment"}: <b>${money(paid)}</b></div>
+    <div class="tip-line">${fr ? "Intérêts cumulés" : "Cumulative interest"}: <b>${money(cumInterest)}</b></div>
+    <div class="tip-line">${fr ? "Progression" : "Progress"}: <b>${progress.toFixed(0)}%</b></div>
+  `;
+}
+
+function buildRemainingTooltipHtml(month) {
+  const data = strategyRenderData;
+  if (!data) return "";
+  const fr = data.fr;
+  const entry = strategyTimelineEntry(data.selected, month);
+  if (!entry) return "";
+  const remaining = (entry.debtBalances || []).filter((item) => item.balance > 0.005);
+  return `
+    <strong class="tip-title">${fr ? "Mois" : "Month"} ${month} · ${formatMonthOffset(data.startMonth, month)}</strong>
+    <div class="tip-line">${fr ? "Dettes restantes" : "Remaining debts"}: <b>${entry.activeCount}</b></div>
+    <div class="tip-debts">
+      ${remaining.length
+        ? remaining.map((item) => `<div class="tip-row"><span>${item.name}</span><b>${money(item.balance)}</b></div>`).join("")
+        : `<div class="tip-line">${fr ? "Toutes les dettes sont remboursées 🎉" : "All debts cleared 🎉"}</div>`}
+    </div>
+    <hr/>
+    <div class="tip-line">${fr ? "Mensualité récupérée" : "Monthly recovered"}: <b>${money(entry.recovered)}</b></div>
+  `;
+}
+
+function positionStrategyTooltip(tooltip, target, container) {
+  tooltip.hidden = false;
+  const cRect = container.getBoundingClientRect();
+  const tRect = target.getBoundingClientRect();
+  const tw = tooltip.offsetWidth;
+  const th = tooltip.offsetHeight;
+  let left = tRect.left - cRect.left + tRect.width / 2 - tw / 2;
+  left = Math.max(6, Math.min(left, cRect.width - tw - 6));
+  let top = tRect.top - cRect.top - th - 10;
+  if (top < 0) top = tRect.top - cRect.top + tRect.height + 10;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function bindStrategyInteractions() {
+  const chart = $("[data-strategy-chart]");
+  if (chart) {
+    const tooltip = chart.querySelector("[data-balance-tooltip]");
+    const cursor = chart.querySelector("[data-balance-cursor]");
+    const hide = () => {
+      if (tooltip) tooltip.hidden = true;
+      if (cursor) cursor.setAttribute("hidden", "true");
+    };
+    chart.querySelectorAll("[data-balance-month]").forEach((hit) => {
+      const show = () => {
+        if (!tooltip) return;
+        tooltip.innerHTML = buildBalanceTooltipHtml(Number(hit.dataset.balanceMonth));
+        positionStrategyTooltip(tooltip, hit, chart);
+        if (cursor) {
+          const cx = hit.getAttribute("cx");
+          cursor.setAttribute("x1", cx);
+          cursor.setAttribute("x2", cx);
+          cursor.removeAttribute("hidden");
+        }
+      };
+      hit.addEventListener("mouseenter", show);
+      hit.addEventListener("focus", show);
+      hit.addEventListener("click", show);
+      hit.addEventListener("mouseleave", hide);
+      hit.addEventListener("blur", hide);
+    });
+  }
+
+  const bars = $("[data-remaining-bars]");
+  if (bars) {
+    const tooltip = bars.querySelector("[data-remaining-tooltip]");
+    const hide = () => { if (tooltip) tooltip.hidden = true; };
+    bars.querySelectorAll("[data-remaining-month]").forEach((bar) => {
+      const show = () => {
+        if (!tooltip) return;
+        tooltip.innerHTML = buildRemainingTooltipHtml(Number(bar.dataset.remainingMonth));
+        positionStrategyTooltip(tooltip, bar, bars);
+      };
+      bar.addEventListener("mouseenter", show);
+      bar.addEventListener("focus", show);
+      bar.addEventListener("click", show);
+      bar.addEventListener("mouseleave", hide);
+      bar.addEventListener("blur", hide);
+    });
+  }
+
+  // Tap en dehors d'un point ferme les tooltips (mobile). Lié une seule fois.
+  if (!strategyOutsideBound) {
+    strategyOutsideBound = true;
+    document.addEventListener("click", (event) => {
+      const chartEl = document.querySelector("[data-strategy-chart]");
+      if (chartEl && !event.target.closest("[data-balance-month]")) {
+        const tt = chartEl.querySelector("[data-balance-tooltip]");
+        const cur = chartEl.querySelector("[data-balance-cursor]");
+        if (tt) tt.hidden = true;
+        if (cur) cur.setAttribute("hidden", "true");
+      }
+      const barsEl = document.querySelector("[data-remaining-bars]");
+      if (barsEl && !event.target.closest("[data-remaining-month]")) {
+        const tt = barsEl.querySelector("[data-remaining-tooltip]");
+        if (tt) tt.hidden = true;
+      }
+    });
+  }
+}
+
 function applyAdminSectionVisibility() {
   if (state.currentView !== "admin" || !state.isSuperAdmin) return;
   const section = state.support.adminSection || "overview";
@@ -3197,6 +3556,19 @@ function bindViewActions() {
       localStorage.setItem("bh_debt_strategy_extra", String(extraPayment));
       localStorage.setItem("bh_debt_strategy_start", startMonth);
       renderView();
+    });
+  }
+
+  bindStrategyInteractions();
+
+  const strategyExportBtn = $("#strategyExportBtn");
+  if (strategyExportBtn) {
+    strategyExportBtn.addEventListener("click", () => {
+      const model = prepareStrategyExport();
+      const fr = state.lang === "fr";
+      strategyExportBtn.textContent = model
+        ? (fr ? "✓ Données prêtes (export PDF bientôt)" : "✓ Data ready (PDF export soon)")
+        : (fr ? "Aucune donnée" : "No data");
     });
   }
 
