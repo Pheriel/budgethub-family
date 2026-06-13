@@ -10,6 +10,7 @@ const memberRoutes = require("./routes/members.routes");
 const billingRoutes = require("./routes/billing.routes");
 const diagnosticsRoutes = require("./routes/diagnostics.routes");
 const adminRoutes = require("./routes/admin.routes");
+const supportRoutes = require("./routes/support.routes");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -39,6 +40,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/members", memberRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/support", supportRoutes);
 
 const staticRoot = __dirname;
 
