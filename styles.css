@@ -1610,6 +1610,7 @@ h3 {
   font-size: 0.8rem;
   overflow-wrap: anywhere;
   animation: chartTooltipFade 0.14s ease-out both;
+  word-break: break-word;
 }
 
 .debt-chart-tooltip[hidden] {
@@ -1625,6 +1626,12 @@ h3 {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .debt-chart-tooltip {
+    animation: none;
   }
 }
 
