@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=16" />
+    <link rel="stylesheet" href="/styles.css?v=17" />
   </head>
   <body>
     <div class="app-shell">
@@ -33,9 +33,10 @@
 
         <div class="topbar-menu" id="topbarMenu">
           <nav class="landing-nav" aria-label="Navigation principale">
+            <a href="#problem" data-i18n="navProblem">Pourquoi</a>
             <a href="#features" data-i18n="navFeatures">Fonctions</a>
+            <a href="#strategy" data-i18n="navStrategy">Snowball/Avalanche</a>
             <a href="#pricing" data-i18n="navPricing">Tarifs</a>
-            <a href="#security" data-i18n="navSecurity">Sécurité</a>
             <a href="/legal" data-legal-link="legal" data-i18n="navLegal">Légal</a>
           </nav>
 
@@ -65,31 +66,37 @@
       <main id="landingView">
         <section class="hero" id="home">
           <div class="hero-content">
-            <p class="eyebrow" data-i18n="heroEyebrow">Plateforme de budget familial</p>
-            <h1 data-i18n="heroTitle">Le cockpit moderne pour reprendre le contrôle des finances familiales.</h1>
+            <p class="eyebrow" data-i18n="heroEyebrow">Budget familial moderne</p>
+            <h1 data-i18n="heroTitle">Une vue claire pour piloter les finances du foyer.</h1>
             <p class="hero-copy" data-i18n="heroCopy">
-              BudgetHub Family réunit dettes, budget, transactions, objectifs et membres de la famille dans un tableau de bord clair, collaboratif et prêt pour la croissance.
+              BudgetHub Family rassemble dettes, budget mensuel, transactions, objectifs et membres de la famille dans un espace simple, bilingue et connecte a Supabase et Stripe.
             </p>
             <div class="hero-actions">
-              <button class="primary-button large" id="heroDemo" type="button" data-i18n="tryDemo">Tester la démo</button>
+              <button class="primary-button large" id="heroDemo" type="button" data-i18n="tryDemo">Tester la demo</button>
+              <button class="ghost-button large" id="heroRegister" type="button" data-i18n="createAccount">Creer un compte</button>
               <a class="secondary-link" href="#pricing" data-i18n="seePricing">Voir les tarifs</a>
             </div>
             <div class="trust-row" aria-label="Indicateurs">
-              <span data-i18n="trustNoCard">Sans carte</span>
-              <span data-i18n="trustTrial">Essai sans engagement</span>
-              <span data-i18n="trustFamily">Pensé pour les familles</span>
+              <span data-i18n="trustNoCard">Demo sans carte</span>
+              <span data-i18n="trustTrial">Donnees demo locales</span>
+              <span data-i18n="trustFamily">Plans Solo et famille</span>
             </div>
           </div>
-          <div class="hero-product" aria-label="Aperçu du tableau de bord">
+          <div class="hero-product" aria-label="Apercu du tableau de bord">
             <div class="product-frame">
               <div class="mini-toolbar">
                 <span></span><span></span><span></span>
                 <strong>BudgetHub</strong>
               </div>
+              <div class="product-tabs">
+                <span data-i18n="appDashboard">Tableau</span>
+                <span data-i18n="appStrategy">Snowball/Avalanche</span>
+                <span data-i18n="appFamily">Famille</span>
+              </div>
               <div class="product-grid">
                 <div class="metric-card accent">
-                  <small data-i18n="heroDebtFree">Date sans dette</small>
-                  <strong>Nov 2028</strong>
+                  <small data-i18n="heroDebtFree">Dette totale</small>
+                  <strong data-money="18450">18 450 $</strong>
                   <div class="progress"><span style="width: 67%"></span></div>
                 </div>
                 <div class="metric-card">
@@ -112,26 +119,120 @@
           </div>
         </section>
 
+        <section class="section problem-section" id="problem">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="problemEyebrow">Le probleme</p>
+            <h2 data-i18n="problemTitle">Quand le budget familial vit partout, les decisions deviennent floues.</h2>
+            <p data-i18n="problemCopy">Dettes, paiements minimums, categories, objectifs et membres du foyer finissent souvent dans des fichiers separes. BudgetHub Family rassemble ces informations pour voir quoi payer, quoi ajuster et ou va l'argent du mois.</p>
+          </div>
+          <div class="problem-grid">
+            <article><span class="css-icon icon-stack"></span><h3 data-i18n="problemCardOneTitle">Trop d'endroits</h3><p data-i18n="problemCardOneCopy">Les dettes, budgets et transactions sont difficiles a suivre quand chacun utilise son propre systeme.</p></article>
+            <article><span class="css-icon icon-alert"></span><h3 data-i18n="problemCardTwoTitle">Priorites incertaines</h3><p data-i18n="problemCardTwoCopy">Sans ordre clair, il est plus dur de choisir entre motivation rapide et economie d'interets.</p></article>
+            <article><span class="css-icon icon-family"></span><h3 data-i18n="problemCardThreeTitle">Collaboration fragile</h3><p data-i18n="problemCardThreeCopy">Les familles ont besoin de roles simples pour contribuer sans donner les memes permissions a tout le monde.</p></article>
+          </div>
+        </section>
+
         <section class="section" id="features">
           <div class="section-heading">
-            <p class="eyebrow" data-i18n="featuresEyebrow">Tout au même endroit</p>
-            <h2 data-i18n="featuresTitle">Conçu pour les décisions d’argent en famille.</h2>
+            <p class="eyebrow" data-i18n="featuresEyebrow">Fonctionnalites principales</p>
+            <h2 data-i18n="featuresTitle">Les outils essentiels, sans promesse inutile.</h2>
+            <p data-i18n="featuresCopy">L'accueil reflete ce que l'application propose deja: un tableau de bord, des dettes, un budget mensuel, des transactions, des objectifs et des membres famille selon le plan choisi.</p>
           </div>
           <div class="feature-grid">
-            <article><span>01</span><h3 data-i18n="featureDebtTitle">Dettes intelligentes</h3><p data-i18n="featureDebtCopy">Comparez snowball et avalanche avec un calendrier de remboursement lisible.</p></article>
-            <article><span>02</span><h3 data-i18n="featureBudgetTitle">Budget vivant</h3><p data-i18n="featureBudgetCopy">Suivez les catégories clés, les écarts et les dépenses récurrentes.</p></article>
-            <article><span>03</span><h3 data-i18n="featureFamilyTitle">Famille organisée</h3><p data-i18n="featureFamilyCopy">Gérez les rôles, membres et objectifs communs selon votre plan.</p></article>
-            <article><span>04</span><h3 data-i18n="featureClarityTitle">Vision claire</h3><p data-i18n="featureClarityCopy">Des indicateurs simples pour décider quoi rembourser, où ajuster et comment avancer ensemble.</p></article>
+            <article><span class="css-icon icon-debt"></span><h3 data-i18n="featureDebtTitle">Dettes intelligentes</h3><p data-i18n="featureDebtCopy">Ajoutez soldes, taux, paiements minimums et paiement recommande pour comparer vos priorites.</p></article>
+            <article><span class="css-icon icon-budget"></span><h3 data-i18n="featureBudgetTitle">Budget mensuel</h3><p data-i18n="featureBudgetCopy">Creez des categories avec montant prevu; le depense se calcule a partir des transactions du mois.</p></article>
+            <article><span class="css-icon icon-goal"></span><h3 data-i18n="featureGoalTitle">Objectifs suivis</h3><p data-i18n="featureGoalCopy">Suivez une cible, l'epargne actuelle et une cotisation mensuelle qui progresse automatiquement.</p></article>
+            <article><span class="css-icon icon-member"></span><h3 data-i18n="featureFamilyTitle">Famille organisee</h3><p data-i18n="featureFamilyCopy">Invitez des membres, attribuez des roles et limitez les permissions selon le plan.</p></article>
+          </div>
+        </section>
+
+        <section class="section strategy-section" id="strategy">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="strategyEyebrow">Snowball / Avalanche</p>
+            <h2 data-i18n="strategyTitleLanding">Comparez deux strategies avec les graphiques deja visibles dans le produit.</h2>
+            <p data-i18n="strategyCopy">BudgetHub Family trie vos dettes par petit solde pour Snowball ou par taux d'interet eleve pour Avalanche. Le tableau de bord affiche aussi des barres de progression et des indicateurs de remboursement.</p>
+          </div>
+          <div class="strategy-showcase">
+            <article class="strategy-card">
+              <span class="chip"><span data-i18n="exampleLabel">Exemple</span> · <span data-i18n="snowball">Snowball</span></span>
+              <h3 data-i18n="strategySnowballTitle">Motivation rapide</h3>
+              <p data-i18n="strategySnowballCopy">Commencez par le plus petit solde pour rayer une dette plus vite et creer de l'elan.</p>
+              <div class="landing-strategy-preview snowball-preview" aria-hidden="true">
+                <svg viewBox="0 0 320 150">
+                  <path d="M18 28 C70 40 88 70 130 76 S230 116 302 132" class="preview-line muted"></path>
+                  <path d="M18 28 C54 42 66 54 92 58 S132 74 156 86 S218 118 302 132" class="preview-line active"></path>
+                  <circle cx="92" cy="58" r="5"></circle>
+                  <circle cx="156" cy="86" r="5"></circle>
+                </svg>
+                <div class="preview-progress">
+                  <span style="width:72%"></span>
+                </div>
+                <div class="preview-stats">
+                  <strong>-3 <small data-i18n="exampleMonths">mois</small></strong>
+                  <strong>+145 $<small>/mois</small></strong>
+                </div>
+              </div>
+            </article>
+            <article class="strategy-card featured">
+              <span class="chip"><span data-i18n="exampleLabel">Exemple</span> · <span data-i18n="avalanche">Avalanche</span></span>
+              <h3 data-i18n="strategyAvalancheTitle">Moins d'interets</h3>
+              <p data-i18n="strategyAvalancheCopy">Commencez par le taux le plus eleve pour reduire le cout total des interets.</p>
+              <div class="landing-strategy-preview avalanche-preview" aria-hidden="true">
+                <svg viewBox="0 0 320 150">
+                  <path d="M18 30 C74 42 112 62 150 82 S228 112 302 134" class="preview-line muted"></path>
+                  <path d="M18 30 C62 34 96 52 128 70 S206 106 302 134" class="preview-line active"></path>
+                  <circle cx="128" cy="70" r="5"></circle>
+                  <circle cx="206" cy="106" r="5"></circle>
+                </svg>
+                <div class="preview-progress">
+                  <span style="width:84%"></span>
+                </div>
+                <div class="preview-stats">
+                  <strong>-420 $<small data-i18n="exampleInterest"> intérêts</small></strong>
+                  <strong>8.9%<small> APR</small></strong>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section family-section" id="family">
+          <div>
+            <p class="eyebrow" data-i18n="familyEyebrow">Gestion familiale</p>
+            <h2 data-i18n="familyLandingTitle">Un espace commun, avec des roles clairs.</h2>
+            <p data-i18n="familyLandingCopy">Les plans Family et Family Plus permettent d'inviter des membres par courriel. Les roles Owner, Admin, Editor et Viewer gardent les actions sensibles sous controle.</p>
+          </div>
+          <div class="role-list" aria-label="Roles famille">
+            <div><strong>Owner</strong><span data-i18n="roleOwnerCopy">Gere l'abonnement et les membres.</span></div>
+            <div><strong>Admin</strong><span data-i18n="roleAdminCopy">Invite et organise la famille.</span></div>
+            <div><strong>Editor</strong><span data-i18n="roleEditorCopy">Ajoute et modifie les donnees.</span></div>
+            <div><strong>Viewer</strong><span data-i18n="roleViewerCopy">Consulte sans modifier.</span></div>
+          </div>
+        </section>
+
+        <section class="section security-band" id="security">
+          <div>
+            <p class="eyebrow" data-i18n="securityEyebrow">Securite et confidentialite</p>
+            <h2 data-i18n="securityTitle">Des comptes proteges, des paiements confies a Stripe.</h2>
+          </div>
+          <div class="security-list">
+            <p data-i18n="securityCopy">L'authentification et la base de donnees utilisent Supabase. Les paiements, abonnements, factures et recus sont traites par Stripe Checkout. La demo gratuite garde ses donnees dans le navigateur.</p>
+            <div class="trust-row">
+              <span data-i18n="securityAuth">Auth Supabase</span>
+              <span data-i18n="securityStripe">Paiements Stripe</span>
+              <span data-i18n="securityLocal">Demo locale</span>
+            </div>
           </div>
         </section>
 
         <section class="section pricing-section" id="pricing">
           <div class="section-heading">
-            <p class="eyebrow" data-i18n="pricingEyebrow">Plans simples</p>
-            <h2 data-i18n="pricingTitle">Commencez gratuitement, grandissez avec votre famille.</h2>
+            <p class="eyebrow" data-i18n="pricingEyebrow">Plans et prix</p>
+            <h2 data-i18n="pricingTitle">Commencez gratuitement, passez au cloud quand vous etes pret.</h2>
+            <p data-i18n="pricingCopy">Le plan gratuit sert a essayer. Les plans payants deverrouillent la sauvegarde cloud, plus de dettes et les limites de membres selon le plan.</p>
           </div>
           <div class="duration-picker">
-            <label for="durationSelect" data-i18n="durationLabel">Durée d'engagement</label>
+            <label for="durationSelect" data-i18n="durationLabel">Duree d'engagement</label>
             <select id="durationSelect">
               <option value="1m">1 mois</option>
               <option value="3m">3 mois</option>
@@ -142,14 +243,29 @@
           <div class="pricing-grid" id="pricingGrid"></div>
         </section>
 
-        <section class="section security-band" id="security">
-          <div>
-            <p class="eyebrow" data-i18n="securityEyebrow">Confiance et clarté</p>
-            <h2 data-i18n="securityTitle">Une expérience simple pour organiser l’argent du foyer sans stress.</h2>
+        <section class="section faq-section" id="faq">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="faqEyebrow">FAQ</p>
+            <h2 data-i18n="faqTitle">Questions frequentes</h2>
           </div>
-          <p data-i18n="securityCopy">
-            Essayez BudgetHub Family gratuitement, explorez les outils essentiels et choisissez le plan qui correspond à votre famille quand vous êtes prêt.
-          </p>
+          <div class="faq-grid">
+            <details open>
+              <summary data-i18n="faqOneQ">Est-ce une application bancaire connectee?</summary>
+              <p data-i18n="faqOneA">Non. Le code actuel fonctionne avec des donnees que vous saisissez dans l'application: dettes, budgets, transactions, objectifs et membres.</p>
+            </details>
+            <details>
+              <summary data-i18n="faqTwoQ">Quelle est la difference entre la demo et un compte?</summary>
+              <p data-i18n="faqTwoA">La demo gratuite garde les donnees dans le navigateur et limite les dettes et membres. Un compte utilise Supabase pour sauvegarder les donnees selon votre plan.</p>
+            </details>
+            <details>
+              <summary data-i18n="faqThreeQ">Comment fonctionnent les paiements?</summary>
+              <p data-i18n="faqThreeA">Les abonnements payants passent par Stripe Checkout. Les prix et taxes applicables sont confirmes dans Stripe avant le paiement.</p>
+            </details>
+            <details>
+              <summary data-i18n="faqFourQ">Puis-je inviter ma famille?</summary>
+              <p data-i18n="faqFourA">Oui, avec les plans Family et Family Plus. Les limites de membres dependent du plan actif.</p>
+            </details>
+          </div>
         </section>
 
         <section class="section legal-page" id="legalPage" hidden></section>
@@ -280,6 +396,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="/app.js?v=24"></script>
+    <script src="/app.js?v=25"></script>
   </body>
 </html>

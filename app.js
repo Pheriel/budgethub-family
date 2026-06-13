@@ -1,36 +1,79 @@
 const translations = {
   fr: {
+    navProblem: "Pourquoi",
     navFeatures: "Fonctions",
+    navStrategy: "Snowball/Avalanche",
     navPricing: "Tarifs",
     navSecurity: "Sécurité",
     login: "Connexion",
     freeDemo: "Démo gratuite",
-    heroEyebrow: "Plateforme de budget familial",
-    heroTitle: "Le cockpit moderne pour reprendre le contrôle des finances familiales.",
-    heroCopy: "BudgetHub Family réunit dettes, budget, transactions, objectifs et membres de la famille dans un tableau de bord clair, collaboratif et prêt pour la croissance.",
+    heroEyebrow: "Budget familial moderne",
+    heroTitle: "Une vue claire pour piloter les finances du foyer.",
+    heroCopy: "BudgetHub Family rassemble dettes, budget mensuel, transactions, objectifs et membres de la famille dans un espace simple, bilingue et connecté à Supabase et Stripe.",
     tryDemo: "Tester la démo",
     seePricing: "Voir les tarifs",
-    trustNoCard: "Sans carte",
-    trustTrial: "Essai sans engagement",
-    trustFamily: "Pensé pour les familles",
-    heroDebtFree: "Date sans dette",
+    trustNoCard: "Démo sans carte",
+    trustTrial: "Données démo locales",
+    trustFamily: "Plans Solo et famille",
+    heroDebtFree: "Dette totale",
     heroMonthlyBudget: "Budget mensuel",
     heroGoals: "Objectifs actifs",
-    featuresEyebrow: "Tout au même endroit",
-    featuresTitle: "Conçu pour les décisions d’argent en famille.",
+    problemEyebrow: "Le problème",
+    problemTitle: "Quand le budget familial vit partout, les décisions deviennent floues.",
+    problemCopy: "Dettes, paiements minimums, catégories, objectifs et membres du foyer finissent souvent dans des fichiers séparés. BudgetHub Family rassemble ces informations pour voir quoi payer, quoi ajuster et où va l'argent du mois.",
+    problemCardOneTitle: "Trop d'endroits",
+    problemCardOneCopy: "Les dettes, budgets et transactions sont difficiles à suivre quand chacun utilise son propre système.",
+    problemCardTwoTitle: "Priorités incertaines",
+    problemCardTwoCopy: "Sans ordre clair, il est plus dur de choisir entre motivation rapide et économie d'intérêts.",
+    problemCardThreeTitle: "Collaboration fragile",
+    problemCardThreeCopy: "Les familles ont besoin de rôles simples pour contribuer sans donner les mêmes permissions à tout le monde.",
+    featuresEyebrow: "Fonctionnalités principales",
+    featuresTitle: "Les outils essentiels, sans promesse inutile.",
+    featuresCopy: "L'accueil reflète ce que l'application propose déjà: un tableau de bord, des dettes, un budget mensuel, des transactions, des objectifs et des membres famille selon le plan choisi.",
     featureDebtTitle: "Dettes intelligentes",
-    featureDebtCopy: "Comparez snowball et avalanche avec un calendrier de remboursement lisible.",
-    featureBudgetTitle: "Budget vivant",
-    featureBudgetCopy: "Suivez les catégories clés, les écarts et les dépenses récurrentes.",
+    featureDebtCopy: "Ajoutez soldes, taux, paiements minimums et paiement recommandé pour comparer vos priorités.",
+    featureBudgetTitle: "Budget mensuel",
+    featureBudgetCopy: "Créez des catégories avec montant prévu; le dépensé se calcule à partir des transactions du mois.",
+    featureGoalTitle: "Objectifs suivis",
+    featureGoalCopy: "Suivez une cible, l'épargne actuelle et une cotisation mensuelle qui progresse automatiquement.",
     featureFamilyTitle: "Famille organisée",
-    featureFamilyCopy: "Gérez les rôles, membres et objectifs communs selon votre plan.",
-    featureClarityTitle: "Vision claire",
-    featureClarityCopy: "Des indicateurs simples pour décider quoi rembourser, où ajuster et comment avancer ensemble.",
-    pricingEyebrow: "Plans simples",
-    pricingTitle: "Commencez gratuitement, grandissez avec votre famille.",
-    securityEyebrow: "Confiance et clarté",
-    securityTitle: "Une expérience simple pour organiser l’argent du foyer sans stress.",
-    securityCopy: "Essayez BudgetHub Family gratuitement, explorez les outils essentiels et choisissez le plan qui correspond à votre famille quand vous êtes prêt.",
+    featureFamilyCopy: "Invitez des membres, attribuez des rôles et limitez les permissions selon le plan.",
+    strategyEyebrow: "Snowball / Avalanche",
+    strategyTitleLanding: "Comparez deux stratégies avec les graphiques déjà visibles dans le produit.",
+    strategyCopy: "BudgetHub Family trie vos dettes par petit solde pour Snowball ou par taux d'intérêt élevé pour Avalanche. Le tableau de bord affiche aussi des barres de progression et des indicateurs de remboursement.",
+    strategySnowballTitle: "Motivation rapide",
+    strategySnowballCopy: "Commencez par le plus petit solde pour rayer une dette plus vite et créer de l'élan.",
+    strategyAvalancheTitle: "Moins d'intérêts",
+    strategyAvalancheCopy: "Commencez par le taux le plus élevé pour réduire le coût total des intérêts.",
+    exampleLabel: "Exemple",
+    exampleMonths: "mois",
+    exampleInterest: " intérêts",
+    familyEyebrow: "Gestion familiale",
+    familyLandingTitle: "Un espace commun, avec des rôles clairs.",
+    familyLandingCopy: "Les plans Family et Family Plus permettent d'inviter des membres par courriel. Les rôles Owner, Admin, Editor et Viewer gardent les actions sensibles sous contrôle.",
+    roleOwnerCopy: "Gère l'abonnement et les membres.",
+    roleAdminCopy: "Invite et organise la famille.",
+    roleEditorCopy: "Ajoute et modifie les données.",
+    roleViewerCopy: "Consulte sans modifier.",
+    pricingEyebrow: "Plans et prix",
+    pricingTitle: "Commencez gratuitement, passez au cloud quand vous êtes prêt.",
+    pricingCopy: "Le plan gratuit sert à essayer. Les plans payants déverrouillent la sauvegarde cloud, plus de dettes et les limites de membres selon le plan.",
+    securityEyebrow: "Sécurité et confidentialité",
+    securityTitle: "Des comptes protégés, des paiements confiés à Stripe.",
+    securityCopy: "L'authentification et la base de données utilisent Supabase. Les paiements, abonnements, factures et reçus sont traités par Stripe Checkout. La démo gratuite garde ses données dans le navigateur.",
+    securityAuth: "Auth Supabase",
+    securityStripe: "Paiements Stripe",
+    securityLocal: "Démo locale",
+    faqEyebrow: "FAQ",
+    faqTitle: "Questions fréquentes",
+    faqOneQ: "Est-ce une application bancaire connectée?",
+    faqOneA: "Non. Le code actuel fonctionne avec des données que vous saisissez dans l'application: dettes, budgets, transactions, objectifs et membres.",
+    faqTwoQ: "Quelle est la différence entre la démo et un compte?",
+    faqTwoA: "La démo gratuite garde les données dans le navigateur et limite les dettes et membres. Un compte utilise Supabase pour sauvegarder les données selon votre plan.",
+    faqThreeQ: "Comment fonctionnent les paiements?",
+    faqThreeA: "Les abonnements payants passent par Stripe Checkout. Les prix et taxes applicables sont confirmés dans Stripe avant le paiement.",
+    faqFourQ: "Puis-je inviter ma famille?",
+    faqFourA: "Oui, avec les plans Family et Family Plus. Les limites de membres dépendent du plan actif.",
     appDashboard: "Tableau",
     appDebts: "Dettes",
     appStrategy: "Snowball/Avalanche",
@@ -110,37 +153,80 @@ const translations = {
     footerCopyright: "© 2026 BudgetHub Family. Tous droits réservés."
   },
   en: {
+    navProblem: "Why",
     navFeatures: "Features",
+    navStrategy: "Snowball/Avalanche",
     navPricing: "Pricing",
     navSecurity: "Security",
     login: "Login",
     freeDemo: "Free demo",
-    heroEyebrow: "Family budgeting platform",
-    heroTitle: "The modern cockpit for taking control of family finances.",
-    heroCopy: "BudgetHub Family brings debts, budget, transactions, goals, and family members into a clear collaborative dashboard built to grow.",
+    heroEyebrow: "Modern family budgeting",
+    heroTitle: "One clear view for household finances.",
+    heroCopy: "BudgetHub Family brings debts, monthly budget, transactions, goals, and family members into a simple bilingual workspace connected to Supabase and Stripe.",
     tryDemo: "Try the demo",
     seePricing: "See pricing",
-    trustNoCard: "No card",
-    trustTrial: "No commitment trial",
-    trustFamily: "Built for families",
-    heroDebtFree: "Debt-free date",
+    trustNoCard: "No card for demo",
+    trustTrial: "Local demo data",
+    trustFamily: "Solo and family plans",
+    heroDebtFree: "Total debt",
     heroMonthlyBudget: "Monthly budget",
     heroGoals: "Active goals",
-    featuresEyebrow: "All in one place",
-    featuresTitle: "Built for family money decisions.",
+    problemEyebrow: "The problem",
+    problemTitle: "When family budgeting lives everywhere, decisions get blurry.",
+    problemCopy: "Debts, minimum payments, categories, goals, and household members often end up in separate files. BudgetHub Family brings that information together so you can see what to pay, what to adjust, and where the month is going.",
+    problemCardOneTitle: "Too many places",
+    problemCardOneCopy: "Debts, budgets, and transactions are harder to follow when everyone uses a separate system.",
+    problemCardTwoTitle: "Unclear priorities",
+    problemCardTwoCopy: "Without a clear order, it is harder to choose between quick motivation and interest savings.",
+    problemCardThreeTitle: "Fragile collaboration",
+    problemCardThreeCopy: "Families need simple roles so people can contribute without giving everyone the same permissions.",
+    featuresEyebrow: "Core features",
+    featuresTitle: "Essential tools, no empty promises.",
+    featuresCopy: "The landing page reflects what the app already offers: a dashboard, debts, monthly budget, transactions, goals, and family members depending on the selected plan.",
     featureDebtTitle: "Smart debts",
-    featureDebtCopy: "Compare snowball and avalanche with a readable payoff schedule.",
-    featureBudgetTitle: "Living budget",
-    featureBudgetCopy: "Track key categories, gaps, and recurring expenses.",
+    featureDebtCopy: "Add balances, rates, minimum payments, and recommended payment amounts to compare priorities.",
+    featureBudgetTitle: "Monthly budget",
+    featureBudgetCopy: "Create planned categories; spent amounts are calculated from the month's transactions.",
+    featureGoalTitle: "Tracked goals",
+    featureGoalCopy: "Track a target, current savings, and a monthly contribution that progresses automatically.",
     featureFamilyTitle: "Organized family",
-    featureFamilyCopy: "Manage roles, members, and shared goals according to your plan.",
-    featureClarityTitle: "Clear direction",
-    featureClarityCopy: "Simple indicators help you decide what to pay down, where to adjust, and how to move forward together.",
-    pricingEyebrow: "Simple plans",
-    pricingTitle: "Start free, grow with your family.",
-    securityEyebrow: "Confidence and clarity",
-    securityTitle: "A calmer way to organize household money.",
-    securityCopy: "Try BudgetHub Family for free, explore the essential tools, and choose the plan that fits your household when you are ready.",
+    featureFamilyCopy: "Invite members, assign roles, and limit permissions according to the plan.",
+    strategyEyebrow: "Snowball / Avalanche",
+    strategyTitleLanding: "Compare two strategies with charts already visible in the product.",
+    strategyCopy: "BudgetHub Family sorts debts by smallest balance for Snowball or highest interest rate for Avalanche. The dashboard also shows progress bars and payoff indicators.",
+    strategySnowballTitle: "Fast motivation",
+    strategySnowballCopy: "Start with the smallest balance to clear a debt sooner and build momentum.",
+    strategyAvalancheTitle: "Less interest",
+    strategyAvalancheCopy: "Start with the highest rate to reduce total interest cost.",
+    exampleLabel: "Example",
+    exampleMonths: "mo",
+    exampleInterest: " interest",
+    familyEyebrow: "Family management",
+    familyLandingTitle: "A shared workspace with clear roles.",
+    familyLandingCopy: "Family and Family Plus plans can invite members by email. Owner, Admin, Editor, and Viewer roles keep sensitive actions controlled.",
+    roleOwnerCopy: "Manages billing and members.",
+    roleAdminCopy: "Invites and organizes the family.",
+    roleEditorCopy: "Adds and edits data.",
+    roleViewerCopy: "Views without editing.",
+    pricingEyebrow: "Plans and pricing",
+    pricingTitle: "Start free, move to cloud backup when ready.",
+    pricingCopy: "The free plan is for trying the app. Paid plans unlock cloud backup, more debts, and member limits according to the plan.",
+    securityEyebrow: "Security and privacy",
+    securityTitle: "Protected accounts, payments handled by Stripe.",
+    securityCopy: "Authentication and database services use Supabase. Payments, subscriptions, invoices, and receipts are handled by Stripe Checkout. Free demo data stays in the browser.",
+    securityAuth: "Supabase auth",
+    securityStripe: "Stripe payments",
+    securityLocal: "Local demo",
+    faqEyebrow: "FAQ",
+    faqTitle: "Frequently asked questions",
+    faqOneQ: "Is this a connected banking app?",
+    faqOneA: "No. The current code works with data you enter in the app: debts, budgets, transactions, goals, and members.",
+    faqTwoQ: "What is the difference between demo and account?",
+    faqTwoA: "The free demo keeps data in the browser and limits debts and members. An account uses Supabase to save data according to your plan.",
+    faqThreeQ: "How do payments work?",
+    faqThreeA: "Paid subscriptions go through Stripe Checkout. Prices and applicable taxes are confirmed in Stripe before payment.",
+    faqFourQ: "Can I invite my family?",
+    faqFourA: "Yes, with Family and Family Plus plans. Member limits depend on the active plan.",
     appDashboard: "Dashboard",
     appDebts: "Debts",
     appStrategy: "Snowball/Avalanche",
@@ -472,7 +558,12 @@ const state = {
   budget: [],
   transactions: [],
   goals: [],
-  members: []
+  members: [],
+  debtStrategy: {
+    method: localStorage.getItem("bh_debt_strategy_method") || "avalanche",
+    extraPayment: Number(localStorage.getItem("bh_debt_strategy_extra") || 100),
+    startMonth: localStorage.getItem("bh_debt_strategy_start") || currentMonthKey()
+  }
 };
 
 // Données fictives affichées uniquement en mode démo (sans compte)
@@ -668,13 +759,13 @@ function renderPricing() {
         "Jusqu’à 5 membres",
         "Budget familial",
         "Objectifs communs",
-        "Suivi dettes, revenus et dépenses par membre"
+        "Invitations et rôles famille"
       ],
       en: [
         "Up to 5 members",
         "Family budget",
         "Shared goals",
-        "Track debts, income, and spending by member"
+        "Family invitations and roles"
       ]
     },
     familyPlus: {
@@ -683,14 +774,14 @@ function renderPricing() {
         "Dettes illimitées",
         "Budgets illimités",
         "Objectifs illimités",
-        "Suivi par membre"
+        "Invitations et rôles famille"
       ],
       en: [
         "Up to 10 members",
         "Unlimited debts",
         "Unlimited budgets",
         "Unlimited goals",
-        "Track by member"
+        "Family invitations and roles"
       ]
     }
   };
@@ -1191,7 +1282,8 @@ function showView(name) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-const landingPages = ["home", "features", "pricing", "security", "terms", "privacy", "refund-policy", "cookies", "legal"];
+const marketingSections = ["home", "problem", "features", "strategy", "family", "security", "pricing", "faq"];
+const landingPages = [...marketingSections, "terms", "privacy", "refund-policy", "cookies", "legal"];
 
 function renderLegalPage(page = state.legalPage || "legal") {
   const target = legalPages[page] ? page : "legal";
@@ -1231,17 +1323,23 @@ function showLandingPage(page) {
   showView("landing");
   state.legalPage = legalPages[target] ? target : null;
   renderLegalPage(target);
-  ["home", "features", "pricing", "security"].forEach((id) => {
-    $(`#${id}`).hidden = state.legalPage || (id !== target && target !== "home");
+  marketingSections.forEach((id) => {
+    $(`#${id}`).hidden = Boolean(state.legalPage);
   });
   $("#legalPage").hidden = !state.legalPage;
   $$(".landing-nav a").forEach((link) => {
     link.classList.toggle("active", link.getAttribute("href") === `#${target}` || link.dataset.legalLink === target);
   });
   bindLegalLinks();
+  if (!state.legalPage && target !== "home") {
+    requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: "start" }));
+  }
 }
 
 function openApp() {
+  if (!state.user && !state.debts.length) {
+    applyMonthData(demoData);
+  }
   showView("app");
   renderView();
 }
@@ -1464,7 +1562,368 @@ function debtTable(actions) {
   `;
 }
 
+function clampNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function cleanDebt(debt, index) {
+  const balance = Math.max(0, clampNumber(debt.balance));
+  const rate = Math.max(0, clampNumber(debt.rate));
+  const minPayment = Math.max(0, clampNumber(debt.minPayment));
+  return {
+    id: debt.id || `debt-${index}`,
+    name: debt.name || `${state.lang === "fr" ? "Dette" : "Debt"} ${index + 1}`,
+    balance,
+    rate,
+    minPayment,
+    originalBalance: balance,
+    payoffMonth: null,
+    totalPaid: 0,
+    interestPaid: 0
+  };
+}
+
+function addMonthsToMonthKey(monthKey, months) {
+  const [year, month] = (monthKey || currentMonthKey()).split("-").map(Number);
+  const date = new Date(year, month - 1 + Math.max(0, months), 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthOffset(monthKey, offset) {
+  return monthLabel(addMonthsToMonthKey(monthKey, offset));
+}
+
+function monthCountLabel(months) {
+  const fr = state.lang === "fr";
+  if (!Number.isFinite(months)) return fr ? "Non calculable" : "Not calculable";
+  if (months <= 0) return fr ? "0 mois" : "0 months";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  if (!years) return fr ? `${rest} mois` : `${rest} mo`;
+  if (!rest) return fr ? `${years} an${years > 1 ? "s" : ""}` : `${years} yr${years > 1 ? "s" : ""}`;
+  return fr
+    ? `${years} an${years > 1 ? "s" : ""} ${rest} mois`
+    : `${years} yr${years > 1 ? "s" : ""} ${rest} mo`;
+}
+
+function targetDebtIndex(debts, method) {
+  const active = debts
+    .map((debt, index) => ({ debt, index }))
+    .filter((item) => item.debt.balance > 0.005);
+  if (!active.length) return -1;
+  active.sort((a, b) => {
+    if (method === "snowball") return a.debt.balance - b.debt.balance || b.debt.rate - a.debt.rate;
+    return b.debt.rate - a.debt.rate || a.debt.balance - b.debt.balance;
+  });
+  return active[0].index;
+}
+
+function simulateDebtPlan(inputDebts, options = {}) {
+  const method = options.method === "snowball" ? "snowball" : "avalanche";
+  const extraPayment = Math.max(0, clampNumber(options.extraPayment));
+  const rollover = options.rollover !== false;
+  const maxMonths = options.maxMonths || 600;
+  const debts = inputDebts.map(cleanDebt).filter((debt) => debt.balance > 0.005);
+  const originalMinTotal = debts.reduce((sum, debt) => sum + debt.minPayment, 0);
+  const originalBalance = debts.reduce((sum, debt) => sum + debt.balance, 0);
+  const timeline = [];
+  const payoffEvents = [];
+  const invalid = debts.some((debt) => debt.minPayment <= 0 && debt.balance > 0);
+
+  if (!debts.length) {
+    return { method, debts, timeline, payoffEvents, months: 0, totalPaid: 0, totalInterest: 0, invalid: false, recoveredMonthly: 0, originalBalance };
+  }
+  if (invalid) {
+    return { method, debts, timeline, payoffEvents, months: Infinity, totalPaid: 0, totalInterest: 0, invalid: true, recoveredMonthly: originalMinTotal, originalBalance };
+  }
+
+  let totalPaid = 0;
+  let totalInterest = 0;
+  for (let month = 1; month <= maxMonths; month += 1) {
+    const activeBeforeInterest = debts.filter((debt) => debt.balance > 0.005);
+    if (!activeBeforeInterest.length) break;
+
+    let interestThisMonth = 0;
+    activeBeforeInterest.forEach((debt) => {
+      const interest = debt.balance * (debt.rate / 100 / 12);
+      debt.balance += interest;
+      debt.interestPaid += interest;
+      interestThisMonth += interest;
+    });
+    totalInterest += interestThisMonth;
+
+    const activeAfterInterest = debts.filter((debt) => debt.balance > 0.005);
+    const monthlyBudget = rollover
+      ? originalMinTotal + extraPayment
+      : activeAfterInterest.reduce((sum, debt) => sum + debt.minPayment, 0);
+    let remainingBudget = monthlyBudget;
+    let paidThisMonth = 0;
+
+    activeAfterInterest.forEach((debt) => {
+      if (remainingBudget <= 0 || debt.balance <= 0.005) return;
+      const payment = Math.min(debt.balance, debt.minPayment, remainingBudget);
+      debt.balance -= payment;
+      debt.totalPaid += payment;
+      remainingBudget -= payment;
+      paidThisMonth += payment;
+      if (debt.balance <= 0.005 && debt.payoffMonth === null) {
+        debt.balance = 0;
+        debt.payoffMonth = month;
+        payoffEvents.push({ month, name: debt.name, recovered: debt.minPayment });
+      }
+    });
+
+    while (remainingBudget > 0.005) {
+      const targetIndex = targetDebtIndex(debts, method);
+      if (targetIndex < 0) break;
+      const target = debts[targetIndex];
+      const payment = Math.min(target.balance, remainingBudget);
+      target.balance -= payment;
+      target.totalPaid += payment;
+      remainingBudget -= payment;
+      paidThisMonth += payment;
+      if (target.balance <= 0.005 && target.payoffMonth === null) {
+        target.balance = 0;
+        target.payoffMonth = month;
+        payoffEvents.push({ month, name: target.name, recovered: target.minPayment });
+      }
+    }
+
+    totalPaid += paidThisMonth;
+    const totalBalance = debts.reduce((sum, debt) => sum + Math.max(0, debt.balance), 0);
+    const activeCount = debts.filter((debt) => debt.balance > 0.005).length;
+    timeline.push({
+      month,
+      totalBalance,
+      activeCount,
+      paid: paidThisMonth,
+      interest: interestThisMonth,
+      recovered: payoffEvents.filter((event) => event.month <= month).reduce((sum, event) => sum + event.recovered, 0)
+    });
+    if (activeCount === 0) break;
+  }
+
+  const completed = debts.every((debt) => debt.balance <= 0.005);
+  return {
+    method,
+    debts,
+    timeline,
+    payoffEvents,
+    months: completed ? timeline.length : Infinity,
+    totalPaid,
+    totalInterest,
+    invalid: !completed,
+    recoveredMonthly: originalMinTotal,
+    originalBalance
+  };
+}
+
+function chartPoints(timeline, key, width = 640, height = 180) {
+  if (!timeline.length) return "";
+  const max = Math.max(...timeline.map((item) => item[key]), 1);
+  const count = Math.max(1, timeline.length - 1);
+  return timeline.map((item, index) => {
+    const x = (index / count) * width;
+    const y = height - (Math.max(0, item[key]) / max) * (height - 16) - 8;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+}
+
+function renderBalanceChart(primary, secondary) {
+  const primaryPoints = chartPoints(primary.timeline, "totalBalance");
+  const secondaryPoints = chartPoints(secondary.timeline, "totalBalance");
+  return `
+    <div class="strategy-chart">
+      <svg viewBox="0 0 640 220" role="img" aria-label="${state.lang === "fr" ? "Graphique du solde total" : "Total balance chart"}">
+        <line x1="0" y1="190" x2="640" y2="190" class="chart-axis"></line>
+        <polyline points="${secondaryPoints}" class="chart-line muted-line"></polyline>
+        <polyline points="${primaryPoints}" class="chart-line primary-line"></polyline>
+      </svg>
+      <div class="chart-legend">
+        <span><i class="legend-primary"></i>${primary.method === "snowball" ? t("snowball") : t("avalanche")}</span>
+        <span><i class="legend-muted"></i>${secondary.method === "snowball" ? t("snowball") : t("avalanche")}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderRemainingDebtBars(plan) {
+  const step = Math.max(1, Math.ceil(plan.timeline.length / 8));
+  const samples = plan.timeline.filter((_, index) => index % step === 0).slice(0, 8);
+  if (!samples.length) return "";
+  const max = Math.max(...samples.map((item) => item.activeCount), 1);
+  return `
+    <div class="remaining-bars" aria-label="${state.lang === "fr" ? "Dettes restantes dans le temps" : "Remaining debts over time"}">
+      ${samples.map((item) => `
+        <div>
+          <span style="height:${Math.max(8, (item.activeCount / max) * 100)}%"></span>
+          <small>M${item.month}</small>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderPayoffTable(plan) {
+  const fr = state.lang === "fr";
+  return `
+    <div class="table-wrap strategy-table-wrap">
+      <table class="responsive-table strategy-table">
+        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${fr ? "Fin estimée" : "Estimated end"}</th><th>${fr ? "Mensuel récupéré" : "Monthly recovered"}</th></tr></thead>
+        <tbody>
+          ${plan.debts
+            .slice()
+            .sort((a, b) => (a.payoffMonth || 9999) - (b.payoffMonth || 9999))
+            .map((debt) => `
+              <tr>
+                <td data-label="${t("name")}">${debt.name}</td>
+                <td data-label="${t("balance")}">${money(debt.originalBalance)}</td>
+                <td data-label="${t("rate")}">${debt.rate.toFixed(2)}%</td>
+                <td data-label="${fr ? "Fin estimée" : "Estimated end"}">${debt.payoffMonth ? formatMonthOffset(state.debtStrategy.startMonth, debt.payoffMonth) : (fr ? "Non calculable" : "Not calculable")}</td>
+                <td data-label="${fr ? "Mensuel récupéré" : "Monthly recovered"}">${money(debt.minPayment)}</td>
+              </tr>
+            `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderComparisonCard(plan, minimumOnly) {
+  const fr = state.lang === "fr";
+  const saved = Math.max(0, minimumOnly.totalInterest - plan.totalInterest);
+  return `
+    <article class="strategy-compare-card ${plan.method === state.debtStrategy.method ? "active" : ""}">
+      <span class="chip">${plan.method === "snowball" ? t("snowball") : t("avalanche")}</span>
+      <h4>${plan.method === "snowball" ? (fr ? "Petits soldes d'abord" : "Smallest balances first") : (fr ? "Taux élevés d'abord" : "Highest rates first")}</h4>
+      <div class="compare-metrics">
+        <div><small>${fr ? "Durée" : "Duration"}</small><strong>${monthCountLabel(plan.months)}</strong></div>
+        <div><small>${fr ? "Intérêts" : "Interest"}</small><strong>${money(plan.totalInterest)}</strong></div>
+        <div><small>${fr ? "Économies" : "Savings"}</small><strong>${money(saved)}</strong></div>
+      </div>
+      <div class="progress"><span style="width:${Math.max(4, Math.min(100, 100 - (plan.totalInterest / Math.max(1, minimumOnly.totalInterest)) * 100))}%"></span></div>
+    </article>
+  `;
+}
+
 function renderStrategy() {
+  const fr = state.lang === "fr";
+  const debts = state.debts.map(cleanDebt).filter((debt) => debt.balance > 0.005);
+  const selectedMethod = state.debtStrategy.method === "snowball" ? "snowball" : "avalanche";
+  const otherMethod = selectedMethod === "snowball" ? "avalanche" : "snowball";
+  const extraPayment = Math.max(0, clampNumber(state.debtStrategy.extraPayment));
+  const selected = simulateDebtPlan(debts, { method: selectedMethod, extraPayment });
+  const comparison = simulateDebtPlan(debts, { method: otherMethod, extraPayment });
+  const snowballPlan = simulateDebtPlan(debts, { method: "snowball", extraPayment });
+  const avalanchePlan = simulateDebtPlan(debts, { method: "avalanche", extraPayment });
+  const minimumOnly = simulateDebtPlan(debts, { method: selectedMethod, extraPayment: 0, rollover: false });
+  const interestSaved = Number.isFinite(minimumOnly.totalInterest) && Number.isFinite(selected.totalInterest)
+    ? Math.max(0, minimumOnly.totalInterest - selected.totalInterest)
+    : 0;
+
+  if (!debts.length) {
+    return `
+      <section class="panel strategy-empty">
+        <h3>${fr ? "Ajoutez vos dettes pour lancer la simulation" : "Add debts to run the simulation"}</h3>
+        <p>${fr
+          ? "La stratégie utilise les dettes déjà inscrites dans l'onglet Dettes. Ajoutez au moins un solde, un taux et un paiement minimum."
+          : "The strategy uses debts already entered in the Debts tab. Add at least one balance, rate, and minimum payment."}</p>
+        <button class="primary-button" data-view-target="debts" type="button">${t("addDebt")}</button>
+      </section>
+    `;
+  }
+
+  const warning = selected.invalid ? `<p class="form-note role-note">${fr
+    ? "Certains paiements minimums ne permettent pas une projection fiable. Augmente le paiement minimum ou le paiement extra."
+    : "Some minimum payments do not allow a reliable projection. Increase the minimum or extra payment."}</p>` : "";
+  const debtFreeDate = Number.isFinite(selected.months)
+    ? formatMonthOffset(state.debtStrategy.startMonth, selected.months)
+    : (fr ? "Non calculable" : "Not calculable");
+  const comparisonWinner = snowballPlan.totalInterest <= avalanchePlan.totalInterest ? snowballPlan : avalanchePlan;
+
+  return `
+    <section class="panel strategy-hero-panel">
+      <div>
+        <p class="eyebrow">${fr ? "Simulation connectée aux dettes" : "Simulation connected to debts"}</p>
+        <h3>${fr
+          ? `Tu serais libre de dettes en ${monthCountLabel(selected.months)} et tu récupères ${money(selected.recoveredMonthly)}/mois.`
+          : `You could be debt free in ${monthCountLabel(selected.months)} and recover ${money(selected.recoveredMonthly)}/mo.`}</h3>
+        <p>${fr
+          ? "Le calcul utilise les soldes, taux et paiements minimums déjà inscrits. Les intérêts sont estimés mensuellement; ce n'est pas un avis financier."
+          : "The calculation uses the balances, rates, and minimum payments already entered. Interest is estimated monthly; this is not financial advice."}</p>
+      </div>
+      <form class="strategy-controls" id="strategyForm">
+        <label><span>${fr ? "Méthode" : "Method"}</span>
+          <select name="method">
+            <option value="avalanche" ${selectedMethod === "avalanche" ? "selected" : ""}>${t("avalanche")}</option>
+            <option value="snowball" ${selectedMethod === "snowball" ? "selected" : ""}>${t("snowball")}</option>
+          </select>
+        </label>
+        <label><span>${fr ? "Paiement extra mensuel" : "Monthly extra payment"}</span>
+          <input name="extraPayment" type="number" min="0" step="1" value="${extraPayment}" />
+        </label>
+        <label><span>${fr ? "Mois de départ" : "Start month"}</span>
+          <input name="startMonth" type="month" value="${state.debtStrategy.startMonth}" />
+        </label>
+        <button class="primary-button" type="submit">${fr ? "Recalculer" : "Recalculate"}</button>
+      </form>
+    </section>
+    ${warning}
+    <div class="strategy-summary-grid">
+      ${stat(fr ? "Date debt free estimée" : "Estimated debt-free date", debtFreeDate, selected.invalid ? "pill-danger" : "pill-good", selected.invalid ? (fr ? "À ajuster" : "Adjust") : monthCountLabel(selected.months))}
+      ${stat(fr ? "Total payé" : "Total paid", money(selected.totalPaid), "pill-warn", fr ? "Capital + intérêts" : "Principal + interest")}
+      ${stat(fr ? "Intérêts estimés" : "Estimated interest", money(selected.totalInterest), "pill-warn", selected.method === "avalanche" ? t("avalanche") : t("snowball"))}
+      ${stat(fr ? "Intérêts économisés" : "Interest saved", money(interestSaved), "pill-good", fr ? "vs minimums" : "vs minimums")}
+    </div>
+    <div class="strategy-dashboard">
+      <section class="panel">
+        <div class="strategy-panel-head">
+          <div>
+            <span class="chip">${selected.method === "snowball" ? t("snowball") : t("avalanche")}</span>
+            <h3>${fr ? "Évolution du solde total" : "Total balance over time"}</h3>
+          </div>
+          <strong>${money(selected.originalBalance)}</strong>
+        </div>
+        ${renderBalanceChart(selected, comparison)}
+      </section>
+      <section class="panel">
+        <div class="strategy-panel-head">
+          <div>
+            <span class="chip">${fr ? "Timeline" : "Timeline"}</span>
+            <h3>${fr ? "Dettes restantes" : "Remaining debts"}</h3>
+          </div>
+          <strong>${debts.length}</strong>
+        </div>
+        ${renderRemainingDebtBars(selected)}
+      </section>
+    </div>
+    <section class="panel comparison-panel">
+      <div class="section-heading compact-heading">
+        <p class="eyebrow">${fr ? "Comparaison" : "Comparison"}</p>
+        <h3>${fr ? "Snowball vs Avalanche" : "Snowball vs Avalanche"}</h3>
+        <p>${fr
+          ? `${comparisonWinner.method === "avalanche" ? "Avalanche" : "Snowball"} est le scénario le moins coûteux avec ces données.`
+          : `${comparisonWinner.method === "avalanche" ? "Avalanche" : "Snowball"} is the lower-cost scenario with this data.`}</p>
+      </div>
+      <div class="comparison-grid">
+        ${renderComparisonCard(snowballPlan, minimumOnly)}
+        ${renderComparisonCard(avalanchePlan, minimumOnly)}
+      </div>
+    </section>
+    <section class="panel">
+      <div class="strategy-panel-head">
+        <div>
+          <span class="chip">${fr ? "Calendrier" : "Schedule"}</span>
+          <h3>${fr ? "Fin estimée par dette" : "Estimated payoff by debt"}</h3>
+        </div>
+      </div>
+      ${renderPayoffTable(selected)}
+    </section>
+  `;
+}
+
+function renderStrategyLegacy() {
   const snowball = [...state.debts].sort((a, b) => a.balance - b.balance);
   const avalanche = [...state.debts].sort((a, b) => b.rate - a.rate);
   return `
@@ -2175,6 +2634,31 @@ function bindViewActions() {
       renderView();
     });
   });
+
+  $$("[data-view-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.currentView = button.dataset.viewTarget;
+      state.editing = { table: null, id: null };
+      renderView();
+      refreshViewData(state.currentView);
+    });
+  });
+
+  const strategyForm = $("#strategyForm");
+  if (strategyForm) {
+    strategyForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = new FormData(strategyForm);
+      const method = form.get("method") === "snowball" ? "snowball" : "avalanche";
+      const extraPayment = Math.max(0, clampNumber(form.get("extraPayment")));
+      const startMonth = form.get("startMonth") || currentMonthKey();
+      state.debtStrategy = { method, extraPayment, startMonth };
+      localStorage.setItem("bh_debt_strategy_method", method);
+      localStorage.setItem("bh_debt_strategy_extra", String(extraPayment));
+      localStorage.setItem("bh_debt_strategy_start", startMonth);
+      renderView();
+    });
+  }
 
   const debtForm = $("#debtForm");
   if (debtForm) {
@@ -2935,6 +3419,7 @@ function boot() {
   });
   $("#startDemo").addEventListener("click", openApp);
   $("#heroDemo").addEventListener("click", openApp);
+  $("#heroRegister").addEventListener("click", () => openAuth("register"));
 
   // Jauge de force en direct pendant la saisie du mot de passe
   $("#authForm").elements.password.addEventListener("input", (event) => {
