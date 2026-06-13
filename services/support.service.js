@@ -267,6 +267,28 @@ async function addAdminReply({ ticketId, actor, message, internal }) {
   return getAdminTicket(ticketId);
 }
 
+async function deleteAdminTicket({ ticketId, actor }) {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return { status: 503, body: { error: "support_unavailable" } };
+  const { data: ticket, error: loadError } = await supabase
+    .from("support_tickets").select("ticket_number").eq("id", ticketId).maybeSingle();
+  if (loadError) return { status: 500, body: { error: "ticket_load_failed", detail: loadError.message } };
+  if (!ticket) return { status: 404, body: { error: "ticket_not_found" } };
+
+  // La FK support_ticket_messages.ticket_id est ON DELETE CASCADE, mais on
+  // supprime explicitement les messages d'abord pour ne laisser aucune donnée
+  // orpheline même si la contrainte venait à changer.
+  const { error: messagesError } = await supabase
+    .from("support_ticket_messages").delete().eq("ticket_id", ticketId);
+  if (messagesError) return { status: 500, body: { error: "ticket_delete_failed", detail: messagesError.message } };
+
+  const { error } = await supabase.from("support_tickets").delete().eq("id", ticketId);
+  if (error) return { status: 500, body: { error: "ticket_delete_failed", detail: error.message } };
+
+  console.log(`[support] ticket deleted by super admin: ${ticket.ticket_number} (${ticketId}) par ${actor && actor.email ? actor.email : "?"}`);
+  return { status: 200, body: { deleted: true, ticketId } };
+}
+
 module.exports = {
   CATEGORIES,
   PRIORITIES,
@@ -278,5 +300,6 @@ module.exports = {
   listAdminTickets,
   getAdminTicket,
   updateAdminTicket,
-  addAdminReply
+  addAdminReply,
+  deleteAdminTicket
 };

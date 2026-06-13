@@ -13,7 +13,8 @@ const {
   listAdminTickets,
   getAdminTicket,
   updateAdminTicket,
-  addAdminReply
+  addAdminReply,
+  deleteAdminTicket
 } = require("../services/support.service");
 
 const router = express.Router();
@@ -96,6 +97,17 @@ router.post("/admin/tickets/:ticketId/replies", requireSuperAdmin, async (req, r
     message: req.body.message,
     internal: req.body.internal
   });
+  res.status(result.status).json(result.body);
+});
+
+router.delete("/admin/tickets/:ticketId", async (req, res) => {
+  // Seul un super admin peut supprimer; on journalise toute tentative bloquée.
+  if (!req.user || !isSuperAdminEmail(req.user.email)) {
+    console.warn(`[support] unauthorized delete attempt blocked: ${req.params.ticketId} par ${req.user && req.user.email ? req.user.email : "anonymous"}`);
+    return res.status(403).json({ error: "super_admin_only" });
+  }
+  if (!isUuid(req.params.ticketId)) return res.status(400).json({ error: "invalid_ticket_id" });
+  const result = await deleteAdminTicket({ ticketId: req.params.ticketId, actor: req.user });
   res.status(result.status).json(result.body);
 });
 

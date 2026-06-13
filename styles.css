@@ -493,6 +493,13 @@
   flex-wrap: wrap;
 }
 
+.admin-ticket-head-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .danger-action {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
