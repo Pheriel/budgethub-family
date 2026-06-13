@@ -9,6 +9,7 @@ const {
   syncSubscription,
   syncUserPlan,
   createCheckoutSession,
+  getBillingProfile,
   previewUpgrade,
   upgradeSubscription,
   setAutoRenew,
@@ -72,6 +73,16 @@ router.post("/checkout", requireAuth, requirePermission("manageBilling"), async 
   } catch (error) {
     console.error("Checkout creation failed:", error.message);
     res.status(500).json({ error: "Checkout creation failed." });
+  }
+});
+
+router.get("/profile", requireAuth, async (req, res) => {
+  try {
+    const result = await getBillingProfile(req.user.id);
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error("Billing profile failed:", error.message);
+    res.status(500).json({ error: "Billing profile failed." });
   }
 });
 

@@ -30,10 +30,75 @@ async function loadSyncProfile(userId) {
   if (!supabase) return null;
   const { data } = await supabase
     .from("profiles")
-    .select("plan,subscription_status,plan_updated_at,stripe_subscription_id")
+    .select("plan,billing_duration,subscription_status,plan_updated_at,current_period_end,stripe_customer_id,stripe_subscription_id,cancel_at_period_end")
     .eq("id", userId)
     .maybeSingle();
   return data || null;
+}
+
+function serializeBillingProfile(profile) {
+  if (!profile) return null;
+  return {
+    plan: profile.plan || "free",
+    billing_duration: profile.billing_duration || null,
+    subscription_status: profile.subscription_status || null,
+    current_period_end: profile.current_period_end || null,
+    stripe_customer_id: profile.stripe_customer_id || null,
+    stripe_subscription_id: profile.stripe_subscription_id || null,
+    cancel_at_period_end: Boolean(profile.cancel_at_period_end)
+  };
+}
+
+async function downgradeExpiredAdminAccess(userId, profile = null) {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return { updated: false, profile };
+
+  const current = profile || await loadSyncProfile(userId);
+  if (!current || current.subscription_status !== "admin_granted") {
+    return { updated: false, profile: current };
+  }
+
+  const end = current.current_period_end ? new Date(current.current_period_end).getTime() : 0;
+  if (end && end > Date.now()) {
+    return { updated: false, profile: current };
+  }
+
+  const update = {
+    plan: "free",
+    billing_duration: null,
+    subscription_status: "free",
+    current_period_end: null,
+    stripe_customer_id: null,
+    stripe_subscription_id: null,
+    cancel_at_period_end: false,
+    plan_updated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await supabase
+    .from("profiles")
+    .update(update)
+    .eq("id", userId)
+    .select("plan,billing_duration,subscription_status,plan_updated_at,current_period_end,stripe_customer_id,stripe_subscription_id,cancel_at_period_end")
+    .single();
+
+  if (error) {
+    console.error("Failed to expire admin-granted access:", error.message);
+    return { updated: false, profile: current, error };
+  }
+
+  return { updated: true, profile: data };
+}
+
+async function getBillingProfile(userId) {
+  const checked = await downgradeExpiredAdminAccess(userId);
+  if (!checked.profile) return { status: 404, body: { error: "profile_not_found" } };
+  return {
+    status: 200,
+    body: {
+      updated: checked.updated,
+      profile: serializeBillingProfile(checked.profile)
+    }
+  };
 }
 
 // Plan d'un abonnement: par price id, sinon par metadata.plan (prix archivés
@@ -104,14 +169,18 @@ async function loadProfileForBilling(userId) {
     .select("plan,billing_duration,stripe_subscription_id,current_period_end,subscription_status")
     .eq("id", userId)
     .single();
-  return profile || null;
+  const checked = await downgradeExpiredAdminAccess(userId, profile || null);
+  return checked.profile || null;
 }
 
 async function previewUpgrade({ userId, targetPlan }) {
+  const profile = await loadProfileForBilling(userId);
+  if (profile && profile.subscription_status === "admin_granted") {
+    return { status: 400, body: { error: "admin_granted_not_upgradeable" } };
+  }
+  if (!profile || !profile.stripe_subscription_id) return { status: 404, body: { error: "no_active_subscription" } };
   const stripe = createStripeClient();
   if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
-  const profile = await loadProfileForBilling(userId);
-  if (!profile || !profile.stripe_subscription_id) return { status: 404, body: { error: "no_active_subscription" } };
   const currentPlan = profile.plan || "free";
   const duration = profile.billing_duration;
   if (!isUpgrade(currentPlan, targetPlan)) return { status: 400, body: { error: "upgrade_only" } };
@@ -156,10 +225,13 @@ async function previewUpgrade({ userId, targetPlan }) {
 }
 
 async function upgradeSubscription({ userId, targetPlan, prorationDate }) {
+  const profile = await loadProfileForBilling(userId);
+  if (profile && profile.subscription_status === "admin_granted") {
+    return { status: 400, body: { error: "admin_granted_not_upgradeable" } };
+  }
+  if (!profile || !profile.stripe_subscription_id) return { status: 404, body: { error: "no_active_subscription" } };
   const stripe = createStripeClient();
   if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
-  const profile = await loadProfileForBilling(userId);
-  if (!profile || !profile.stripe_subscription_id) return { status: 404, body: { error: "no_active_subscription" } };
   const currentPlan = profile.plan || "free";
   const duration = profile.billing_duration;
   if (!isUpgrade(currentPlan, targetPlan)) return { status: 400, body: { error: "upgrade_only" } };
@@ -316,6 +388,14 @@ async function handleInvoicePaymentFailed(invoice) {
 
 // Fallback quand le webhook n'est pas joignable: cherche l'abonnement le plus récent
 async function syncUserPlan(userId) {
+  const checked = await downgradeExpiredAdminAccess(userId);
+  if (checked.profile && checked.profile.subscription_status === "admin_granted") {
+    return { updated: checked.updated, reason: "admin_granted", profile: serializeBillingProfile(checked.profile) };
+  }
+  if (checked.updated) {
+    return { updated: true, plan: "free", reason: "admin_granted_expired", profile: serializeBillingProfile(checked.profile) };
+  }
+
   const stripe = createStripeClient();
   if (!stripe) return { updated: false, reason: "stripe_not_configured" };
 
@@ -354,19 +434,28 @@ async function syncUserPlan(userId) {
 
 // Active/désactive le renouvellement automatique (résiliation en fin de période)
 async function setAutoRenew(userId, autoRenew) {
-  const stripe = createStripeClient();
   const supabase = createSupabaseAdminClient();
-  if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("stripe_subscription_id")
+    .select("plan,billing_duration,subscription_status,plan_updated_at,current_period_end,stripe_customer_id,stripe_subscription_id,cancel_at_period_end")
     .eq("id", userId)
     .single();
+
+  const checked = await downgradeExpiredAdminAccess(userId, profile || null);
+  if (checked.profile && checked.profile.subscription_status === "admin_granted") {
+    return { status: 400, body: { error: "admin_granted_not_renewable" } };
+  }
+  if (checked.updated) {
+    return { status: 400, body: { error: "admin_granted_expired" } };
+  }
 
   if (!profile || !profile.stripe_subscription_id) {
     return { status: 404, body: { error: "no_active_subscription" } };
   }
+
+  const stripe = createStripeClient();
+  if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
 
   const subscription = await stripe.subscriptions.update(profile.stripe_subscription_id, {
     cancel_at_period_end: !autoRenew
@@ -382,19 +471,28 @@ async function setAutoRenew(userId, autoRenew) {
 
 // Annule le renouvellement; l'accès reste actif jusqu'à la fin de la période payée
 async function cancelSubscription(userId) {
-  const stripe = createStripeClient();
   const supabase = createSupabaseAdminClient();
-  if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("stripe_subscription_id")
+    .select("plan,billing_duration,subscription_status,plan_updated_at,current_period_end,stripe_customer_id,stripe_subscription_id,cancel_at_period_end")
     .eq("id", userId)
     .single();
+
+  const checked = await downgradeExpiredAdminAccess(userId, profile || null);
+  if (checked.profile && checked.profile.subscription_status === "admin_granted") {
+    return { status: 400, body: { error: "admin_granted_not_cancelable" } };
+  }
+  if (checked.updated) {
+    return { status: 400, body: { error: "admin_granted_expired" } };
+  }
 
   if (!profile || !profile.stripe_subscription_id) {
     return { status: 404, body: { error: "no_active_subscription" } };
   }
+
+  const stripe = createStripeClient();
+  if (!stripe) return { status: 503, body: { error: "stripe_not_configured" } };
 
   const subscription = await stripe.subscriptions.update(profile.stripe_subscription_id, {
     cancel_at_period_end: true
@@ -411,6 +509,7 @@ async function cancelSubscription(userId) {
 
 module.exports = {
   createCheckoutSession,
+  getBillingProfile,
   previewUpgrade,
   upgradeSubscription,
   handleCheckoutCompleted,

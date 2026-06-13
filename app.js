@@ -695,6 +695,7 @@ function renderPricing() {
     }
   };
   const months = durationMonths[state.billingDuration];
+  const manualAccess = state.subscription && state.subscription.status === "admin_granted";
   grid.innerHTML = planDefinitions.map((plan) => {
     const features = planFeatures[plan.id][state.lang];
     const fr = state.lang === "fr";
@@ -710,6 +711,7 @@ function renderPricing() {
     const discountLine = hasDiscount
       ? `<p class="price-discount">${durationLabel(state.billingDuration)} — ${discount}% ${fr ? "de rabais" : "off"}</p>`
       : "";
+    const isCurrentPlan = plan.id === state.plan && !manualAccess;
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
@@ -728,8 +730,8 @@ function renderPricing() {
           : `Refund available within 7 days after the initial purchase. `}
           <a class="secondary-link" href="/refund-policy" data-legal-link="refund-policy">${state.lang === "fr" ? "Politique" : "Policy"}</a>
         </p>` : ""}
-        <button class="${plan.id === state.plan ? "secondary-button" : "primary-button"}" data-plan="${plan.id}">
-          ${plan.id === state.plan ? t("current") : t("choosePlan")}
+        <button class="${isCurrentPlan ? "secondary-button" : "primary-button"}" data-plan="${plan.id}">
+          ${isCurrentPlan ? t("current") : t("choosePlan")}
         </button>
       </article>
     `;
@@ -944,6 +946,17 @@ async function syncBillingPlan() {
 
 async function loadProfilePlan() {
   if (!supabaseClient || !state.user) return;
+  let billingProfile = null;
+  try {
+    const billingResponse = await authFetch("/api/billing/profile");
+    if (billingResponse.ok) {
+      const billingResult = await billingResponse.json();
+      billingProfile = billingResult.profile;
+    }
+  } catch (_error) {
+    // Backend indisponible: lecture Supabase directe en secours.
+  }
+
   let { data, error } = await supabaseClient
     .from("profiles")
     .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id,is_suspended")
@@ -957,6 +970,29 @@ async function loadProfilePlan() {
       .single();
     data = fallback.data;
     error = fallback.error;
+  }
+  if (!error && data && billingProfile) {
+    data = {
+      ...data,
+      plan: billingProfile.plan,
+      subscription_status: billingProfile.subscription_status,
+      cancel_at_period_end: billingProfile.cancel_at_period_end,
+      current_period_end: billingProfile.current_period_end,
+      billing_duration: billingProfile.billing_duration
+    };
+  }
+  if (!error && data && data.subscription_status === "admin_granted") {
+    const expiresAt = data.current_period_end ? new Date(data.current_period_end).getTime() : 0;
+    if (!expiresAt || expiresAt <= Date.now()) {
+      data = {
+        ...data,
+        plan: "free",
+        subscription_status: "free",
+        cancel_at_period_end: false,
+        current_period_end: null,
+        billing_duration: null
+      };
+    }
   }
   if (!error && data && data.plan) {
     if (data.is_suspended) {
@@ -1645,6 +1681,7 @@ function renderSubscriptionDetails(plan) {
       <p class="form-note">${fr ? "Vous êtes sur le plan gratuit." : "You are on the free plan."}</p>`;
   }
   const sub = state.subscription;
+  const isAdminGranted = sub.status === "admin_granted";
   const durLabel = sub.duration ? durationLabel(sub.duration) : "";
   const endDate = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
   const renewDate = endDate
@@ -1667,6 +1704,19 @@ function renderSubscriptionDetails(plan) {
       ? `<p class="sub-days"><strong>${daysLeft}</strong> jour${daysLeft > 1 ? "s" : ""} restant${daysLeft > 1 ? "s" : ""} dans la période en cours.</p>`
       : `<p class="sub-days"><strong>${daysLeft}</strong> day${daysLeft > 1 ? "s" : ""} left in the current period.</p>`)
     : "";
+  if (isAdminGranted) {
+    return `
+    <p><strong>${plan.name}</strong>${durLabel ? ` · ${durLabel}` : ""}</p>
+    <p class="form-note">${fr
+      ? "Accès temporaire accordé par l’équipe BudgetHub Family."
+      : "Temporary access granted by the BudgetHub Family team."}</p>
+    <p class="form-note">${fr ? `Expiration: ${renewDate}.` : `Expiration: ${renewDate}.`}</p>
+    ${daysLine}
+    <p class="form-note">${fr
+      ? "À la fin de cette période, votre compte reviendra au plan gratuit. Vous pourrez vous abonner à tout moment."
+      : "At the end of this period, your account will return to the free plan. You can subscribe at any time."}</p>
+  `;
+  }
   return `
     <p><strong>${plan.name}</strong>${durLabel ? ` · ${durLabel}` : ""}</p>
     <p class="form-note">${renewLine}</p>
@@ -1678,7 +1728,8 @@ function renderSubscriptionDetails(plan) {
 function renderAccount() {
   const plan = planDefinitions.find((item) => item.id === state.plan) || planDefinitions[0];
   const fr = state.lang === "fr";
-  const targets = state.subscription ? upgradeTargets() : [];
+  const isAdminGranted = state.subscription && state.subscription.status === "admin_granted";
+  const targets = state.subscription && !isAdminGranted ? upgradeTargets() : [];
   return `
     <section class="panel">
       <h3>${fr ? "Mon compte" : "My account"}</h3>
@@ -1691,8 +1742,8 @@ function renderAccount() {
       ${renderSubscriptionDetails(plan)}
       ${can("manageBilling") ? `
       <div class="account-actions">
-        <button class="primary-button" id="changePlanButton" type="button">${fr ? "Changer de plan" : "Change plan"}</button>
-        ${state.subscription ? `<button class="secondary-button" id="cancelSubButton" type="button">${fr ? "Annuler le renouvellement" : "Cancel renewal"}</button>` : ""}
+        <button class="primary-button" id="changePlanButton" type="button">${isAdminGranted ? (fr ? "S'abonner" : "Subscribe") : (fr ? "Changer de plan" : "Change plan")}</button>
+        ${state.subscription && !isAdminGranted ? `<button class="secondary-button" id="cancelSubButton" type="button">${fr ? "Annuler le renouvellement" : "Cancel renewal"}</button>` : ""}
       </div>` : `<p class="form-note role-note">${fr
         ? "Seul le propriétaire de la famille peut gérer l'abonnement Stripe."
         : "Only the family owner can manage the Stripe subscription."}</p>`}
