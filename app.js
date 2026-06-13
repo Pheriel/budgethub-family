@@ -2661,17 +2661,17 @@ function renderSupportModal() {
       <button class="primary-button full" type="submit">${fr ? "Envoyer au support" : "Send to support"}</button>
     </form>
     <p class="form-note" id="supportMessage" ${state.support.message ? "" : "hidden"}>${state.support.message}</p>
-    <div class="support-ticket-list">
-      <h3>${fr ? "Mes tickets récents" : "My recent tickets"}</h3>
-      ${(state.support.tickets || []).slice(0, 5).map((ticket) => `
-        <article>
-          <strong>${ticket.number}</strong>
-          <span>${supportLabel(supportStatuses, ticket.status)} · ${supportLabel(supportCategories, ticket.category)} · ${supportDate(ticket.createdAt)}</span>
-          <p>${ticket.subject}</p>
-        </article>
-      `).join("") || `<p class="form-note">${fr ? "Aucun ticket pour le moment." : "No tickets yet."}</p>`}
-    </div>
+    <button class="secondary-button full" id="supportGoTickets" type="button">${fr ? "Voir mes tickets" : "View my tickets"}</button>
   `;
+  const goTickets = $("#supportGoTickets");
+  if (goTickets) {
+    goTickets.addEventListener("click", () => {
+      $("#supportModal").hidden = true;
+      state.currentView = "support";
+      openApp();
+      refreshViewData("support");
+    });
+  }
   $("#supportForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -2802,7 +2802,12 @@ function renderAdminSupport() {
                 <td>${supportLabel(supportPriorities, ticket.priority)}</td>
                 <td><span class="status-pill ${ticket.status === "closed" ? "inactive" : "active"}">${supportLabel(supportStatuses, ticket.status)}</span></td>
                 <td>${supportDate(ticket.createdAt)}</td>
-                <td><button class="secondary-button" data-admin-ticket="${ticket.id}" type="button">${fr ? "Voir" : "View"}</button></td>
+                <td>
+                  <div class="cell-actions">
+                    <button class="secondary-button" data-admin-ticket="${ticket.id}" type="button">${fr ? "Voir" : "View"}</button>
+                    <button class="secondary-button danger-action" data-delete-ticket="${ticket.id}" data-ticket-number="${ticket.number}" type="button">${fr ? "Supprimer" : "Delete"}</button>
+                  </div>
+                </td>
               </tr>
             `).join("") || `<tr><td colspan="8">${fr ? "Aucun ticket." : "No tickets."}</td></tr>`}
           </tbody>
@@ -2816,10 +2821,13 @@ function renderAdminSupport() {
             <h3>${selected.number} · ${selected.subject}</h3>
             <p class="form-note">${selected.userEmail} · ${supportLabel(supportCategories, selected.category)} · ${supportDate(selected.createdAt)}</p>
           </div>
-          <form class="admin-button-row" id="adminTicketStatusForm">
-            <select name="status">${Object.keys(supportStatuses).map((key) => `<option value="${key}" ${selected.status === key ? "selected" : ""}>${supportLabel(supportStatuses, key)}</option>`).join("")}</select>
-            <button class="secondary-button" type="submit">${fr ? "Changer statut" : "Change status"}</button>
-          </form>
+          <div class="admin-ticket-head-actions">
+            <form class="admin-button-row" id="adminTicketStatusForm">
+              <select name="status">${Object.keys(supportStatuses).map((key) => `<option value="${key}" ${selected.status === key ? "selected" : ""}>${supportLabel(supportStatuses, key)}</option>`).join("")}</select>
+              <button class="secondary-button" type="submit">${fr ? "Changer statut" : "Change status"}</button>
+            </form>
+            <button class="secondary-button danger-action" data-delete-ticket="${selected.id}" data-ticket-number="${selected.number}" type="button">${fr ? "Supprimer le ticket" : "Delete ticket"}</button>
+          </div>
         </div>
         <div class="support-thread">
           ${(state.support.adminMessages || []).map((msg) => `
@@ -3405,6 +3413,30 @@ function bindViewActions() {
       try {
         await loadAdminTicket(button.dataset.adminTicket);
         state.support.adminMessage = "";
+      } catch (error) {
+        state.support.adminMessage = error.message;
+      }
+      renderView();
+    });
+  });
+
+  $$("[data-delete-ticket]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const fr = state.lang === "fr";
+      const number = button.dataset.ticketNumber || "";
+      const confirmMessage = fr
+        ? `Êtes-vous certain de vouloir supprimer ce ticket ${number} ? Cette action est irréversible.`
+        : `Are you sure you want to delete ticket ${number}? This action is irreversible.`;
+      if (!window.confirm(confirmMessage)) return;
+      const ticketId = button.dataset.deleteTicket;
+      try {
+        await supportFetch(`/admin/tickets/${ticketId}`, { method: "DELETE" });
+        if (state.support.adminSelected && state.support.adminSelected.id === ticketId) {
+          state.support.adminSelected = null;
+          state.support.adminMessages = [];
+        }
+        await loadAdminTickets();
+        state.support.adminMessage = fr ? `Ticket ${number} supprimé.` : `Ticket ${number} deleted.`;
       } catch (error) {
         state.support.adminMessage = error.message;
       }
