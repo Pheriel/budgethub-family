@@ -1610,6 +1610,7 @@ h3 {
   overflow-wrap: anywhere;
   pointer-events: none;
   animation: chartTooltipFade 0.14s ease-out both;
+  word-break: break-word;
 }
 
 .chart-tooltip[hidden] {
@@ -1625,6 +1626,12 @@ h3 {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-tooltip {
+    animation: none;
   }
 }
 
