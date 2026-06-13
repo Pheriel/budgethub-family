@@ -2120,6 +2120,62 @@ h3 {
   background: var(--surface);
 }
 
+.cashflow-equation {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cashflow-equation span,
+.cashflow-equation b {
+  display: grid;
+  place-items: center;
+  min-height: 3.2rem;
+}
+
+.cashflow-equation span {
+  min-width: 9rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-weight: 900;
+}
+
+.cashflow-equation small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.cash-positive {
+  color: var(--accent);
+}
+
+.cash-negative {
+  color: var(--danger);
+}
+
+.checkbox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.65rem;
+}
+
+.checkbox-field input {
+  min-height: auto;
+}
+
+.table-note {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -2360,7 +2416,8 @@ label select {
     position: sticky;
     top: 0;
     z-index: 50;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
@@ -2559,8 +2616,12 @@ label select {
     max-width: 100%;
   }
 
+  .table-wrap {
+    overflow-x: visible;
+  }
+
   table {
-    min-width: 38rem;
+    min-width: 0;
   }
 
   /* ------ Dashboard mobile: layout vertical propre, zéro overflow ------ */
@@ -2581,20 +2642,24 @@ label select {
   .workspace-actions {
     display: flex;
     align-items: stretch;
-    flex-wrap: nowrap;
     gap: 0.55rem;
     width: 100%;
     max-width: 100%;
-    overflow-x: auto;
-    padding-bottom: 0.15rem;
-  }
-
-  .workspace-actions > * {
-    flex: 0 0 auto;
+    overflow-x: hidden;
   }
 
   .workspace-actions .compact-control {
-    min-width: 13rem;
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  .workspace-actions #appSupportButton,
+  .workspace-actions #upgradeButton,
+  .workspace-actions #openRegister:not([hidden]),
+  .workspace-actions #logoutButton:not([hidden]),
+  .workspace-actions #userEmailChip:not([hidden]) {
+    grid-column: 1 / -1;
   }
 
   .workspace-actions .chip {
