@@ -332,7 +332,16 @@
       </main>
 
       <main id="appView" class="dashboard-layout" hidden>
-        <aside class="sidebar">
+        <div class="mobile-app-header">
+          <div class="sidebar-head">
+            <img class="brand-logo" src="/assets/logo.svg" alt="" />
+            <div><strong>BudgetHub</strong><small id="mobileActivePlanLabel">Free</small></div>
+          </div>
+          <button class="icon-button app-menu-toggle" id="appMenuToggle" type="button" aria-label="Ouvrir le menu" aria-controls="appSidebar" aria-expanded="false">☰</button>
+        </div>
+        <div class="app-menu-backdrop" id="appMenuBackdrop" hidden></div>
+        <aside class="sidebar" id="appSidebar">
+          <button class="icon-button app-menu-close" id="appMenuClose" type="button" aria-label="Fermer le menu">×</button>
           <div class="sidebar-head">
             <img class="brand-logo" src="/assets/logo.svg" alt="" />
             <div><strong>BudgetHub</strong><small id="activePlanLabel">Free</small></div>
@@ -349,6 +358,10 @@
             <button data-view="admin" id="adminNavButton" data-i18n="appAdmin" hidden>Super Admin</button>
             <button data-view="settings" data-i18n="appSettings">Paramètres</button>
           </nav>
+          <div class="mobile-drawer-actions">
+            <button class="ghost-button full" id="mobileSupportButton" type="button">Support</button>
+            <button class="primary-button full" id="mobileUpgradeButton" type="button">Passer Pro</button>
+          </div>
           <button class="ghost-button full" id="backToLanding" type="button" data-i18n="backLanding">Retour accueil</button>
         </aside>
 
