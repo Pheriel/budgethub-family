@@ -77,7 +77,7 @@ const translations = {
     appDashboard: "Tableau",
     appDebts: "Dettes",
     appStrategy: "Snowball/Avalanche",
-    appBudget: "Budget",
+    appBudget: "Dépenses",
     appTransactions: "Transactions",
     appGoals: "Objectifs",
     appFamily: "Famille",
@@ -98,7 +98,7 @@ const translations = {
     dashboardSub: "Vue synthèse",
     debtsTitle: "Dettes",
     strategyTitle: "Snowball/Avalanche",
-    budgetTitle: "Budget",
+    budgetTitle: "Dépenses mensuelles",
     transactionsTitle: "Transactions",
     goalsTitle: "Objectifs",
     familyTitle: "Membres famille",
@@ -230,7 +230,7 @@ const translations = {
     appDashboard: "Dashboard",
     appDebts: "Debts",
     appStrategy: "Snowball/Avalanche",
-    appBudget: "Budget",
+    appBudget: "Expenses",
     appTransactions: "Transactions",
     appGoals: "Goals",
     appFamily: "Family",
@@ -251,7 +251,7 @@ const translations = {
     dashboardSub: "Summary view",
     debtsTitle: "Debts",
     strategyTitle: "Snowball/Avalanche",
-    budgetTitle: "Budget",
+    budgetTitle: "Monthly expenses",
     transactionsTitle: "Transactions",
     goalsTitle: "Goals",
     familyTitle: "Family members",
@@ -590,10 +590,10 @@ const demoData = {
     { name: "Prêt auto", balance: 12800, rate: 7.49, minPayment: 410 }
   ],
   budget: [
-    { category: "Logement", planned: 2100, spent: 2100 },
-    { category: "Épicerie", planned: 980, spent: 1045 },
-    { category: "Transport", planned: 620, spent: 590 },
-    { category: "Loisirs", planned: 420, spent: 318 }
+    { name: "Appartement", category: "housing", planned: 1300, dueDay: 1, isRecurring: true, notes: "" },
+    { name: "Épicerie", category: "groceries", planned: 800, dueDay: "", isRecurring: true, notes: "" },
+    { name: "Internet", category: "telecom", planned: 70, dueDay: 15, isRecurring: true, notes: "" },
+    { name: "Assurance auto", category: "insurance", planned: 110, dueDay: 20, isRecurring: true, notes: "" }
   ],
   transactions: [
     { date: "2026-06-09", name: "Épicerie Marché Central", category: "Épicerie", amount: -126.42 },
@@ -622,7 +622,7 @@ function applyMonthData(data) {
   const monthData = data || emptyMonthData();
   state.income = Number(monthData.income || 0);
   state.debts = (monthData.debts || []).map((item) => ({ ...item }));
-  state.budget = (monthData.budget || []).map((item) => ({ ...item }));
+  state.budget = (monthData.budget || []).map((item) => normalizeExpense(item));
   state.transactions = (monthData.transactions || []).map((item) => ({ ...item }));
   state.goals = (monthData.goals || []).map((item) => ({ ...item }));
 }
@@ -948,6 +948,20 @@ const supportPriorities = {
   normal: { fr: "Normale", en: "Normal" },
   high: { fr: "Haute", en: "High" }
 };
+
+const expenseCategories = [
+  { value: "housing", fr: "Logement", en: "Housing" },
+  { value: "groceries", fr: "Épicerie", en: "Groceries" },
+  { value: "transport", fr: "Transport", en: "Transport" },
+  { value: "telecom", fr: "Télécom", en: "Telecom" },
+  { value: "insurance", fr: "Assurances", en: "Insurance" },
+  { value: "health", fr: "Santé", en: "Health" },
+  { value: "family", fr: "Enfants / famille", en: "Kids / family" },
+  { value: "leisure", fr: "Loisirs", en: "Leisure" },
+  { value: "subscriptions", fr: "Abonnements", en: "Subscriptions" },
+  { value: "other", fr: "Autre", en: "Other" }
+];
+
 const supportStatuses = {
   open: { fr: "Ouvert", en: "Open" },
   in_progress: { fr: "En cours", en: "In progress" },
@@ -957,6 +971,33 @@ const supportStatuses = {
 
 function supportLabel(map, key) {
   return (map[key] && map[key][state.lang]) || key || "—";
+}
+
+function expenseCategoryLabel(value) {
+  const match = expenseCategories.find((item) => item.value === value || item.fr === value || item.en === value);
+  if (!match) return value || "â€”";
+  return match[state.lang] || match.fr;
+}
+
+function expenseCategoryOptions(selected) {
+  return expenseCategories.map((item) => {
+    const isSelected = selected === item.value || selected === item.fr || selected === item.en;
+    return `<option value="${item.value}" ${isSelected ? "selected" : ""}>${item[state.lang]}</option>`;
+  }).join("");
+}
+
+function normalizeExpense(item = {}) {
+  const category = item.category || "other";
+  return {
+    ...item,
+    name: item.name || item.label || item.category || "",
+    category,
+    planned: Math.max(0, clampNumber(item.planned)),
+    dueDay: item.dueDay ?? item.due_day ?? "",
+    isRecurring: item.isRecurring ?? item.is_recurring ?? true,
+    notes: item.notes || "",
+    monthKey: item.monthKey || item.month_key || state.selectedMonth
+  };
 }
 
 function supportDate(value) {
@@ -1189,7 +1230,7 @@ async function loadUserData(shouldRender = true) {
   const { start, end } = selectedMonthRange();
   const [debts, budget, transactions, goals, members, incomes] = await Promise.all([
     supabaseClient.from("debts").select("id,name,balance,rate,min_payment").order("created_at"),
-    supabaseClient.from("budget_categories").select("id,category,planned,spent").order("created_at"),
+    supabaseClient.from("budget_categories").select("id,name,category,planned,spent,due_day,is_recurring,notes,month_key").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
     supabaseClient.from("transactions").select("id,date,name,category,amount").gte("date", start).lt("date", end).order("date", { ascending: false }),
     supabaseClient.from("goals").select("id,name,target,saved,monthly_contribution,created_at").order("created_at"),
     supabaseClient.from("family_members").select("id,name,role,email").order("created_at"),
@@ -1200,8 +1241,16 @@ async function loadUserData(shouldRender = true) {
     debts: (debts.data || []).map((row) => ({
       id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment)
     })),
-    budget: (budget.data || []).map((row) => ({
-      id: row.id, category: row.category, planned: Number(row.planned), spent: Number(row.spent || 0)
+    budget: (budget.data || []).map((row) => normalizeExpense({
+      id: row.id,
+      name: row.name,
+      category: row.category,
+      planned: Number(row.planned),
+      spent: Number(row.spent || 0),
+      dueDay: row.due_day || "",
+      isRecurring: row.is_recurring !== false,
+      notes: row.notes || "",
+      monthKey: row.month_key || state.selectedMonth
     })),
     transactions: (transactions.data || []).map((row) => ({
       id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount)
@@ -1526,7 +1575,10 @@ function transactionIncome() {
 
 function spentForCategory(category) {
   return state.transactions
-    .filter((item) => item.category && item.category.toLowerCase() === category.toLowerCase() && Number(item.amount) < 0)
+    .filter((item) => item.category && (
+      item.category.toLowerCase() === String(category).toLowerCase()
+      || expenseCategoryLabel(category).toLowerCase() === item.category.toLowerCase()
+    ) && Number(item.amount) < 0)
     .reduce((sum, item) => sum + Math.abs(Number(item.amount)), 0);
 }
 
@@ -1534,14 +1586,16 @@ function totals() {
   const debt = state.debts.reduce((sum, item) => sum + item.balance, 0);
   const debtPayments = state.debts.reduce((sum, item) => sum + item.minPayment, 0);
   const debtInterest = state.debts.reduce((sum, item) => sum + monthlyInterest(item), 0);
-  const monthlyExpenses = transactionExpenses();
+  const monthlyExpenses = state.budget.reduce((sum, item) => sum + Math.max(0, clampNumber(item.planned)), 0);
+  const trackedSpending = transactionExpenses();
   const extraIncome = transactionIncome();
   const goalContributions = state.goals.reduce((sum, item) => sum + (item.monthlyContribution || 0), 0);
   const income = state.income + extraIncome;
-  const leftover = income - monthlyExpenses - debtPayments - goalContributions;
+  const availableAfterBills = income - monthlyExpenses - debtPayments;
+  const leftover = availableAfterBills - goalContributions;
   const saved = goalContributions + Math.max(0, leftover);
   const savingsRate = income > 0 ? Math.round((saved / income) * 100) : 0;
-  return { debt, debtPayments, debtInterest, monthlyExpenses, extraIncome, goalContributions, income, leftover, savingsRate };
+  return { debt, debtPayments, debtInterest, monthlyExpenses, trackedSpending, extraIncome, goalContributions, income, availableAfterBills, leftover, savingsRate };
 }
 
 function renderDashboard() {
@@ -1553,9 +1607,9 @@ function renderDashboard() {
     : (tot.income > 0 && tot.debt > tot.income * 6
       ? { cls: "pill-danger", txt: fr ? "Élevée" : "High" }
       : { cls: "pill-warn", txt: fr ? "À surveiller" : "Watch" });
-  const leftoverBadge = tot.leftover >= 0
-    ? { cls: "pill-good", txt: fr ? "Positif" : "Positive" }
-    : { cls: "pill-danger", txt: fr ? "Négatif" : "Negative" };
+  const availableBadge = tot.availableAfterBills >= 0
+    ? { cls: "pill-good", txt: fr ? "Disponible" : "Available" }
+    : { cls: "pill-danger", txt: fr ? "À corriger" : "Fix needed" };
   const savingsBadge = tot.savingsRate >= 20
     ? { cls: "pill-good", txt: fr ? "Excellent" : "Great" }
     : (tot.savingsRate >= 10 ? { cls: "pill-warn", txt: fr ? "Correct" : "Fair" } : { cls: "pill-danger", txt: fr ? "Faible" : "Low" });
@@ -1567,8 +1621,8 @@ function renderDashboard() {
     <section class="panel month-panel">
       <strong>${fr ? "Mois sélectionné" : "Selected month"}: ${monthLabel(state.selectedMonth)}</strong>
       <p class="form-note">${fr
-        ? "Le revenu, les transactions, le budget, les dettes et les objectifs ci-dessous appartiennent à ce mois seulement."
-        : "Income, transactions, budget, debts, and goals below belong to this month only."}</p>
+        ? "Ce mois filtre les revenus, les dépenses mensuelles, les transactions, les paiements de dettes estimés et les graphiques."
+        : "This month filters income, monthly expenses, transactions, estimated debt payments, and charts."}</p>
     </section>
     <section class="panel income-panel">
       ${can("editData") ? `
@@ -1584,12 +1638,24 @@ function renderDashboard() {
       ${readOnlyNote()}`}
     </section>
     <div class="stats-grid">
-      ${stat(fr ? "Revenu du mois" : "Monthly income", money(tot.income), incomeBadge.cls, incomeBadge.txt)}
-      ${stat(fr ? "Dépenses du mois" : "Monthly expenses", money(tot.monthlyExpenses), tot.monthlyExpenses ? "pill-warn" : "pill-good", tot.monthlyExpenses ? (fr ? "Actives" : "Active") : (fr ? "Aucune" : "None"))}
-      ${stat(t("totalDebt"), money(tot.debt), debtBadge.cls, debtBadge.txt)}
-      ${stat(fr ? "Cash disponible" : "Available cash", money(tot.leftover), leftoverBadge.cls, leftoverBadge.txt)}
-      ${stat(t("savingsRate"), `${tot.savingsRate}%`, savingsBadge.cls, savingsBadge.txt)}
+      ${stat(fr ? "Revenus" : "Income", money(tot.income), incomeBadge.cls, incomeBadge.txt)}
+      ${stat(fr ? "Dépenses mensuelles" : "Monthly expenses", money(tot.monthlyExpenses), tot.monthlyExpenses ? "pill-warn" : "pill-good", tot.monthlyExpenses ? (fr ? "Prévues" : "Planned") : (fr ? "Aucune" : "None"))}
+      ${stat(fr ? "Paiements de dettes" : "Debt payments", money(tot.debtPayments), tot.debtPayments ? "pill-warn" : "pill-good", tot.debtPayments ? (fr ? "Minimums" : "Minimums") : (fr ? "Aucun" : "None"))}
+      ${stat(fr ? "Disponible" : "Available", money(tot.availableAfterBills), availableBadge.cls, availableBadge.txt)}
+      ${stat(fr ? "Objectifs / épargne" : "Goals / savings", money(tot.goalContributions), savingsBadge.cls, `${tot.savingsRate}%`)}
     </div>
+    <section class="panel cashflow-panel">
+      <h3>${fr ? "Calcul du disponible" : "Available cash calculation"}</h3>
+      <div class="cashflow-equation">
+        <span>${money(tot.income)}<small>${fr ? "Revenus" : "Income"}</small></span>
+        <b>-</b>
+        <span>${money(tot.monthlyExpenses)}<small>${fr ? "Dépenses mensuelles" : "Monthly expenses"}</small></span>
+        <b>-</b>
+        <span>${money(tot.debtPayments)}<small>${fr ? "Paiements dettes" : "Debt payments"}</small></span>
+        <b>=</b>
+        <span class="${tot.availableAfterBills >= 0 ? "cash-positive" : "cash-negative"}">${money(tot.availableAfterBills)}<small>${fr ? "Disponible" : "Available"}</small></span>
+      </div>
+    </section>
     <section class="panel debt-summary">
       <h3>${fr ? "Résumé des dettes" : "Debt summary"}</h3>
       <div class="summary-grid">
@@ -1633,6 +1699,9 @@ function renderDebts() {
   }
   return `
     <section class="panel">
+      <p class="form-note">${fr
+        ? "Ajoutez ici les montants que vous devez rembourser : carte de crédit, Affirm, prêt auto, prêt étudiant, marge de crédit, etc. Les paiements minimums sont inclus dans le calcul mensuel."
+        : "Add amounts you must repay here: credit cards, Affirm, car loans, student loans, lines of credit, etc. Minimum payments are included in the monthly calculation."}</p>
       <form class="form-grid" id="debtForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="Mastercard" value="${d ? d.name : ""}" /></label>
         <label><span>${t("balance")}</span><input name="balance" required type="number" min="1" placeholder="2500" value="${d ? d.balance : ""}" /></label>
@@ -2295,40 +2364,45 @@ function strategyList(items) {
 function renderBudget() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "budget_categories";
-  const b = editing ? findEditable(state.budget) : null;
+  const b = editing ? normalizeExpense(findEditable(state.budget)) : null;
   if (!can("editData")) {
     return `<section class="panel">${readOnlyNote()}${budgetTable(false)}</section>`;
   }
   return `
     <section class="panel">
+      <p class="form-note">${fr
+        ? "Ajoutez ici vos dépenses récurrentes du mois comme logement, épicerie, assurances, téléphone, internet, transport, abonnements, etc. Les dettes vont dans la section Dettes."
+        : "Add recurring monthly expenses here, such as housing, groceries, insurance, phone, internet, transport, subscriptions, etc. Debts belong in the Debts section."}</p>
       <form class="form-grid" id="budgetForm">
-        <label><span>${t("category")}</span><input name="category" required placeholder="${fr ? "Logement" : "Housing"}" value="${b ? b.category : ""}" /></label>
-        <label><span>${fr ? "Budget prévu" : "Planned budget"}</span><input name="planned" required type="number" min="0" step="0.01" placeholder="1500" value="${b ? b.planned : ""}" /></label>
+        <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Appartement" : "Apartment"}" value="${b ? b.name : ""}" /></label>
+        <label><span>${t("category")}</span><select name="category" required>${expenseCategoryOptions(b ? b.category : "housing")}</select></label>
+        <label><span>${fr ? "Montant mensuel prévu" : "Planned monthly amount"}</span><input name="planned" required type="number" min="0" step="0.01" placeholder="1300" value="${b ? b.planned : ""}" /></label>
+        <label><span>${fr ? "Jour du mois (optionnel)" : "Day of month (optional)"}</span><input name="dueDay" type="number" min="1" max="31" placeholder="1" value="${b && b.dueDay ? b.dueDay : ""}" /></label>
+        <label class="checkbox-field"><input name="isRecurring" type="checkbox" ${!b || b.isRecurring ? "checked" : ""} /><span>${fr ? "Récurrent chaque mois" : "Recurring monthly"}</span></label>
+        <label><span>${fr ? "Notes (optionnel)" : "Notes (optional)"}</span><input name="notes" placeholder="${fr ? "Ex. loyer, forfait internet..." : "E.g. rent, internet plan..."}" value="${b ? b.notes : ""}" /></label>
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
-      <p class="form-note">${fr
-        ? "Un budget est une limite ou prévision mensuelle. Le dépensé est calculé automatiquement à partir des transactions du mois qui utilisent la même catégorie."
-        : "A budget is a monthly limit or forecast. Spent is calculated automatically from this month's transactions using the same category."}</p>
       ${budgetTable(true)}
     </section>
   `;
 }
 
 function budgetTable(actions) {
+  const fr = state.lang === "fr";
   const showActions = actions && can("editData");
   if (!state.budget.length) {
-    return `<p class="form-note">${state.lang === "fr" ? "Aucune catégorie de budget pour le moment." : "No budget categories yet."}</p>`;
+    return `<p class="form-note">${fr ? "Aucune dépense mensuelle pour le moment." : "No monthly expenses yet."}</p>`;
   }
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("category")}</th><th>${t("planned")}</th><th>${t("spent")}</th><th>${t("progress")}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("category")}</th><th>${fr ? "Mensuel prévu" : "Monthly planned"}</th><th>${fr ? "Jour" : "Day"}</th><th>${fr ? "Récurrent" : "Recurring"}</th><th>${fr ? "Dépensé suivi" : "Tracked spent"}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.budget.map((item, index) => {
-            const spent = spentForCategory(item.category);
-            const pct = item.planned > 0 ? Math.min(100, Math.round((spent / item.planned) * 100)) : 0;
-            return `<tr><td data-label="${t("category")}">${item.category}</td><td data-label="${t("planned")}">${money(item.planned)}</td><td data-label="${t("spent")}">${money(spent)}</td><td data-label="${t("progress")}"><div class="progress"><span style="width:${pct}%"></span></div></td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+            const expense = normalizeExpense(item);
+            const spent = spentForCategory(expense.category);
+            return `<tr><td data-label="${t("name")}"><strong>${expense.name}</strong>${expense.notes ? `<small class="table-note">${expense.notes}</small>` : ""}</td><td data-label="${t("category")}">${expenseCategoryLabel(expense.category)}</td><td data-label="${fr ? "Mensuel prévu" : "Monthly planned"}">${money(expense.planned)}</td><td data-label="${fr ? "Jour" : "Day"}">${expense.dueDay || "—"}</td><td data-label="${fr ? "Récurrent" : "Recurring"}">${expense.isRecurring ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}</td><td data-label="${fr ? "Dépensé suivi" : "Tracked spent"}">${money(spent)}</td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${expense.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
@@ -3868,20 +3942,34 @@ function bindViewActions() {
       event.preventDefault();
       const form = new FormData(budgetForm);
       const payload = {
+        name: form.get("name"),
         category: form.get("category"),
-        planned: Number(form.get("planned"))
+        planned: Number(form.get("planned")),
+        due_day: form.get("dueDay") ? Number(form.get("dueDay")) : null,
+        is_recurring: form.get("isRecurring") === "on",
+        notes: form.get("notes") || "",
+        month_key: state.selectedMonth
       };
+      const localExpense = normalizeExpense({
+        name: payload.name,
+        category: payload.category,
+        planned: payload.planned,
+        dueDay: payload.due_day || "",
+        isRecurring: payload.is_recurring,
+        notes: payload.notes,
+        monthKey: payload.month_key
+      });
       if (state.editing.table === "budget_categories") {
         const b = findEditable(state.budget);
-        if (canSyncUndatedMonthlyData() && b.id) await dbUpdate("budget_categories", b.id, payload);
-        Object.assign(b, { ...payload, spent: 0 });
+        if (state.user && b.id) await dbUpdate("budget_categories", b.id, payload);
+        Object.assign(b, localExpense, { id: b.id, spent: 0 });
         saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
         return;
       }
-      const item = { ...payload, spent: 0 };
-      if (canSyncUndatedMonthlyData()) {
+      const item = { ...localExpense, spent: 0 };
+      if (state.user) {
         const row = await dbInsert("budget_categories", payload);
         if (row) item.id = row.id;
       }
