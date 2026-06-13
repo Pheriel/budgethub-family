@@ -553,6 +553,17 @@ const state = {
   role: "Owner",
   isSuperAdmin: false,
   admin: { query: "", users: [], selected: null, logs: [], message: "", page: 1, pageSize: 20, total: 0, hasPrevious: false, hasNext: false, loaded: false },
+  support: {
+    tickets: [],
+    selected: null,
+    messages: [],
+    message: "",
+    adminTickets: [],
+    adminSelected: null,
+    adminMessages: [],
+    adminFilters: { status: "", category: "", priority: "" },
+    adminMessage: ""
+  },
   currentView: "dashboard",
   debts: [],
   budget: [],
@@ -913,6 +924,35 @@ function roleLabel(role) {
   }[normalizeRole(role)] || role;
 }
 
+const supportCategories = {
+  payment_issue: { fr: "Problème de paiement", en: "Payment issue" },
+  login_issue: { fr: "Problème de connexion", en: "Login issue" },
+  subscription_issue: { fr: "Problème avec mon abonnement", en: "Subscription issue" },
+  budget_bug: { fr: "Bug dans le budget", en: "Budget bug" },
+  debt_bug: { fr: "Bug dans les dettes", en: "Debt bug" },
+  general_question: { fr: "Question générale", en: "General question" },
+  refund_request: { fr: "Demande de remboursement", en: "Refund request" },
+  other: { fr: "Autre", en: "Other" }
+};
+const supportPriorities = {
+  low: { fr: "Basse", en: "Low" },
+  normal: { fr: "Normale", en: "Normal" },
+  high: { fr: "Haute", en: "High" }
+};
+const supportStatuses = {
+  open: { fr: "Ouvert", en: "Open" },
+  in_progress: { fr: "En cours", en: "In progress" },
+  closed: { fr: "Fermé", en: "Closed" }
+};
+
+function supportLabel(map, key) {
+  return (map[key] && map[key][state.lang]) || key || "—";
+}
+
+function supportDate(value) {
+  return value ? new Date(value).toLocaleString(state.lang === "fr" ? "fr-CA" : "en-CA") : "—";
+}
+
 function forbiddenMessage() {
   return state.lang === "fr"
     ? `Votre rôle (${roleLabel(state.role)}) ne permet pas cette action.`
@@ -1013,6 +1053,7 @@ async function checkSuperAdminAccess() {
   if (state.isSuperAdmin && !state.admin.loaded) {
     try {
       await adminLoadUsers();
+      await loadAdminTickets();
     } catch (error) {
       state.admin.message = error.message;
       state.admin.loaded = true;
@@ -2278,6 +2319,200 @@ function subscriptionStatusLabel(user) {
   return user.subscriptionStatus ? `${base} · ${user.subscriptionStatus}` : base;
 }
 
+function supportCategoryOptions(selected = "") {
+  return Object.keys(supportCategories)
+    .map((key) => `<option value="${key}" ${selected === key ? "selected" : ""}>${supportLabel(supportCategories, key)}</option>`)
+    .join("");
+}
+
+function supportPriorityOptions(selected = "normal") {
+  return Object.keys(supportPriorities)
+    .map((key) => `<option value="${key}" ${selected === key ? "selected" : ""}>${supportLabel(supportPriorities, key)}</option>`)
+    .join("");
+}
+
+function supportStatusOptions(selected = "") {
+  return [`<option value="">${state.lang === "fr" ? "Tous les statuts" : "All statuses"}</option>`]
+    .concat(Object.keys(supportStatuses).map((key) => `<option value="${key}" ${selected === key ? "selected" : ""}>${supportLabel(supportStatuses, key)}</option>`))
+    .join("");
+}
+
+async function supportFetch(path, options = {}) {
+  const response = await authFetch(`/api/support${path}`, options);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || result.error || "support_error");
+  return result;
+}
+
+async function loadMySupportTickets() {
+  const result = await supportFetch("/tickets");
+  state.support.tickets = result.tickets || [];
+}
+
+async function loadAdminTickets() {
+  const params = new URLSearchParams();
+  Object.entries(state.support.adminFilters).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  const result = await supportFetch(`/admin/tickets?${params.toString()}`);
+  state.support.adminTickets = result.tickets || [];
+}
+
+async function loadAdminTicket(ticketId) {
+  const result = await supportFetch(`/admin/tickets/${ticketId}`);
+  state.support.adminSelected = result.ticket;
+  state.support.adminMessages = result.messages || [];
+}
+
+function renderSupportModal() {
+  const fr = state.lang === "fr";
+  const content = $("#supportModalContent");
+  if (!content) return;
+  if (!state.user) {
+    content.innerHTML = `
+      <h2>${fr ? "Support BudgetHub Family" : "BudgetHub Family Support"}</h2>
+      <p class="form-note">${fr ? "Connectez-vous pour envoyer une demande de support reliée à votre compte." : "Sign in to send a support request linked to your account."}</p>
+      <button class="primary-button full" id="supportLoginButton" type="button">${t("login")}</button>
+    `;
+    $("#supportLoginButton").addEventListener("click", () => {
+      $("#supportModal").hidden = true;
+      openAuth("login");
+    });
+    return;
+  }
+  content.innerHTML = `
+    <h2>${fr ? "Envoyer une demande de support" : "Send a support request"}</h2>
+    <p class="form-note">${fr ? "Email du compte inclus automatiquement" : "Account email included automatically"}: <strong>${state.user.email}</strong></p>
+    <form class="support-form" id="supportForm">
+      <label><span>${fr ? "Catégorie" : "Category"}</span><select name="category">${supportCategoryOptions()}</select></label>
+      <label><span>${fr ? "Priorité" : "Priority"}</span><select name="priority">${supportPriorityOptions("normal")}</select></label>
+      <label class="wide"><span>${fr ? "Sujet" : "Subject"}</span><input name="subject" maxlength="160" required placeholder="${fr ? "Résumé de votre demande" : "Short summary"}" /></label>
+      <label class="wide"><span>Message</span><textarea name="message" maxlength="5000" required rows="6" placeholder="${fr ? "Décrivez le problème ou la question." : "Describe the issue or question."}"></textarea></label>
+      <button class="primary-button full" type="submit">${fr ? "Envoyer au support" : "Send to support"}</button>
+    </form>
+    <p class="form-note" id="supportMessage" ${state.support.message ? "" : "hidden"}>${state.support.message}</p>
+    <div class="support-ticket-list">
+      <h3>${fr ? "Mes tickets récents" : "My recent tickets"}</h3>
+      ${(state.support.tickets || []).slice(0, 5).map((ticket) => `
+        <article>
+          <strong>${ticket.number}</strong>
+          <span>${supportLabel(supportStatuses, ticket.status)} · ${supportLabel(supportCategories, ticket.category)} · ${supportDate(ticket.createdAt)}</span>
+          <p>${ticket.subject}</p>
+        </article>
+      `).join("") || `<p class="form-note">${fr ? "Aucun ticket pour le moment." : "No tickets yet."}</p>`}
+    </div>
+  `;
+  $("#supportForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const note = $("#supportMessage");
+    note.hidden = false;
+    note.textContent = fr ? "Envoi en cours..." : "Sending...";
+    try {
+      const result = await supportFetch("/tickets", {
+        method: "POST",
+        body: JSON.stringify({
+          category: form.get("category"),
+          priority: form.get("priority"),
+          subject: form.get("subject"),
+          message: form.get("message")
+        })
+      });
+      state.support.message = fr
+        ? `Votre ticket #${result.ticket.number} a bien été envoyé à notre support.`
+        : `Your ticket #${result.ticket.number} has been sent to support.`;
+      await loadMySupportTickets();
+      renderSupportModal();
+    } catch (error) {
+      note.textContent = error.message;
+    }
+  });
+}
+
+async function openSupportModal() {
+  $("#supportModal").hidden = false;
+  state.support.message = "";
+  if (state.user) {
+    try {
+      await loadMySupportTickets();
+    } catch (error) {
+      state.support.message = error.message;
+    }
+  }
+  renderSupportModal();
+}
+
+function renderAdminSupport() {
+  const fr = state.lang === "fr";
+  const selected = state.support.adminSelected;
+  return `
+    <section class="panel">
+      <div class="admin-user-head">
+        <div>
+          <p class="eyebrow">Support</p>
+          <h3>${fr ? "Tickets support" : "Support tickets"}</h3>
+          <p class="form-note">${fr ? "Voir, filtrer et répondre aux demandes des utilisateurs." : "View, filter, and reply to user requests."}</p>
+        </div>
+        <button class="secondary-button" id="adminSupportRefresh" type="button">${fr ? "Rafraîchir" : "Refresh"}</button>
+      </div>
+      <form class="form-grid admin-action-grid" id="adminSupportFilters">
+        <label><span>${fr ? "Statut" : "Status"}</span><select name="status">${supportStatusOptions(state.support.adminFilters.status)}</select></label>
+        <label><span>${fr ? "Catégorie" : "Category"}</span><select name="category"><option value="">${fr ? "Toutes les catégories" : "All categories"}</option>${supportCategoryOptions(state.support.adminFilters.category)}</select></label>
+        <label><span>${fr ? "Priorité" : "Priority"}</span><select name="priority"><option value="">${fr ? "Toutes les priorités" : "All priorities"}</option>${supportPriorityOptions(state.support.adminFilters.priority)}</select></label>
+        <button class="primary-button" type="submit">${fr ? "Filtrer" : "Filter"}</button>
+      </form>
+      ${state.support.adminMessage ? `<p class="form-note">${state.support.adminMessage}</p>` : ""}
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>#</th><th>User</th><th>Email</th><th>${fr ? "Catégorie" : "Category"}</th><th>${fr ? "Priorité" : "Priority"}</th><th>${fr ? "Statut" : "Status"}</th><th>${fr ? "Date" : "Date"}</th><th></th></tr></thead>
+          <tbody>
+            ${(state.support.adminTickets || []).map((ticket) => `
+              <tr class="${selected && selected.id === ticket.id ? "active" : ""}">
+                <td><strong>${ticket.number}</strong></td>
+                <td>${ticket.userId}</td>
+                <td>${ticket.userEmail}</td>
+                <td>${supportLabel(supportCategories, ticket.category)}</td>
+                <td>${supportLabel(supportPriorities, ticket.priority)}</td>
+                <td><span class="status-pill ${ticket.status === "closed" ? "inactive" : "active"}">${supportLabel(supportStatuses, ticket.status)}</span></td>
+                <td>${supportDate(ticket.createdAt)}</td>
+                <td><button class="secondary-button" data-admin-ticket="${ticket.id}" type="button">${fr ? "Voir" : "View"}</button></td>
+              </tr>
+            `).join("") || `<tr><td colspan="8">${fr ? "Aucun ticket." : "No tickets."}</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    ${selected ? `
+      <section class="panel">
+        <div class="admin-user-head">
+          <div>
+            <h3>${selected.number} · ${selected.subject}</h3>
+            <p class="form-note">${selected.userEmail} · ${supportLabel(supportCategories, selected.category)} · ${supportDate(selected.createdAt)}</p>
+          </div>
+          <form class="admin-button-row" id="adminTicketStatusForm">
+            <select name="status">${Object.keys(supportStatuses).map((key) => `<option value="${key}" ${selected.status === key ? "selected" : ""}>${supportLabel(supportStatuses, key)}</option>`).join("")}</select>
+            <button class="secondary-button" type="submit">${fr ? "Changer statut" : "Change status"}</button>
+          </form>
+        </div>
+        <div class="support-thread">
+          ${(state.support.adminMessages || []).map((msg) => `
+            <article class="${msg.isInternal ? "internal" : ""}">
+              <strong>${msg.authorRole === "admin" ? "Admin" : "User"} · ${msg.authorEmail}</strong>
+              <span>${supportDate(msg.createdAt)}${msg.isInternal ? ` · ${fr ? "interne" : "internal"}` : ""}</span>
+              <p>${msg.message}</p>
+            </article>
+          `).join("")}
+        </div>
+        <form class="support-form" id="adminTicketReplyForm">
+          <label class="wide"><span>${fr ? "Réponse" : "Reply"}</span><textarea name="message" rows="5" maxlength="5000" required></textarea></label>
+          <label class="toggle-row"><input name="internal" type="checkbox" /><span>${fr ? "Note interne seulement" : "Internal note only"}</span></label>
+          <button class="primary-button" type="submit">${fr ? "Ajouter la réponse" : "Add reply"}</button>
+        </form>
+      </section>
+    ` : ""}
+  `;
+}
+
 function renderAdmin() {
   const fr = state.lang === "fr";
   if (!state.isSuperAdmin) {
@@ -2305,6 +2540,8 @@ function renderAdmin() {
       </div>
       <span class="chip">${state.user ? state.user.email : ""}</span>
     </section>
+
+    ${renderAdminSupport()}
 
     <section class="panel">
       <h3>${fr ? "Recherche utilisateur" : "User search"}</h3>
@@ -2551,6 +2788,95 @@ function bindViewActions() {
           : (state.lang === "fr" ? "Aucun utilisateur trouvé." : "No user found.");
       } catch (error) {
         state.admin.message = error.message;
+      }
+      renderView();
+    });
+  }
+
+  const adminSupportFilters = $("#adminSupportFilters");
+  if (adminSupportFilters) {
+    adminSupportFilters.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(adminSupportFilters);
+      state.support.adminFilters = {
+        status: form.get("status") || "",
+        category: form.get("category") || "",
+        priority: form.get("priority") || ""
+      };
+      try {
+        await loadAdminTickets();
+        state.support.adminMessage = "";
+      } catch (error) {
+        state.support.adminMessage = error.message;
+      }
+      renderView();
+    });
+  }
+
+  const adminSupportRefresh = $("#adminSupportRefresh");
+  if (adminSupportRefresh) {
+    adminSupportRefresh.addEventListener("click", async () => {
+      try {
+        await loadAdminTickets();
+        if (state.support.adminSelected) await loadAdminTicket(state.support.adminSelected.id);
+        state.support.adminMessage = "";
+      } catch (error) {
+        state.support.adminMessage = error.message;
+      }
+      renderView();
+    });
+  }
+
+  $$("[data-admin-ticket]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await loadAdminTicket(button.dataset.adminTicket);
+        state.support.adminMessage = "";
+      } catch (error) {
+        state.support.adminMessage = error.message;
+      }
+      renderView();
+    });
+  });
+
+  const adminTicketStatusForm = $("#adminTicketStatusForm");
+  if (adminTicketStatusForm && state.support.adminSelected) {
+    adminTicketStatusForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const status = new FormData(adminTicketStatusForm).get("status");
+      try {
+        const result = await supportFetch(`/admin/tickets/${state.support.adminSelected.id}/status`, {
+          method: "POST",
+          body: JSON.stringify({ status })
+        });
+        state.support.adminSelected = result.ticket;
+        state.support.adminMessages = result.messages || [];
+        await loadAdminTickets();
+      } catch (error) {
+        state.support.adminMessage = error.message;
+      }
+      renderView();
+    });
+  }
+
+  const adminTicketReplyForm = $("#adminTicketReplyForm");
+  if (adminTicketReplyForm && state.support.adminSelected) {
+    adminTicketReplyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(adminTicketReplyForm);
+      try {
+        const result = await supportFetch(`/admin/tickets/${state.support.adminSelected.id}/replies`, {
+          method: "POST",
+          body: JSON.stringify({
+            message: form.get("message"),
+            internal: form.get("internal") === "on"
+          })
+        });
+        state.support.adminSelected = result.ticket;
+        state.support.adminMessages = result.messages || [];
+        await loadAdminTickets();
+      } catch (error) {
+        state.support.adminMessage = error.message;
       }
       renderView();
     });
@@ -3406,7 +3732,7 @@ function boot() {
   });
   // Fermer le menu mobile après un choix (lien ou bouton d'action, pas les préférences)
   $("#topbarMenu").addEventListener("click", (event) => {
-    if (event.target.closest("a, #openWorkspace, #openLogin, #topRegister, #startDemo")) {
+    if (event.target.closest("a, #openWorkspace, #openLogin, #topRegister, #startDemo, #openSupport")) {
       setMobileMenu(false);
     }
   });
@@ -3420,6 +3746,9 @@ function boot() {
   $("#startDemo").addEventListener("click", openApp);
   $("#heroDemo").addEventListener("click", openApp);
   $("#heroRegister").addEventListener("click", () => openAuth("register"));
+  $("#openSupport").addEventListener("click", openSupportModal);
+  $("#appSupportButton").addEventListener("click", openSupportModal);
+  $("#supportClose").addEventListener("click", () => { $("#supportModal").hidden = true; });
 
   // Jauge de force en direct pendant la saisie du mot de passe
   $("#authForm").elements.password.addEventListener("input", (event) => {

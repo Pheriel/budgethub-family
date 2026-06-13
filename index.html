@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=17" />
+    <link rel="stylesheet" href="/styles.css?v=18" />
   </head>
   <body>
     <div class="app-shell">
@@ -54,6 +54,7 @@
               <button class="icon-button" id="themeToggle" type="button" aria-label="Changer le thème">☾</button>
             </div>
             <button class="primary-button" id="openWorkspace" type="button" hidden></button>
+            <button class="ghost-button" id="openSupport" type="button">Support</button>
             <button class="ghost-button" id="openLogin" type="button" data-i18n="login">Connexion</button>
             <button class="ghost-button" id="topRegister" type="button" data-i18n="createAccount">Créer un compte</button>
             <button class="primary-button" id="startDemo" type="button" data-i18n="freeDemo">Démo gratuite</button>
@@ -372,6 +373,7 @@
               </select>
               <button class="icon-button" id="appThemeToggle" type="button" aria-label="Changer le thème">☾</button>
               <span class="chip" id="userEmailChip" hidden></span>
+              <button class="ghost-button" id="appSupportButton" type="button">Support</button>
               <button class="ghost-button" id="openRegister" type="button" data-i18n="createAccount">Créer un compte</button>
               <button class="ghost-button" id="logoutButton" type="button" hidden></button>
               <button class="primary-button" id="upgradeButton" type="button" data-i18n="upgrade">Passer Pro</button>
@@ -395,7 +397,14 @@
       </div>
     </div>
 
+    <div id="supportModal" class="modal-overlay" hidden>
+      <div class="modal-card support-modal-card">
+        <button class="modal-close" id="supportClose" type="button" aria-label="Fermer">×</button>
+        <div id="supportModalContent"></div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="/app.js?v=25"></script>
+    <script src="/app.js?v=26"></script>
   </body>
 </html>
