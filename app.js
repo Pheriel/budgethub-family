@@ -725,7 +725,10 @@ function applyTranslations() {
   if (appMonthLabel) appMonthLabel.textContent = monthLabel(state.selectedMonth);
   $("#workspaceTitle").textContent = getViewTitle(state.currentView);
   $("#workspaceEyebrow").textContent = state.plan === "free" ? "Demo" : state.plan;
-  $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan).name;
+  const planName = planDefinitions.find((plan) => plan.id === state.plan).name;
+  $("#activePlanLabel").textContent = planName;
+  const mobilePlanLabel = $("#mobileActivePlanLabel");
+  if (mobilePlanLabel) mobilePlanLabel.textContent = planName;
   renderPricing();
   renderMoneyTags();
   renderLegalPage();
@@ -1412,6 +1415,7 @@ function showLandingPage(page) {
 }
 
 function openApp() {
+  closeAppMenu();
   if (!state.user && !state.debts.length) {
     applyMonthData(demoData);
   }
@@ -1440,6 +1444,39 @@ function getViewTitle(view) {
 // (window scrolle dans le layout: sidebar sticky desktop, statique mobile.)
 function scrollWorkspaceToTop() {
   window.scrollTo({ top: 0, left: 0 });
+}
+
+function setAppMenu(open) {
+  const toggle = $("#appMenuToggle");
+  const backdrop = $("#appMenuBackdrop");
+  document.body.classList.toggle("app-menu-open", open);
+  if (toggle) toggle.setAttribute("aria-expanded", String(open));
+  if (backdrop) backdrop.hidden = !open;
+}
+
+function closeAppMenu() {
+  setAppMenu(false);
+}
+
+function navigateAppView(nextView) {
+  const token = state.viewToken + 1;
+  state.viewToken = token;
+  state.currentView = nextView;
+  state.editing = { table: null, id: null };
+  renderView();
+  scrollWorkspaceToTop();
+  refreshViewData(nextView, token);
+  closeAppMenu();
+}
+
+function handleUpgradeAction() {
+  closeAppMenu();
+  if (state.user && state.plan !== "free") {
+    navigateAppView("account");
+    return;
+  }
+  history.replaceState(null, "", "#pricing");
+  showLandingPage("pricing");
 }
 
 function renderView() {
@@ -3022,11 +3059,15 @@ function renderAdmin() {
 
 function updateUpgradeButton() {
   const button = $("#upgradeButton");
+  const mobileButton = $("#mobileUpgradeButton");
+  const label = state.user && state.plan !== "free"
+    ? `Plan: ${planDefinitions.find((item) => item.id === state.plan).name}`
+    : t("upgrade");
+  if (mobileButton) mobileButton.textContent = label;
   if (state.user && state.plan !== "free") {
-    const plan = planDefinitions.find((item) => item.id === state.plan);
-    button.textContent = state.lang === "fr" ? `Plan: ${plan.name}` : `Plan: ${plan.name}`;
+    button.textContent = label;
   } else {
-    button.textContent = t("upgrade");
+    button.textContent = label;
   }
 }
 
@@ -4407,7 +4448,27 @@ function boot() {
   $("#heroDemo").addEventListener("click", openApp);
   $("#heroRegister").addEventListener("click", () => openAuth("register"));
   $("#openSupport").addEventListener("click", openSupportModal);
-  $("#appSupportButton").addEventListener("click", openSupportModal);
+  $("#appSupportButton").addEventListener("click", () => {
+    closeAppMenu();
+    openSupportModal();
+  });
+  const mobileSupportButton = $("#mobileSupportButton");
+  if (mobileSupportButton) mobileSupportButton.addEventListener("click", () => {
+    closeAppMenu();
+    openSupportModal();
+  });
+  const appMenuToggle = $("#appMenuToggle");
+  if (appMenuToggle) appMenuToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setAppMenu(!document.body.classList.contains("app-menu-open"));
+  });
+  const appMenuClose = $("#appMenuClose");
+  if (appMenuClose) appMenuClose.addEventListener("click", closeAppMenu);
+  const appMenuBackdrop = $("#appMenuBackdrop");
+  if (appMenuBackdrop) appMenuBackdrop.addEventListener("click", closeAppMenu);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeAppMenu();
+  });
   $("#supportClose").addEventListener("click", () => { $("#supportModal").hidden = true; });
 
   // Jauge de force en direct pendant la saisie du mot de passe
@@ -4523,15 +4584,9 @@ function boot() {
       }
     });
   }
-  $("#upgradeButton").addEventListener("click", () => {
-    if (state.user && state.plan !== "free") {
-      state.currentView = "account";
-      renderView();
-      return;
-    }
-    history.replaceState(null, "", "#pricing");
-    showLandingPage("pricing");
-  });
+  $("#upgradeButton").addEventListener("click", handleUpgradeAction);
+  const mobileUpgradeButton = $("#mobileUpgradeButton");
+  if (mobileUpgradeButton) mobileUpgradeButton.addEventListener("click", handleUpgradeAction);
   $("#openWorkspace").addEventListener("click", () => {
     showView("app");
     renderView();
@@ -4649,17 +4704,7 @@ function boot() {
     }
   });
   $$("#appNav button").forEach((button) => button.addEventListener("click", () => {
-    const nextView = button.dataset.view;
-    const token = state.viewToken + 1;
-    state.viewToken = token;
-    state.currentView = nextView;
-    state.editing = { table: null, id: null };
-    renderView();
-    // Remettre le contenu en haut: sinon, en venant d'une page longue déjà
-    // scrollée, la nouvelle vue (plus courte) laisse un gros vide en haut et
-    // semble ne pas s'être rafraîchie (l'utilisateur regarde sous le contenu).
-    scrollWorkspaceToTop();
-    refreshViewData(nextView, token);
+    navigateAppView(button.dataset.view);
   }));
 
   // Rafraîchit l'épargne des objectifs en temps réel (croissance par cotisation)
