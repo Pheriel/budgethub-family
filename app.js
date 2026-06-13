@@ -558,11 +558,16 @@ const state = {
     selected: null,
     messages: [],
     message: "",
+    adminSection: "overview",
     adminTickets: [],
     adminSelected: null,
     adminMessages: [],
     adminFilters: { status: "", category: "", priority: "" },
-    adminMessage: ""
+    adminMessage: "",
+    adminUnreadCount: 0,
+    selectedTicket: null,
+    selectedMessages: [],
+    unreadCount: 0
   },
   currentView: "dashboard",
   debts: [],
@@ -942,6 +947,7 @@ const supportPriorities = {
 const supportStatuses = {
   open: { fr: "Ouvert", en: "Open" },
   in_progress: { fr: "En cours", en: "In progress" },
+  waiting_customer: { fr: "En attente client", en: "Waiting on customer" },
   closed: { fr: "Fermé", en: "Closed" }
 };
 
@@ -951,6 +957,27 @@ function supportLabel(map, key) {
 
 function supportDate(value) {
   return value ? new Date(value).toLocaleString(state.lang === "fr" ? "fr-CA" : "en-CA") : "—";
+}
+
+function badgeText(label, count) {
+  return count ? `${label} ${count}` : label;
+}
+
+function updateSupportBadges() {
+  const supportLabelText = "Support";
+  const myTicketsLabel = state.lang === "fr" ? "Mes tickets" : "My tickets";
+  const adminLabel = t("appAdmin") || "Super Admin";
+  const userCount = state.support.unreadCount || 0;
+  const adminCount = state.support.adminUnreadCount || 0;
+  const supportCount = state.isSuperAdmin ? adminCount : userCount;
+  const openSupport = $("#openSupport");
+  const appSupport = $("#appSupportButton");
+  const supportNav = $("#supportNavButton");
+  const adminNav = $("#adminNavButton");
+  if (openSupport) openSupport.innerHTML = supportCount ? `${supportLabelText} <span class="notification-badge">${supportCount}</span>` : supportLabelText;
+  if (appSupport) appSupport.innerHTML = supportCount ? `${supportLabelText} <span class="notification-badge">${supportCount}</span>` : supportLabelText;
+  if (supportNav) supportNav.innerHTML = userCount ? `${myTicketsLabel} <span class="notification-badge">${userCount}</span>` : myTicketsLabel;
+  if (adminNav) adminNav.innerHTML = adminCount ? `${adminLabel} <span class="notification-badge">${adminCount}</span>` : adminLabel;
 }
 
 function forbiddenMessage() {
@@ -1034,6 +1061,7 @@ function setSessionUser(user) {
   const adminButton = $("#adminNavButton");
   if (adminButton) adminButton.hidden = !state.isSuperAdmin;
   updateUpgradeButton();
+  updateSupportBadges();
 }
 
 async function checkSuperAdminAccess() {
@@ -1060,6 +1088,7 @@ async function checkSuperAdminAccess() {
     }
     if (state.currentView === "admin" && !$("#appView").hidden) renderView();
   }
+  updateSupportBadges();
 }
 
 // Demande au backend de vérifier les achats Stripe récents et de mettre à jour le plan
@@ -1197,6 +1226,9 @@ async function refreshViewData(view) {
   try {
     if (["dashboard", "debts", "strategy", "budget", "transactions", "goals", "family"].includes(view)) {
       await loadUserData();
+    } else if (view === "support") {
+      await loadMySupportTickets();
+      renderView();
     } else if (view === "account") {
       await loadProfilePlan();
     } else if (view === "admin") {
@@ -1387,6 +1419,7 @@ function openApp() {
 
 function getViewTitle(view) {
   if (view === "account") return state.lang === "fr" ? "Mon compte" : "My account";
+  if (view === "support") return state.lang === "fr" ? "Mes tickets" : "My tickets";
   const keys = {
     dashboard: "dashboardTitle",
     debts: "debtsTitle",
@@ -1414,6 +1447,7 @@ function renderView() {
     transactions: renderTransactions,
     goals: renderGoals,
     family: renderFamily,
+    support: renderUserSupport,
     admin: renderAdmin,
     settings: renderSettings,
     account: renderAccount
@@ -2347,6 +2381,15 @@ async function supportFetch(path, options = {}) {
 async function loadMySupportTickets() {
   const result = await supportFetch("/tickets");
   state.support.tickets = result.tickets || [];
+  state.support.unreadCount = result.unreadCount || 0;
+  updateSupportBadges();
+}
+
+async function loadMySupportTicket(ticketId) {
+  const result = await supportFetch(`/tickets/${ticketId}`);
+  state.support.selectedTicket = result.ticket;
+  state.support.selectedMessages = result.messages || [];
+  await loadMySupportTickets();
 }
 
 async function loadAdminTickets() {
@@ -2356,6 +2399,8 @@ async function loadAdminTickets() {
   });
   const result = await supportFetch(`/admin/tickets?${params.toString()}`);
   state.support.adminTickets = result.tickets || [];
+  state.support.adminUnreadCount = result.openUnreadCount || 0;
+  updateSupportBadges();
 }
 
 async function loadAdminTicket(ticketId) {
@@ -2440,6 +2485,63 @@ async function openSupportModal() {
     }
   }
   renderSupportModal();
+}
+
+function renderUserSupport() {
+  const fr = state.lang === "fr";
+  if (!state.user) {
+    return `<section class="panel"><h3>${fr ? "Connectez-vous" : "Sign in"}</h3><p class="form-note">${fr ? "Connectez-vous pour consulter vos tickets." : "Sign in to view your tickets."}</p></section>`;
+  }
+  const selected = state.support.selectedTicket;
+  return `
+    <section class="panel">
+      <div class="admin-user-head">
+        <div>
+          <h3>${fr ? "Mes tickets support" : "My support tickets"}</h3>
+          <p class="form-note">${fr ? "Consultez vos demandes et répondez au support." : "View your requests and reply to support."}</p>
+        </div>
+        <button class="secondary-button" id="userSupportRefresh" type="button">${fr ? "Rafraîchir" : "Refresh"}</button>
+      </div>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>#</th><th>${fr ? "Catégorie" : "Category"}</th><th>${fr ? "Sujet" : "Subject"}</th><th>${fr ? "Statut" : "Status"}</th><th>${fr ? "Date" : "Date"}</th><th></th></tr></thead>
+          <tbody>
+            ${(state.support.tickets || []).map((ticket) => `
+              <tr class="${selected && selected.id === ticket.id ? "active" : ""}">
+                <td><strong>${ticket.number}</strong>${ticket.customerUnread ? `<small>${fr ? "Nouveau" : "New"}</small>` : ""}</td>
+                <td>${supportLabel(supportCategories, ticket.category)}</td>
+                <td>${ticket.subject}</td>
+                <td><span class="status-pill ${ticket.status === "closed" ? "inactive" : "active"}">${supportLabel(supportStatuses, ticket.status)}</span></td>
+                <td>${supportDate(ticket.createdAt)}</td>
+                <td><button class="secondary-button" data-user-ticket="${ticket.id}" type="button">${fr ? "Voir" : "View"}</button></td>
+              </tr>
+            `).join("") || `<tr><td colspan="6">${fr ? "Aucun ticket." : "No tickets."}</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    ${selected ? `
+      <section class="panel">
+        <h3>${selected.number} · ${selected.subject}</h3>
+        <p class="form-note">${supportLabel(supportStatuses, selected.status)} · ${supportLabel(supportCategories, selected.category)} · ${supportDate(selected.createdAt)}</p>
+        <div class="support-thread">
+          ${(state.support.selectedMessages || []).map((msg) => `
+            <article>
+              <strong>${msg.authorRole === "admin" ? "Support" : state.user.email}</strong>
+              <span>${supportDate(msg.createdAt)}</span>
+              <p>${msg.message}</p>
+            </article>
+          `).join("")}
+        </div>
+        ${selected.status !== "closed" ? `
+          <form class="support-form" id="userTicketReplyForm">
+            <label class="wide"><span>${fr ? "Répondre" : "Reply"}</span><textarea name="message" rows="5" maxlength="5000" required></textarea></label>
+            <button class="primary-button" type="submit">${fr ? "Envoyer la réponse" : "Send reply"}</button>
+          </form>
+        ` : `<p class="form-note">${fr ? "Ce ticket est fermé." : "This ticket is closed."}</p>`}
+      </section>
+    ` : ""}
+  `;
 }
 
 function renderAdminSupport() {
@@ -2541,7 +2643,36 @@ function renderAdmin() {
       <span class="chip">${state.user ? state.user.email : ""}</span>
     </section>
 
+    <nav class="admin-tabs" aria-label="Super Admin">
+      ${[
+        ["overview", fr ? "Vue d’ensemble" : "Overview"],
+        ["tickets", fr ? "Tickets support" : "Support tickets"],
+        ["users", fr ? "Utilisateurs" : "Users"],
+        ["subscriptions", fr ? "Abonnements" : "Subscriptions"],
+        ["access", fr ? "Accès admin / accès manuels" : "Admin / manual access"],
+        ["settings", fr ? "Paramètres admin" : "Admin settings"]
+      ].map(([key, label]) => `<button class="${(state.support.adminSection || "overview") === key ? "active" : ""}" data-admin-section="${key}" type="button">${label}${key === "tickets" && state.support.adminUnreadCount ? ` <span class="notification-badge">${state.support.adminUnreadCount}</span>` : ""}</button>`).join("")}
+    </nav>
+
+    <section class="panel admin-overview-panel">
+      <h3>${fr ? "Vue d’ensemble" : "Overview"}</h3>
+      <div class="admin-summary">
+        <div><span>${fr ? "Utilisateurs" : "Users"}</span><strong>${state.admin.total}</strong></div>
+        <div><span>${fr ? "Tickets support" : "Support tickets"}</span><strong>${(state.support.adminTickets || []).length}</strong></div>
+        <div><span>${fr ? "Tickets ouverts non lus" : "Unread open tickets"}</span><strong>${state.support.adminUnreadCount || 0}</strong></div>
+      </div>
+    </section>
+
     ${renderAdminSupport()}
+
+    <section class="panel admin-settings-panel">
+      <h3>${fr ? "Paramètres admin" : "Admin settings"}</h3>
+      <div class="admin-summary">
+        <div><span>SUPPORT_FROM_EMAIL</span><strong>${fr ? "Config serveur" : "Server config"}</strong></div>
+        <div><span>SUPPORT_ADMIN_EMAIL</span><strong>${fr ? "Config serveur" : "Server config"}</strong></div>
+        <div><span>SMTP</span><strong>${fr ? "Voir .env" : "See .env"}</strong></div>
+      </div>
+    </section>
 
     <section class="panel">
       <h3>${fr ? "Recherche utilisateur" : "User search"}</h3>
@@ -2721,7 +2852,47 @@ async function adminPost(path, payload) {
   await adminLoadUsers(state.admin.page);
 }
 
+function applyAdminSectionVisibility() {
+  if (state.currentView !== "admin" || !state.isSuperAdmin) return;
+  const section = state.support.adminSection || "overview";
+  const panels = Array.from(document.querySelectorAll("#viewContainer > .panel"));
+  panels.forEach((panel) => {
+    const isHero = panel.classList.contains("admin-hero");
+    const isOverview = panel.classList.contains("admin-overview-panel");
+    const isSettings = panel.classList.contains("admin-settings-panel");
+    const isTickets = panel.querySelector("#adminSupportFilters, #adminTicketReplyForm, #adminTicketStatusForm");
+    const hasSelectedUser = panel.querySelector("#adminRefreshUser");
+    const isUsers = panel.querySelector("#adminSearchForm") || (hasSelectedUser && section === "users");
+    const isSubscriptions = panel.querySelector("#adminPlanForm") || (hasSelectedUser && section === "subscriptions");
+    const isAccess = panel.querySelector("[data-admin-extend], [data-admin-suspend], .admin-log") || (hasSelectedUser && section === "access");
+    const show = isHero
+      || (section === "overview" && isOverview)
+      || (section === "tickets" && isTickets)
+      || (section === "users" && isUsers)
+      || (section === "subscriptions" && isSubscriptions)
+      || (section === "access" && isAccess)
+      || (section === "settings" && isSettings);
+    panel.hidden = !show;
+  });
+}
+
 function bindViewActions() {
+  applyAdminSectionVisibility();
+
+  $$("[data-admin-section]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.support.adminSection = button.dataset.adminSection;
+      if (state.support.adminSection === "tickets") {
+        try {
+          await loadAdminTickets();
+        } catch (error) {
+          state.support.adminMessage = error.message;
+        }
+      }
+      renderView();
+    });
+  });
+
   const upgradePreviewForm = $("#upgradePreviewForm");
   if (upgradePreviewForm) {
     upgradePreviewForm.addEventListener("submit", async (event) => {
@@ -2788,6 +2959,49 @@ function bindViewActions() {
           : (state.lang === "fr" ? "Aucun utilisateur trouvé." : "No user found.");
       } catch (error) {
         state.admin.message = error.message;
+      }
+      renderView();
+    });
+  }
+
+  const userSupportRefresh = $("#userSupportRefresh");
+  if (userSupportRefresh) {
+    userSupportRefresh.addEventListener("click", async () => {
+      try {
+        await loadMySupportTickets();
+      } catch (error) {
+        state.support.message = error.message;
+      }
+      renderView();
+    });
+  }
+
+  $$("[data-user-ticket]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await loadMySupportTicket(button.dataset.userTicket);
+      } catch (error) {
+        state.support.message = error.message;
+      }
+      renderView();
+    });
+  });
+
+  const userTicketReplyForm = $("#userTicketReplyForm");
+  if (userTicketReplyForm && state.support.selectedTicket) {
+    userTicketReplyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = new FormData(userTicketReplyForm).get("message");
+      try {
+        const result = await supportFetch(`/tickets/${state.support.selectedTicket.id}/replies`, {
+          method: "POST",
+          body: JSON.stringify({ message })
+        });
+        state.support.selectedTicket = result.ticket;
+        state.support.selectedMessages = result.messages || [];
+        await loadMySupportTickets();
+      } catch (error) {
+        state.support.message = error.message;
       }
       renderView();
     });
@@ -3993,6 +4207,12 @@ function boot() {
     state.editing = { table: null, id: null };
     renderView();
     refreshViewData(button.dataset.view);
+    if (button.dataset.view === "support") {
+      loadMySupportTickets().then(renderView).catch((error) => {
+        state.support.message = error.message;
+        renderView();
+      });
+    }
   }));
 
   // Rafraîchit l'épargne des objectifs en temps réel (croissance par cotisation)
