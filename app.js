@@ -449,6 +449,15 @@ const currencyMeta = {
   EUR: { rate: 0.68, locale: "fr-FR" }
 };
 
+const incomeFrequencies = {
+  weekly: { fr: "Par semaine", en: "Weekly", factor: 52 / 12 },
+  biweekly: { fr: "Aux 2 semaines", en: "Every 2 weeks", factor: 26 / 12 },
+  every15: { fr: "Aux 15 jours", en: "Every 15 days", factor: 24 / 12 },
+  twiceMonthly: { fr: "2 fois par mois", en: "Twice monthly", factor: 2 },
+  monthly: { fr: "Par mois", en: "Monthly", factor: 1 },
+  annual: { fr: "Annuel", en: "Annual", factor: 1 / 12 }
+};
+
 function detectDefaultCurrency() {
   const locale = navigator.language || (navigator.languages && navigator.languages[0]) || "fr-CA";
   const region = locale.split("-")[1]?.toUpperCase();
@@ -967,15 +976,6 @@ const expenseCategories = [
   { value: "subscriptions", fr: "Abonnements", en: "Subscriptions" },
   { value: "other", fr: "Autre", en: "Other" }
 ];
-
-const incomeFrequencies = {
-  weekly: { fr: "Par semaine", en: "Weekly", factor: 52 / 12 },
-  biweekly: { fr: "Aux 2 semaines", en: "Every 2 weeks", factor: 26 / 12 },
-  every15: { fr: "Aux 15 jours", en: "Every 15 days", factor: 24 / 12 },
-  twiceMonthly: { fr: "2 fois par mois", en: "Twice monthly", factor: 2 },
-  monthly: { fr: "Par mois", en: "Monthly", factor: 1 },
-  annual: { fr: "Annuel", en: "Annual", factor: 1 / 12 }
-};
 
 const supportStatuses = {
   open: { fr: "Ouvert", en: "Open" },
