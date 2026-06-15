@@ -1765,10 +1765,19 @@ function totals() {
   const goalContributions = state.goals.reduce((sum, item) => sum + myShare(item, item.monthlyContribution || 0), 0);
   const income = state.income + extraIncome;
   const availableAfterBills = income - monthlyExpenses - debtPayments;
-  const leftover = availableAfterBills - goalContributions;
-  const saved = goalContributions + Math.max(0, leftover);
+  // Revenu disponible AVANT le paiement extra Snowball/Avalanche (= max extra possible).
+  const availableForExtra = Math.max(0, availableAfterBills - goalContributions);
+  // Le paiement extra Snowball/Avalanche fait partie du budget mensuel: il réduit
+  // le reste à vivre. Les minimums récupérés des dettes terminées NE sont PAS
+  // soustraits ici (ils proviennent déjà des paiements minimums du budget).
+  const hasActiveDebt = state.debts.some((item) => clampNumber(item.balance) > 0.005);
+  const extraDebtPayment = hasActiveDebt
+    ? Math.min(Math.max(0, clampNumber(state.debtStrategy.extraPayment)), availableForExtra)
+    : 0;
+  const leftover = availableAfterBills - goalContributions - extraDebtPayment;
+  const saved = goalContributions + extraDebtPayment + Math.max(0, leftover);
   const savingsRate = income > 0 ? Math.round((saved / income) * 100) : 0;
-  return { debt, debtPayments, debtInterest, monthlyExpenses, trackedSpending, extraIncome, goalContributions, income, availableAfterBills, leftover, savingsRate };
+  return { debt, debtPayments, debtInterest, monthlyExpenses, trackedSpending, extraIncome, goalContributions, income, availableAfterBills, availableForExtra, extraDebtPayment, leftover, savingsRate };
 }
 
 function renderDashboard() {
@@ -2328,37 +2337,83 @@ function renderPremiumCards(context) {
   `;
 }
 
-function renderDebtTimeline(plan, startMonth) {
+function renderDebtTimeline(plan, startMonth, extraPayment = 0) {
   const fr = state.lang === "fr";
+  const extra = Math.max(0, clampNumber(extraPayment));
   const events = (plan.payoffEvents || []).slice().sort((a, b) => a.month - b.month);
   const lastEvent = events.at(-1);
+
+  // Regroupe les dettes terminées par mois de simulation (plusieurs dettes
+  // peuvent être remboursées le même mois).
+  const groups = [];
+  const byMonth = new Map();
+  events.forEach((event) => {
+    if (!byMonth.has(event.month)) {
+      const group = { month: event.month, items: [] };
+      byMonth.set(event.month, group);
+      groups.push(group);
+    }
+    byMonth.get(event.month).items.push(event);
+  });
+
+  // Résumé en haut de la timeline.
+  const freedFinal = (plan.recoveredMonthly || 0) + extra;
+  const debtFreeDate = Number.isFinite(plan.months)
+    ? (lastEvent?.date ? formatDateShort(new Date(lastEvent.date)) : formatMonthOffset(startMonth, plan.months))
+    : (fr ? "Non calculable" : "Not calculable");
+  const summary = `
+    <div class="timeline-summary">
+      <div><small>${fr ? "Dettes restantes" : "Remaining debts"}</small><strong>${plan.debts.length}</strong></div>
+      <div><small>${fr ? "Date libre de dettes" : "Debt-free date"}</small><strong>${debtFreeDate}</strong></div>
+      <div><small>${fr ? "Mois avant la liberté" : "Months to freedom"}</small><strong>${Number.isFinite(plan.months) ? monthCountLabel(plan.months) : "—"}</strong></div>
+      <div><small>${fr ? "Paiement mensuel libéré final" : "Final freed monthly payment"}</small><strong>${money(freedFinal)}/${fr ? "mois" : "mo"}</strong></div>
+      <div><small>${fr ? "Intérêts estimés" : "Estimated interest"}</small><strong>${money(plan.totalInterest)}</strong></div>
+    </div>`;
+
+  let cumulativeFreed = 0;
+  const groupSteps = groups.map((group, index) => {
+    const groupRecovered = group.items.reduce((sum, e) => sum + (e.recovered || 0), 0);
+    cumulativeFreed += groupRecovered;
+    const accelerated = extra + cumulativeFreed; // réellement appliqué à la dette ciblée
+    const monthLabelText = group.items[0].date ? monthLabel(group.items[0].date.slice(0, 7)) : formatMonthOffset(startMonth, group.month);
+    const rows = group.items.map((event) => `
+      <li class="timeline-debt-row">
+        <span>${event.name}</span>
+        <span class="timeline-meta">${event.date ? formatDateShort(new Date(event.date)) : ""} · +${money(event.recovered)}/${fr ? "mois" : "mo"} ${fr ? "récupéré" : "freed"}</span>
+      </li>`).join("");
+    return `
+      <li class="timeline-step timeline-month-group">
+        <span class="timeline-dot">${index + 1}</span>
+        <div class="timeline-body">
+          <strong>${monthLabelText}</strong>
+          <ul class="timeline-debt-list">${rows}</ul>
+          <span class="timeline-meta timeline-freed">${fr ? "Paiements libérés cumulés" : "Cumulative freed payments"}: <strong>${money(cumulativeFreed)}/${fr ? "mois" : "mo"}</strong></span>
+          <span class="timeline-meta timeline-accel">${fr ? "Paiement accéléré disponible pour la prochaine dette" : "Accelerated payment available for the next debt"}: <strong>${money(accelerated)}/${fr ? "mois" : "mo"}</strong></span>
+        </div>
+      </li>`;
+  }).join("");
+
   const debtFreeStep = Number.isFinite(plan.months) && plan.months > 0
     ? `<li class="timeline-step timeline-step-final">
         <span class="timeline-dot">🏁</span>
         <div class="timeline-body">
           <strong>${fr ? "Libre de dettes" : "Debt-free"}</strong>
-          <span class="timeline-meta">${lastEvent?.date ? formatDateShort(new Date(lastEvent.date)) : formatMonthOffset(startMonth, plan.months)}</span>
+          <span class="timeline-meta">${debtFreeDate} · ${fr ? "Paiement libéré" : "Freed payment"}: ${money(freedFinal)}/${fr ? "mois" : "mo"}</span>
         </div>
       </li>`
     : "";
+
   return `
+    ${summary}
     <ol class="debt-timeline">
       <li class="timeline-step timeline-step-start">
         <span class="timeline-dot">📍</span>
         <div class="timeline-body">
           <strong>${fr ? "Aujourd'hui" : "Today"}</strong>
-          <span class="timeline-meta">${money(plan.originalBalance)} · ${plan.debts.length} ${fr ? "dettes" : "debts"}</span>
+          <span class="timeline-meta">${money(plan.originalBalance)} · ${plan.debts.length} ${fr ? "dettes" : "debts"} · ${fr ? "Paiement extra" : "Extra payment"}: ${money(extra)}/${fr ? "mois" : "mo"}</span>
         </div>
       </li>
-      ${events.map((event, index) => `
-        <li class="timeline-step">
-          <span class="timeline-dot">${index + 1}</span>
-          <div class="timeline-body">
-            <strong>${event.name}</strong>
-            <span class="timeline-meta">${event.date ? formatDateShort(new Date(event.date)) : formatMonthOffset(startMonth, event.month)} · +${money(event.recovered)}/${fr ? "mois" : "mo"} ${fr ? "récupéré" : "freed"}</span>
-          </div>
-        </li>
-      `).join("")}
+      ${groupSteps}
       ${debtFreeStep}
     </ol>
   `;
@@ -2463,7 +2518,13 @@ function renderStrategy() {
   const debts = state.debts.map(cleanDebt).filter((debt) => debt.balance > 0.005);
   const selectedMethod = state.debtStrategy.method === "snowball" ? "snowball" : "avalanche";
   const otherMethod = selectedMethod === "snowball" ? "avalanche" : "snowball";
-  const extraPayment = Math.max(0, clampNumber(state.debtStrategy.extraPayment));
+  // Le paiement extra fait partie du budget mensuel et ne peut pas dépasser le
+  // revenu disponible. On limite automatiquement la valeur utilisée pour la projection.
+  const budget = totals();
+  const availableForExtra = budget.availableForExtra;
+  const enteredExtra = Math.max(0, clampNumber(state.debtStrategy.extraPayment));
+  const extraPayment = Math.min(enteredExtra, availableForExtra);
+  const extraExceeds = enteredExtra > availableForExtra + 0.005;
   const startMonth = state.debtStrategy.startMonth;
   // Calculs réels memoïsés: snowball/avalanche calculés une fois, les scénarios
   // sélectionné/comparaison ne sont que des références (aucun recalcul).
@@ -2527,6 +2588,16 @@ function renderStrategy() {
         <button class="primary-button" type="submit">${fr ? "Recalculer" : "Recalculate"}</button>
       </form>
     </section>
+    <section class="panel budget-impact-panel">
+      <div class="budget-impact">
+        <div><small>${fr ? "Revenu disponible" : "Available income"}</small><strong>${money(availableForExtra)}</strong></div>
+        <div><small>${fr ? "Paiement extra Snowball/Avalanche" : "Snowball/Avalanche extra payment"}</small><strong>${money(extraPayment)}</strong></div>
+        <div><small>${fr ? "Reste à vivre" : "Money left to live"}</small><strong class="${budget.leftover < 0 ? "pill-danger" : "pill-good"}">${money(Math.max(0, availableForExtra - extraPayment))}</strong></div>
+      </div>
+      ${extraExceeds ? `<p class="form-note role-note">${fr
+        ? `Le paiement extra dépasse votre revenu disponible. Il a été limité automatiquement à ${money(availableForExtra)}.`
+        : `The extra payment exceeds your available income. It was automatically capped at ${money(availableForExtra)}.`}</p>` : ""}
+    </section>
     ${warning}
     ${renderPremiumCards({ fr, selected, snowball: snowballPlan, avalanche: avalanchePlan, extraPayment, startMonth })}
     <div class="strategy-summary-grid">
@@ -2583,7 +2654,7 @@ function renderStrategy() {
         </div>
         <button class="secondary-button" id="strategyExportBtn" type="button">${fr ? "📄 Préparer l'export (PDF bientôt)" : "📄 Prepare export (PDF soon)"}</button>
       </div>
-      ${renderDebtTimeline(selected, startMonth)}
+      ${renderDebtTimeline(selected, startMonth, extraPayment)}
     </section>
     <section class="panel">
       <div class="strategy-panel-head">
