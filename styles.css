@@ -2162,21 +2162,58 @@ h3 {
   align-items: center;
   gap: 0.55rem;
   min-height: 2.65rem;
+  justify-content: flex-start;
 }
 
-.checkbox-field input {
+.checkbox-field input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
   min-height: auto;
+  margin: 0;
+}
+
+.checkbox-field span {
+  display: inline;
+  margin: 0;
 }
 
 .sharing-block {
   grid-column: 1 / -1;
-  display: grid;
-  gap: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-height: 0;
+  height: auto;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.1rem 0 0.25rem;
+}
+
+/* La case + le label restent collés à gauche, largeur du contenu (pas de bloc vide). */
+.sharing-block .checkbox-field {
+  width: auto;
+  max-width: 100%;
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  justify-content: flex-start;
+  line-height: 1.35;
+}
+
+.sharing-block .checkbox-field span {
+  display: inline;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .sharing-options {
+  width: 100%;
   display: grid;
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  margin-top: 0.2rem;
 }
 
 .split-config {
@@ -2804,6 +2841,14 @@ label select {
 
   .form-grid {
     gap: 0.7rem;
+  }
+
+  .sharing-block {
+    padding: 0;
+  }
+
+  .sharing-options {
+    grid-template-columns: 1fr;
   }
 }
 
