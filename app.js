@@ -571,13 +571,15 @@ const state = {
   },
   currentView: "dashboard",
   viewToken: 0,
+  incomeInput: 0,
+  incomeFrequency: localStorage.getItem("bh_income_frequency") || "monthly",
   debts: [],
   budget: [],
   transactions: [],
   goals: [],
   members: [],
   debtStrategy: {
-    method: localStorage.getItem("bh_debt_strategy_method") || "avalanche",
+    method: localStorage.getItem("bh_debt_strategy_method") || "snowball",
     extraPayment: Number(localStorage.getItem("bh_debt_strategy_extra") || 100),
     startMonth: localStorage.getItem("bh_debt_strategy_start") || currentMonthKey()
   }
@@ -586,8 +588,8 @@ const state = {
 // Données fictives affichées uniquement en mode démo (sans compte)
 const demoData = {
   debts: [
-    { name: "Carte Visa", balance: 4850, rate: 19.99, minPayment: 145 },
-    { name: "Prêt auto", balance: 12800, rate: 7.49, minPayment: 410 }
+    { name: "Carte Visa", balance: 4850, rate: 19.99, minPayment: 145, paymentDay: 28 },
+    { name: "Prêt auto", balance: 12800, rate: 7.49, minPayment: 410, paymentDay: 1 }
   ],
   budget: [
     { name: "Appartement", category: "housing", planned: 1300, dueDay: 1, isRecurring: true, notes: "" },
@@ -620,7 +622,9 @@ function monthlyStorageKey(monthKey = state.selectedMonth) {
 
 function applyMonthData(data) {
   const monthData = data || emptyMonthData();
-  state.income = Number(monthData.income || 0);
+  state.incomeFrequency = monthData.incomeFrequency || state.incomeFrequency || "monthly";
+  state.incomeInput = Number(monthData.incomeInput ?? monthData.income ?? 0);
+  state.income = Number(monthData.income || monthlyIncomeFromPay(state.incomeInput, state.incomeFrequency));
   state.debts = (monthData.debts || []).map((item) => ({ ...item }));
   state.budget = (monthData.budget || []).map((item) => normalizeExpense(item));
   state.transactions = (monthData.transactions || []).map((item) => ({ ...item }));
@@ -630,6 +634,8 @@ function applyMonthData(data) {
 function saveMonthData() {
   localStorage.setItem(monthlyStorageKey(), JSON.stringify({
     income: state.income,
+    incomeInput: state.incomeInput,
+    incomeFrequency: state.incomeFrequency,
     debts: state.debts,
     budget: state.budget,
     transactions: state.transactions,
@@ -962,6 +968,15 @@ const expenseCategories = [
   { value: "other", fr: "Autre", en: "Other" }
 ];
 
+const incomeFrequencies = {
+  weekly: { fr: "Par semaine", en: "Weekly", factor: 52 / 12 },
+  biweekly: { fr: "Aux 2 semaines", en: "Every 2 weeks", factor: 26 / 12 },
+  every15: { fr: "Aux 15 jours", en: "Every 15 days", factor: 24 / 12 },
+  twiceMonthly: { fr: "2 fois par mois", en: "Twice monthly", factor: 2 },
+  monthly: { fr: "Par mois", en: "Monthly", factor: 1 },
+  annual: { fr: "Annuel", en: "Annual", factor: 1 / 12 }
+};
+
 const supportStatuses = {
   open: { fr: "Ouvert", en: "Open" },
   in_progress: { fr: "En cours", en: "In progress" },
@@ -998,6 +1013,22 @@ function normalizeExpense(item = {}) {
     notes: item.notes || "",
     monthKey: item.monthKey || item.month_key || state.selectedMonth
   };
+}
+
+function incomeFrequencyLabel(value) {
+  const frequency = incomeFrequencies[value] || incomeFrequencies.monthly;
+  return frequency[state.lang] || frequency.fr;
+}
+
+function incomeFrequencyOptions(selected) {
+  return Object.entries(incomeFrequencies).map(([value, item]) =>
+    `<option value="${value}" ${selected === value ? "selected" : ""}>${item[state.lang]}</option>`
+  ).join("");
+}
+
+function monthlyIncomeFromPay(amount, frequency) {
+  const model = incomeFrequencies[frequency] || incomeFrequencies.monthly;
+  return Math.max(0, clampNumber(amount)) * model.factor;
 }
 
 function supportDate(value) {
@@ -1229,17 +1260,17 @@ async function loadUserData(shouldRender = true) {
   if (!supabaseClient || !state.user) return;
   const { start, end } = selectedMonthRange();
   const [debts, budget, transactions, goals, members, incomes] = await Promise.all([
-    supabaseClient.from("debts").select("id,name,balance,rate,min_payment").order("created_at"),
+    supabaseClient.from("debts").select("id,name,balance,rate,min_payment,payment_day").order("created_at"),
     supabaseClient.from("budget_categories").select("id,name,category,planned,spent,due_day,is_recurring,notes,month_key").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
     supabaseClient.from("transactions").select("id,date,name,category,amount").gte("date", start).lt("date", end).order("date", { ascending: false }),
     supabaseClient.from("goals").select("id,name,target,saved,monthly_contribution,created_at").order("created_at"),
     supabaseClient.from("family_members").select("id,name,role,email").order("created_at"),
-    supabaseClient.from("profiles").select("monthly_income")
+    supabaseClient.from("profiles").select("monthly_income,income_amount,income_frequency")
   ]);
   state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "" }));
   const seed = {
     debts: (debts.data || []).map((row) => ({
-      id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment)
+      id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment), paymentDay: clampPaymentDay(row.payment_day || 1)
     })),
     budget: (budget.data || []).map((row) => normalizeExpense({
       id: row.id,
@@ -1259,8 +1290,10 @@ async function loadUserData(shouldRender = true) {
       id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved),
       monthlyContribution: Number(row.monthly_contribution || 0), createdAt: row.created_at
     })),
-    // Revenu du foyer = somme des salaires de tous les membres de la famille
-    income: (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0)
+    // Revenu du foyer = somme des salaires mensuels de tous les membres de la famille
+    income: (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0),
+    incomeInput: Number((incomes.data || [])[0]?.income_amount ?? (incomes.data || [])[0]?.monthly_income ?? 0),
+    incomeFrequency: (incomes.data || [])[0]?.income_frequency || "monthly"
   };
   loadMonthData(state.selectedMonth === currentMonthKey() ? seed : emptyMonthData());
   if (shouldRender) renderView();
@@ -1340,10 +1373,14 @@ function goalCurrentSaved(goal) {
 }
 
 // Met à jour le salaire de l'utilisateur connecté
-async function updateIncome(value) {
+async function updateIncome(value, frequency = state.incomeFrequency) {
   if (!supabaseClient || !state.user) return;
   if (!canSyncUndatedMonthlyData()) return;
-  await supabaseClient.from("profiles").update({ monthly_income: value }).eq("id", state.user.id);
+  await supabaseClient.from("profiles").update({
+    income_amount: value,
+    income_frequency: frequency,
+    monthly_income: monthlyIncomeFromPay(value, frequency)
+  }).eq("id", state.user.id);
   saveMonthData();
 }
 
@@ -1548,6 +1585,7 @@ function renderView() {
     account: renderAccount
   };
   $("#viewContainer").innerHTML = renderers[state.currentView]();
+  bindDecimalInputs($("#viewContainer"));
   bindViewActions();
 }
 
@@ -1627,13 +1665,15 @@ function renderDashboard() {
     <section class="panel income-panel">
       ${can("editData") ? `
       <form class="form-grid" id="incomeForm">
-        <label><span>${fr ? "Revenu mensuel du foyer (salaire net)" : "Household monthly income (net salary)"}</span>
-          <input name="income" type="number" min="0" step="0.01" value="${state.income || ""}" placeholder="3500" /></label>
+        <label><span>${fr ? "Revenu net par paie" : "Net income per pay"}</span>
+          <input name="income" ${decimalInputAttrs("1560.00")} value="${state.incomeInput || state.income || ""}" /></label>
+        <label><span>${fr ? "Fréquence de paie" : "Pay frequency"}</span>
+          <select name="incomeFrequency">${incomeFrequencyOptions(state.incomeFrequency)}</select></label>
         <button class="primary-button" type="submit">${fr ? "Enregistrer le revenu" : "Save income"}</button>
       </form>
       <p class="form-note">${fr
-        ? "Votre salaire net mensuel sert à calculer ce qu'il vous reste à la fin du mois."
-        : "Your net monthly salary is used to compute what's left at the end of the month."}</p>` : `
+        ? `Revenu entré: ${money(state.incomeInput || state.income)} · Fréquence: ${incomeFrequencyLabel(state.incomeFrequency)} · Équivalent mensuel estimé: ${money(state.income)}`
+        : `Entered income: ${money(state.incomeInput || state.income)} · Frequency: ${incomeFrequencyLabel(state.incomeFrequency)} · Estimated monthly equivalent: ${money(state.income)}`}</p>` : `
       <p><strong>${fr ? "Revenu mensuel du foyer" : "Household monthly income"}:</strong> ${money(state.income)}</p>
       ${readOnlyNote()}`}
     </section>
@@ -1704,9 +1744,10 @@ function renderDebts() {
         : "Add amounts you must repay here: credit cards, Affirm, car loans, student loans, lines of credit, etc. Minimum payments are included in the monthly calculation."}</p>
       <form class="form-grid" id="debtForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="Mastercard" value="${d ? d.name : ""}" /></label>
-        <label><span>${t("balance")}</span><input name="balance" required type="number" min="1" placeholder="2500" value="${d ? d.balance : ""}" /></label>
-        <label><span>${t("rate")}</span><input name="rate" required type="number" min="0" step="0.01" placeholder="18.99" value="${d ? d.rate : ""}" /></label>
-        <label><span>${t("minPayment")}</span><input name="minPayment" required type="number" min="0" step="0.01" placeholder="75" value="${d ? d.minPayment : ""}" /></label>
+        <label><span>${t("balance")}</span><input name="balance" required ${decimalInputAttrs("2500.00")} value="${d ? d.balance : ""}" /></label>
+        <label><span>${t("rate")}</span><input name="rate" required ${decimalInputAttrs("18.99")} value="${d ? d.rate : ""}" /></label>
+        <label><span>${t("minPayment")}</span><input name="minPayment" required ${decimalInputAttrs("75.00")} value="${d ? d.minPayment : ""}" /></label>
+        <label><span>${fr ? "Jour du paiement" : "Payment day"}</span><input name="paymentDay" type="number" min="1" max="31" step="1" placeholder="15" value="${d ? clampPaymentDay(d.paymentDay) : ""}" /></label>
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : t("addDebt")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
@@ -1725,6 +1766,7 @@ function recommendedPayment(debt) {
 function debtTable(actions) {
   const fr = state.lang === "fr";
   const showActions = actions && can("editData");
+  const paymentDayLabel = fr ? "Jour paiement" : "Payment day";
   const recommendedLabel = fr ? "Paiement recommandé" : "Recommended payment";
   const interestLabel = fr ? "Intérêts/mois" : "Interest/mo";
   if (!state.debts.length) {
@@ -1733,7 +1775,7 @@ function debtTable(actions) {
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${recommendedLabel}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${paymentDayLabel}</th><th>${recommendedLabel}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.debts.map((debt, index) => `
             <tr>
@@ -1742,6 +1784,7 @@ function debtTable(actions) {
               <td data-label="${t("rate")}">${debt.rate.toFixed(2)}%</td>
               <td data-label="${interestLabel}">${money(monthlyInterest(debt))}</td>
               <td data-label="${t("minPayment")}">${money(debt.minPayment)}</td>
+              <td data-label="${paymentDayLabel}">${clampPaymentDay(debt.paymentDay)}</td>
               <td data-label="${recommendedLabel}">${money(recommendedPayment(debt))}</td>
               ${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-debt="${debt.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
             </tr>
@@ -1753,22 +1796,54 @@ function debtTable(actions) {
 }
 
 function clampNumber(value, fallback = 0) {
-  const number = Number(value);
+  const normalized = typeof value === "string"
+    ? value.trim().replace(/\s/g, "").replace(",", ".")
+    : value;
+  const number = Number(normalized);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function clampPaymentDay(value) {
+  const day = Math.round(clampNumber(value, 1));
+  return Math.min(31, Math.max(1, day || 1));
+}
+
+function decimalInputAttrs(placeholder = "") {
+  return `type="text" min="0" step="0.01" inputmode="decimal" data-decimal-input ${placeholder ? `placeholder="${placeholder}"` : ""}`;
+}
+
+function signedDecimalInputAttrs(placeholder = "") {
+  return `type="text" step="0.01" inputmode="decimal" data-decimal-input ${placeholder ? `placeholder="${placeholder}"` : ""}`;
+}
+
+function bindDecimalInputs(root = document) {
+  root.querySelectorAll("[data-decimal-input]").forEach((input) => {
+    input.addEventListener("input", () => {
+      if (input.value.includes(",")) input.value = input.value.replace(/,/g, ".");
+    });
+    input.addEventListener("paste", () => {
+      setTimeout(() => {
+        if (input.value.includes(",")) input.value = input.value.replace(/,/g, ".");
+      }, 0);
+    });
+  });
 }
 
 function cleanDebt(debt, index) {
   const balance = Math.max(0, clampNumber(debt.balance));
   const rate = Math.max(0, clampNumber(debt.rate));
   const minPayment = Math.max(0, clampNumber(debt.minPayment));
+  const paymentDay = clampPaymentDay(debt.paymentDay ?? debt.payment_day ?? 1);
   return {
     id: debt.id || `debt-${index}`,
     name: debt.name || `${state.lang === "fr" ? "Dette" : "Debt"} ${index + 1}`,
     balance,
     rate,
     minPayment,
+    paymentDay,
     originalBalance: balance,
     payoffMonth: null,
+    payoffDate: null,
     totalPaid: 0,
     interestPaid: 0
   };
@@ -1782,6 +1857,47 @@ function addMonthsToMonthKey(monthKey, months) {
 
 function formatMonthOffset(monthKey, offset) {
   return monthLabel(addMonthsToMonthKey(monthKey, offset));
+}
+
+function lastDayOfMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function paymentDateForMonth(year, monthIndex, paymentDay) {
+  const safeDay = Math.min(clampPaymentDay(paymentDay), lastDayOfMonth(year, monthIndex));
+  return new Date(year, monthIndex, safeDay);
+}
+
+function paymentDateForDebt(startMonth, paymentDay, paymentNumber) {
+  const [year, month] = (startMonth || currentMonthKey()).split("-").map(Number);
+  const today = new Date();
+  const startDate = startMonth === currentMonthKey()
+    ? new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    : new Date(year, month - 1, 1);
+  let cursorYear = year;
+  let cursorMonth = month - 1;
+  let firstPayment = paymentDateForMonth(cursorYear, cursorMonth, paymentDay);
+  if (firstPayment < startDate) {
+    cursorMonth += 1;
+    if (cursorMonth > 11) {
+      cursorMonth = 0;
+      cursorYear += 1;
+    }
+    firstPayment = paymentDateForMonth(cursorYear, cursorMonth, paymentDay);
+  }
+  const zeroBasedTarget = firstPayment.getMonth() + Math.max(0, paymentNumber - 1);
+  const targetYear = firstPayment.getFullYear() + Math.floor(zeroBasedTarget / 12);
+  const targetMonth = ((zeroBasedTarget % 12) + 12) % 12;
+  return paymentDateForMonth(targetYear, targetMonth, paymentDay);
+}
+
+function formatDateShort(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(state.lang === "fr" ? "fr-CA" : "en-CA", {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
 }
 
 function monthCountLabel(months) {
@@ -1814,6 +1930,7 @@ function simulateDebtPlan(inputDebts, options = {}) {
   const extraPayment = Math.max(0, clampNumber(options.extraPayment));
   const rollover = options.rollover !== false;
   const maxMonths = options.maxMonths || 600;
+  const startMonth = options.startMonth || currentMonthKey();
   const debts = inputDebts.map(cleanDebt).filter((debt) => debt.balance > 0.005);
   const originalMinTotal = debts.reduce((sum, debt) => sum + debt.minPayment, 0);
   const originalBalance = debts.reduce((sum, debt) => sum + debt.balance, 0);
@@ -1860,7 +1977,8 @@ function simulateDebtPlan(inputDebts, options = {}) {
       if (debt.balance <= 0.005 && debt.payoffMonth === null) {
         debt.balance = 0;
         debt.payoffMonth = month;
-        payoffEvents.push({ month, name: debt.name, recovered: debt.minPayment });
+        debt.payoffDate = paymentDateForDebt(startMonth, debt.paymentDay, month).toISOString();
+        payoffEvents.push({ month, date: debt.payoffDate, paymentDay: debt.paymentDay, name: debt.name, recovered: debt.minPayment });
       }
     });
 
@@ -1876,7 +1994,8 @@ function simulateDebtPlan(inputDebts, options = {}) {
       if (target.balance <= 0.005 && target.payoffMonth === null) {
         target.balance = 0;
         target.payoffMonth = month;
-        payoffEvents.push({ month, name: target.name, recovered: target.minPayment });
+        target.payoffDate = paymentDateForDebt(startMonth, target.paymentDay, month).toISOString();
+        payoffEvents.push({ month, date: target.payoffDate, paymentDay: target.paymentDay, name: target.name, recovered: target.minPayment });
       }
     }
 
@@ -1918,10 +2037,10 @@ const debtPlanCache = new Map();
 
 function debtPlanSignature(inputDebts, options) {
   const debtsKey = inputDebts
-    .map((debt, index) => `${debt.id || index}:${clampNumber(debt.balance)}:${clampNumber(debt.rate)}:${clampNumber(debt.minPayment)}`)
+    .map((debt, index) => `${debt.id || index}:${clampNumber(debt.balance)}:${clampNumber(debt.rate)}:${clampNumber(debt.minPayment)}:${clampPaymentDay(debt.paymentDay ?? debt.payment_day ?? 1)}`)
     .join(",");
   const rollover = options.rollover !== false;
-  return `${options.method === "snowball" ? "snowball" : "avalanche"}|${Math.max(0, clampNumber(options.extraPayment))}|${rollover}|${debtsKey}`;
+  return `${options.method === "snowball" ? "snowball" : "avalanche"}|${Math.max(0, clampNumber(options.extraPayment))}|${rollover}|${options.startMonth || currentMonthKey()}|${debtsKey}`;
 }
 
 function simulateDebtPlanCached(inputDebts, options = {}) {
@@ -2033,15 +2152,16 @@ function freedMonthlyPayment(plan, extraPayment) {
 
 function renderPremiumCards(context) {
   const { fr, selected, snowball, avalanche, extraPayment, startMonth } = context;
+  const lastEvent = (selected.payoffEvents || []).slice().sort((a, b) => a.month - b.month).at(-1);
   const debtFree = Number.isFinite(selected.months)
-    ? `${formatMonthOffset(startMonth, selected.months)}`
+    ? (lastEvent?.date ? formatDateShort(new Date(lastEvent.date)) : `${formatMonthOffset(startMonth, selected.months)}`)
     : (fr ? "Non calculable" : "Not calculable");
   const interestDiff = Math.abs(snowball.totalInterest - avalanche.totalInterest);
   const cheaper = snowball.totalInterest <= avalanche.totalInterest ? "snowball" : "avalanche";
   const cheaperLabel = cheaper === "snowball" ? t("snowball") : t("avalanche");
   const freed = freedMonthlyPayment(selected, extraPayment);
   const next = nextDebtToClear(selected);
-  const nextDate = next ? formatMonthOffset(startMonth, next.month) : "—";
+  const nextDate = next ? (next.date ? formatDateShort(new Date(next.date)) : formatMonthOffset(startMonth, next.month)) : "—";
   return `
     <div class="premium-cards">
       <article class="premium-card">
@@ -2075,12 +2195,13 @@ function renderPremiumCards(context) {
 function renderDebtTimeline(plan, startMonth) {
   const fr = state.lang === "fr";
   const events = (plan.payoffEvents || []).slice().sort((a, b) => a.month - b.month);
+  const lastEvent = events.at(-1);
   const debtFreeStep = Number.isFinite(plan.months) && plan.months > 0
     ? `<li class="timeline-step timeline-step-final">
         <span class="timeline-dot">🏁</span>
         <div class="timeline-body">
           <strong>${fr ? "Libre de dettes" : "Debt-free"}</strong>
-          <span class="timeline-meta">${formatMonthOffset(startMonth, plan.months)}</span>
+          <span class="timeline-meta">${lastEvent?.date ? formatDateShort(new Date(lastEvent.date)) : formatMonthOffset(startMonth, plan.months)}</span>
         </div>
       </li>`
     : "";
@@ -2098,7 +2219,7 @@ function renderDebtTimeline(plan, startMonth) {
           <span class="timeline-dot">${index + 1}</span>
           <div class="timeline-body">
             <strong>${event.name}</strong>
-            <span class="timeline-meta">${formatMonthOffset(startMonth, event.month)} · +${money(event.recovered)}/${fr ? "mois" : "mo"} ${fr ? "récupéré" : "freed"}</span>
+            <span class="timeline-meta">${event.date ? formatDateShort(new Date(event.date)) : formatMonthOffset(startMonth, event.month)} · +${money(event.recovered)}/${fr ? "mois" : "mo"} ${fr ? "récupéré" : "freed"}</span>
           </div>
         </li>
       `).join("")}
@@ -2111,6 +2232,7 @@ function renderDebtTimeline(plan, startMonth) {
 // à partir des plans déjà calculés; l'export PDF complet n'est pas implémenté.
 function buildStrategyExportModel(context) {
   const { selected, snowball, avalanche, extraPayment, startMonth, fr } = context;
+  const lastEvent = (selected.payoffEvents || []).slice().sort((a, b) => a.month - b.month).at(-1);
   return {
     generatedAt: new Date().toISOString(),
     locale: fr ? "fr-CA" : "en-CA",
@@ -2119,7 +2241,7 @@ function buildStrategyExportModel(context) {
     extraPayment: Math.max(0, clampNumber(extraPayment)),
     startMonth,
     summary: {
-      debtFreeDate: Number.isFinite(selected.months) ? formatMonthOffset(startMonth, selected.months) : null,
+      debtFreeDate: Number.isFinite(selected.months) ? (lastEvent?.date ? formatDateShort(new Date(lastEvent.date)) : formatMonthOffset(startMonth, selected.months)) : null,
       months: Number.isFinite(selected.months) ? selected.months : null,
       totalPaid: selected.totalPaid,
       totalInterest: selected.totalInterest,
@@ -2134,7 +2256,7 @@ function buildStrategyExportModel(context) {
     payoffOrder: (selected.payoffEvents || []).slice().sort((a, b) => a.month - b.month).map((event) => ({
       name: event.name,
       month: event.month,
-      date: formatMonthOffset(startMonth, event.month),
+      date: event.date ? formatDateShort(new Date(event.date)) : formatMonthOffset(startMonth, event.month),
       recovered: event.recovered
     })),
     debts: selected.debts.map((debt) => ({
@@ -2142,7 +2264,9 @@ function buildStrategyExportModel(context) {
       originalBalance: debt.originalBalance,
       rate: debt.rate,
       minPayment: debt.minPayment,
-      payoffMonth: debt.payoffMonth
+      paymentDay: debt.paymentDay,
+      payoffMonth: debt.payoffMonth,
+      payoffDate: debt.payoffDate ? formatDateShort(new Date(debt.payoffDate)) : null
     }))
   };
 }
@@ -2171,7 +2295,7 @@ function renderPayoffTable(plan) {
                 <td data-label="${t("name")}">${debt.name}</td>
                 <td data-label="${t("balance")}">${money(debt.originalBalance)}</td>
                 <td data-label="${t("rate")}">${debt.rate.toFixed(2)}%</td>
-                <td data-label="${fr ? "Fin estimée" : "Estimated end"}">${debt.payoffMonth ? formatMonthOffset(state.debtStrategy.startMonth, debt.payoffMonth) : (fr ? "Non calculable" : "Not calculable")}</td>
+                <td data-label="${fr ? "Fin estimée" : "Estimated end"}">${debt.payoffMonth ? (debt.payoffDate ? formatDateShort(new Date(debt.payoffDate)) : formatMonthOffset(state.debtStrategy.startMonth, debt.payoffMonth)) : (fr ? "Non calculable" : "Not calculable")}</td>
                 <td data-label="${fr ? "Mensuel récupéré" : "Monthly recovered"}">${money(debt.minPayment)}</td>
               </tr>
             `).join("")}
@@ -2207,14 +2331,15 @@ function renderStrategy() {
   const startMonth = state.debtStrategy.startMonth;
   // Calculs réels memoïsés: snowball/avalanche calculés une fois, les scénarios
   // sélectionné/comparaison ne sont que des références (aucun recalcul).
-  const snowballPlan = simulateDebtPlanCached(debts, { method: "snowball", extraPayment });
-  const avalanchePlan = simulateDebtPlanCached(debts, { method: "avalanche", extraPayment });
+  const snowballPlan = simulateDebtPlanCached(debts, { method: "snowball", extraPayment, startMonth });
+  const avalanchePlan = simulateDebtPlanCached(debts, { method: "avalanche", extraPayment, startMonth });
   const selected = selectedMethod === "snowball" ? snowballPlan : avalanchePlan;
   const comparison = otherMethod === "snowball" ? snowballPlan : avalanchePlan;
-  const minimumOnly = simulateDebtPlanCached(debts, { method: selectedMethod, extraPayment: 0, rollover: false });
+  const minimumOnly = simulateDebtPlanCached(debts, { method: selectedMethod, extraPayment: 0, rollover: false, startMonth });
   const interestSaved = Number.isFinite(minimumOnly.totalInterest) && Number.isFinite(selected.totalInterest)
     ? Math.max(0, minimumOnly.totalInterest - selected.totalInterest)
     : 0;
+  const selectedLastEvent = (selected.payoffEvents || []).slice().sort((a, b) => a.month - b.month).at(-1);
 
   // Partagé avec les gestionnaires d'interaction (tooltips) et l'export futur.
   strategyRenderData = { fr, startMonth, extraPayment, selectedMethod, selected, comparison, snowball: snowballPlan, avalanche: avalanchePlan };
@@ -2235,7 +2360,7 @@ function renderStrategy() {
     ? "Certains paiements minimums ne permettent pas une projection fiable. Augmente le paiement minimum ou le paiement extra."
     : "Some minimum payments do not allow a reliable projection. Increase the minimum or extra payment."}</p>` : "";
   const debtFreeDate = Number.isFinite(selected.months)
-    ? formatMonthOffset(state.debtStrategy.startMonth, selected.months)
+    ? (selectedLastEvent?.date ? formatDateShort(new Date(selectedLastEvent.date)) : formatMonthOffset(state.debtStrategy.startMonth, selected.months))
     : (fr ? "Non calculable" : "Not calculable");
   const comparisonWinner = snowballPlan.totalInterest <= avalanchePlan.totalInterest ? snowballPlan : avalanchePlan;
 
@@ -2253,12 +2378,12 @@ function renderStrategy() {
       <form class="strategy-controls" id="strategyForm">
         <label><span>${fr ? "Méthode" : "Method"}</span>
           <select name="method">
-            <option value="avalanche" ${selectedMethod === "avalanche" ? "selected" : ""}>${t("avalanche")}</option>
             <option value="snowball" ${selectedMethod === "snowball" ? "selected" : ""}>${t("snowball")}</option>
+            <option value="avalanche" ${selectedMethod === "avalanche" ? "selected" : ""}>${t("avalanche")}</option>
           </select>
         </label>
         <label><span>${fr ? "Paiement extra mensuel" : "Monthly extra payment"}</span>
-          <input name="extraPayment" type="number" min="0" step="1" value="${extraPayment}" />
+          <input name="extraPayment" ${decimalInputAttrs("100.00")} value="${extraPayment}" />
         </label>
         <label><span>${fr ? "Mois de départ" : "Start month"}</span>
           <input name="startMonth" type="month" value="${state.debtStrategy.startMonth}" />
@@ -2376,7 +2501,7 @@ function renderBudget() {
       <form class="form-grid" id="budgetForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Appartement" : "Apartment"}" value="${b ? b.name : ""}" /></label>
         <label><span>${t("category")}</span><select name="category" required>${expenseCategoryOptions(b ? b.category : "housing")}</select></label>
-        <label><span>${fr ? "Montant mensuel prévu" : "Planned monthly amount"}</span><input name="planned" required type="number" min="0" step="0.01" placeholder="1300" value="${b ? b.planned : ""}" /></label>
+        <label><span>${fr ? "Montant mensuel prévu" : "Planned monthly amount"}</span><input name="planned" required ${decimalInputAttrs("1300.00")} value="${b ? b.planned : ""}" /></label>
         <label><span>${fr ? "Jour du mois (optionnel)" : "Day of month (optional)"}</span><input name="dueDay" type="number" min="1" max="31" placeholder="1" value="${b && b.dueDay ? b.dueDay : ""}" /></label>
         <label class="checkbox-field"><input name="isRecurring" type="checkbox" ${!b || b.isRecurring ? "checked" : ""} /><span>${fr ? "Récurrent chaque mois" : "Recurring monthly"}</span></label>
         <label><span>${fr ? "Notes (optionnel)" : "Notes (optional)"}</span><input name="notes" placeholder="${fr ? "Ex. loyer, forfait internet..." : "E.g. rent, internet plan..."}" value="${b ? b.notes : ""}" /></label>
@@ -2423,7 +2548,7 @@ function renderTransactions() {
         <label><span>${t("date")}</span><input name="date" required type="date" min="${state.selectedMonth}-01" max="${selectedMonthRange().last}" value="${tr ? tr.date : defaultTransactionDate()}" /></label>
         <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.name : ""}" /></label>
         <label><span>${t("category")}</span><input name="category" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.category : ""}" /></label>
-        <label><span>${t("amount")}</span><input name="amount" required type="number" step="0.01" placeholder="-50.00" value="${tr ? tr.amount : ""}" /></label>
+        <label><span>${t("amount")}</span><input name="amount" required ${signedDecimalInputAttrs("-50.00")} value="${tr ? tr.amount : ""}" /></label>
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
@@ -2463,9 +2588,9 @@ function renderGoals() {
     <section class="panel">
       <form class="form-grid" id="goalForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Fonds urgence" : "Emergency fund"}" value="${g ? g.name : ""}" /></label>
-        <label><span>${fr ? "Cible" : "Target"}</span><input name="target" required type="number" min="1" placeholder="15000" value="${g ? g.target : ""}" /></label>
-        <label><span>${fr ? "Déjà épargné" : "Already saved"}</span><input name="saved" type="number" min="0" placeholder="0" value="${g ? g.saved : ""}" /></label>
-        <label><span>${fr ? "Cotisation par mois" : "Monthly contribution"}</span><input name="monthlyContribution" type="number" min="0" step="0.01" placeholder="100" value="${g ? g.monthlyContribution : ""}" /></label>
+        <label><span>${fr ? "Cible" : "Target"}</span><input name="target" required ${decimalInputAttrs("15000.00")} value="${g ? g.target : ""}" /></label>
+        <label><span>${fr ? "Déjà épargné" : "Already saved"}</span><input name="saved" ${decimalInputAttrs("0.00")} value="${g ? g.saved : ""}" /></label>
+        <label><span>${fr ? "Cotisation par mois" : "Monthly contribution"}</span><input name="monthlyContribution" ${decimalInputAttrs("100.00")} value="${g ? g.monthlyContribution : ""}" /></label>
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
@@ -3768,14 +3893,15 @@ function bindViewActions() {
       const form = new FormData(debtForm);
       const payload = {
         name: form.get("name"),
-        balance: Number(form.get("balance")),
-        rate: Number(form.get("rate")),
-        min_payment: Number(form.get("minPayment"))
+        balance: Math.max(0, clampNumber(form.get("balance"))),
+        rate: Math.max(0, clampNumber(form.get("rate"))),
+        min_payment: Math.max(0, clampNumber(form.get("minPayment"))),
+        payment_day: clampPaymentDay(form.get("paymentDay") || 1)
       };
       if (state.editing.table === "debts") {
         const debt = findEditable(state.debts);
         if (canSyncUndatedMonthlyData() && debt.id) await dbUpdate("debts", debt.id, payload);
-        Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment });
+        Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day });
         saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
@@ -3783,7 +3909,7 @@ function bindViewActions() {
       }
       const plan = planDefinitions.find((item) => item.id === state.plan);
       if (state.debts.length >= plan.debts) return showLimit(planLimitMessage("debts"));
-      const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment };
+      const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day };
       if (canSyncUndatedMonthlyData()) {
         const row = await dbInsert("debts", payload);
         if (row) debt.id = row.id;
@@ -3878,7 +4004,7 @@ function bindViewActions() {
         date: form.get("date"),
         name: form.get("name"),
         category: form.get("category"),
-        amount: Number(form.get("amount"))
+        amount: clampNumber(form.get("amount"))
       };
       if (!payload.date.startsWith(state.selectedMonth)) {
         return showLimit(state.lang === "fr"
@@ -3912,9 +4038,9 @@ function bindViewActions() {
       const form = new FormData(goalForm);
       const payload = {
         name: form.get("name"),
-        target: Number(form.get("target")),
-        saved: Number(form.get("saved") || 0),
-        monthly_contribution: Number(form.get("monthlyContribution") || 0)
+        target: Math.max(0, clampNumber(form.get("target"))),
+        saved: Math.max(0, clampNumber(form.get("saved") || 0)),
+        monthly_contribution: Math.max(0, clampNumber(form.get("monthlyContribution") || 0))
       };
       if (state.editing.table === "goals") {
         const goal = findEditable(state.goals);
@@ -3944,8 +4070,8 @@ function bindViewActions() {
       const payload = {
         name: form.get("name"),
         category: form.get("category"),
-        planned: Number(form.get("planned")),
-        due_day: form.get("dueDay") ? Number(form.get("dueDay")) : null,
+        planned: Math.max(0, clampNumber(form.get("planned"))),
+        due_day: form.get("dueDay") ? Math.round(clampNumber(form.get("dueDay"))) : null,
         is_recurring: form.get("isRecurring") === "on",
         notes: form.get("notes") || "",
         month_key: state.selectedMonth
@@ -3983,9 +4109,14 @@ function bindViewActions() {
   if (incomeForm) {
     incomeForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const value = Number(new FormData(incomeForm).get("income") || 0);
-      state.income = value;
-      if (state.user) await updateIncome(value);
+      const form = new FormData(incomeForm);
+      const value = Math.max(0, clampNumber(form.get("income") || 0));
+      const frequency = form.get("incomeFrequency") || "monthly";
+      state.incomeInput = value;
+      state.incomeFrequency = frequency;
+      state.income = monthlyIncomeFromPay(value, frequency);
+      localStorage.setItem("bh_income_frequency", frequency);
+      if (state.user) await updateIncome(value, frequency);
       saveMonthData();
       renderView();
     });
