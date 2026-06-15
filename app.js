@@ -588,7 +588,7 @@ const state = {
   familySection: "members",
   viewToken: 0,
   incomeInput: 0,
-  incomeFrequency: localStorage.getItem("bh_income_frequency") || "monthly",
+  incomeFrequency: "monthly",
   debts: [],
   budget: [],
   transactions: [],
@@ -627,13 +627,44 @@ const demoData = {
   members: [{ name: "Alex", role: "Admin" }]
 };
 
+const LEGACY_FINANCIAL_STORAGE_KEYS = new Set([
+  "debts",
+  "expenses",
+  "budgets",
+  "transactions",
+  "goals",
+  "monthData",
+  "dashboardData",
+  "snowballData",
+  "bh_income_frequency"
+]);
+
+function isLegacyFinancialStorageKey(key) {
+  return LEGACY_FINANCIAL_STORAGE_KEYS.has(key) || /^bh_month_(?!demo_).+/.test(key);
+}
+
+function cleanupLegacyFinancialStorage() {
+  const keysToRemove = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key && isLegacyFinancialStorageKey(key)) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((key) => {
+    console.warn(`[Storage] Removing legacy financial key: ${key}`);
+    localStorage.removeItem(key);
+  });
+}
+
+cleanupLegacyFinancialStorage();
+
 function emptyMonthData() {
   return { income: 0, debts: [], budget: [], transactions: [], goals: [] };
 }
 
 function monthlyStorageKey(monthKey = state.selectedMonth) {
-  const owner = state.user ? state.user.id : "demo";
-  return `bh_month_${owner}_${monthKey}`;
+  return `bh_month_demo_${monthKey}`;
 }
 
 function applyMonthData(data) {
@@ -648,6 +679,7 @@ function applyMonthData(data) {
 }
 
 function saveMonthData() {
+  if (state.user) return;
   localStorage.setItem(monthlyStorageKey(), JSON.stringify({
     income: state.income,
     incomeInput: state.incomeInput,
@@ -659,11 +691,11 @@ function saveMonthData() {
   }));
 }
 
-function canSyncUndatedMonthlyData() {
-  return state.user && state.selectedMonth === currentMonthKey();
-}
-
 function loadMonthData(seedData = null) {
+  if (state.user) {
+    applyMonthData(seedData);
+    return;
+  }
   const cached = localStorage.getItem(monthlyStorageKey());
   if (cached) {
     try {
@@ -1573,6 +1605,18 @@ async function loadUserData(shouldRender = true) {
   logSupabaseError("Load family_members", members.error);
   logSupabaseError("Load profiles", incomes.error);
   logSupabaseError("Load item_contributions", contributions.error);
+  const loadErrors = [
+    debts.error,
+    budget.error,
+    transactions.error,
+    goals.error,
+    members.error,
+    incomes.error,
+    contributions.error
+  ].filter(Boolean);
+  if (loadErrors.length) {
+    console.error("[Supabase] One or more financial loads failed.", loadErrors);
+  }
   state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "", invitedUserId: row.invited_user_id || null }));
 
   // Foyer = profils de la famille (propriétaire + membres invités), source des
@@ -1621,7 +1665,18 @@ async function loadUserData(shouldRender = true) {
     incomeInput: Number(myProfile.income_amount ?? myProfile.monthly_income ?? 0),
     incomeFrequency: myProfile.income_frequency || "monthly"
   };
-  loadMonthData(state.selectedMonth === currentMonthKey() ? seed : emptyMonthData());
+  applyMonthData(seed);
+  console.log("loaded from Supabase", {
+    userId: state.user.id,
+    month: state.selectedMonth,
+    rows: {
+      debts: seed.debts.length,
+      budget: seed.budget.length,
+      transactions: seed.transactions.length,
+      goals: seed.goals.length,
+      contributions: state.contributions.length
+    }
+  });
   if (shouldRender) renderView();
 }
 
@@ -1650,7 +1705,7 @@ async function refreshViewData(view, token = state.viewToken) {
       renderView();
     }
   } catch (_error) {
-    // Hors ligne: on garde l'affichage actuel
+    console.error(`[Supabase] Refresh failed for view ${view}.`, _error);
   }
 }
 
@@ -1699,6 +1754,15 @@ async function dbDelete(table, id) {
   if (error) logSupabaseError(`Delete from ${table}`, error);
 }
 
+async function reloadAfterFinancialMutation() {
+  if (state.user) {
+    await loadUserData();
+    return;
+  }
+  saveMonthData();
+  renderView();
+}
+
 // Épargne actuelle d'un objectif: montant de départ + cotisation × mois écoulés depuis la création
 function goalCurrentSaved(goal) {
   if (!goal.monthlyContribution || !goal.createdAt) return goal.saved;
@@ -1711,13 +1775,12 @@ function goalCurrentSaved(goal) {
 // Met à jour le salaire de l'utilisateur connecté
 async function updateIncome(value, frequency = state.incomeFrequency) {
   if (!supabaseClient || !state.user) return;
-  if (!canSyncUndatedMonthlyData()) return;
-  await supabaseClient.from("profiles").update({
+  const { error } = await supabaseClient.from("profiles").update({
     income_amount: value,
     income_frequency: frequency,
     monthly_income: monthlyIncomeFromPay(value, frequency)
   }).eq("id", state.user.id);
-  saveMonthData();
+  if (error) logSupabaseError("Update profiles income", error);
 }
 
 async function selectPlan(planId) {
@@ -4373,23 +4436,26 @@ function bindViewActions() {
       };
       if (state.editing.table === "debts") {
         const debt = findEditable(state.debts);
-        if (canSyncUndatedMonthlyData() && debt.id) await dbUpdate("debts", debt.id, payload);
-        Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day, ...sharingLocal });
+        if (state.user && debt.id) {
+          await dbUpdate("debts", debt.id, payload);
+        } else {
+          Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day, ...sharingLocal });
+        }
         saveMonthData();
         state.editing = { table: null, id: null };
-        renderView();
+        await reloadAfterFinancialMutation();
         return;
       }
       const plan = planDefinitions.find((item) => item.id === state.plan);
       if (state.debts.length >= plan.debts) return showLimit(planLimitMessage("debts"));
       const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day, ...sharingLocal };
-      if (canSyncUndatedMonthlyData()) {
+      if (state.user) {
         const row = await dbInsert("debts", payload);
         if (row) debt.id = row.id;
+      } else {
+        state.debts.push(debt);
       }
-      state.debts.push(debt);
-      saveMonthData();
-      renderView();
+      await reloadAfterFinancialMutation();
     });
   }
 
@@ -4492,21 +4558,24 @@ function bindViewActions() {
       }
       if (state.editing.table === "transactions") {
         const tr = findEditable(state.transactions);
-        if (state.user && tr.id) await dbUpdate("transactions", tr.id, payload);
-        Object.assign(tr, payload, sharingLocal);
+        if (state.user && tr.id) {
+          await dbUpdate("transactions", tr.id, payload);
+        } else {
+          Object.assign(tr, payload, sharingLocal);
+        }
         saveMonthData();
         state.editing = { table: null, id: null };
-        renderView();
+        await reloadAfterFinancialMutation();
         return;
       }
       const transaction = { ...payload };
       if (state.user) {
         const row = await dbInsert("transactions", payload);
         if (row) transaction.id = row.id;
+      } else {
+        state.transactions.unshift(transaction);
       }
-      state.transactions.unshift(transaction);
-      saveMonthData();
-      renderView();
+      await reloadAfterFinancialMutation();
     });
   }
 
@@ -4526,21 +4595,24 @@ function bindViewActions() {
       };
       if (state.editing.table === "goals") {
         const goal = findEditable(state.goals);
-        if (canSyncUndatedMonthlyData() && goal.id) await dbUpdate("goals", goal.id, payload);
-        Object.assign(goal, { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, ...sharingLocal });
+        if (state.user && goal.id) {
+          await dbUpdate("goals", goal.id, payload);
+        } else {
+          Object.assign(goal, { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, ...sharingLocal });
+        }
         saveMonthData();
         state.editing = { table: null, id: null };
-        renderView();
+        await reloadAfterFinancialMutation();
         return;
       }
       const goal = { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, createdAt: new Date().toISOString(), ...sharingLocal };
-      if (canSyncUndatedMonthlyData()) {
+      if (state.user) {
         const row = await dbInsert("goals", payload);
         if (row) { goal.id = row.id; goal.createdAt = row.created_at; }
+      } else {
+        state.goals.push(goal);
       }
-      state.goals.push(goal);
-      saveMonthData();
-      renderView();
+      await reloadAfterFinancialMutation();
     });
   }
 
@@ -4574,21 +4646,24 @@ function bindViewActions() {
       });
       if (state.editing.table === "budget_categories") {
         const b = findEditable(state.budget);
-        if (state.user && b.id) await dbUpdate("budget_categories", b.id, payload);
-        Object.assign(b, localExpense, { id: b.id, spent: 0 });
+        if (state.user && b.id) {
+          await dbUpdate("budget_categories", b.id, payload);
+        } else {
+          Object.assign(b, localExpense, { id: b.id, spent: 0 });
+        }
         saveMonthData();
         state.editing = { table: null, id: null };
-        renderView();
+        await reloadAfterFinancialMutation();
         return;
       }
       const item = { ...localExpense, spent: 0 };
       if (state.user) {
         const row = await dbInsert("budget_categories", payload);
         if (row) item.id = row.id;
+      } else {
+        state.budget.push(item);
       }
-      state.budget.push(item);
-      saveMonthData();
-      renderView();
+      await reloadAfterFinancialMutation();
     });
   }
 
@@ -4617,16 +4692,7 @@ function bindViewActions() {
           return;
         }
         if (response.ok && result.contribution) {
-          state.contributions.push({
-            id: result.contribution.id,
-            itemTable: result.contribution.item_table,
-            itemId: result.contribution.item_id,
-            memberUserId: result.contribution.member_user_id,
-            amount: Number(result.contribution.amount || 0),
-            note: result.contribution.note || "",
-            paidOn: result.contribution.paid_on
-          });
-          renderView();
+          await loadUserData();
           return;
         }
         const msg = $("#contributionMessage");
@@ -4664,10 +4730,10 @@ function bindViewActions() {
       state.incomeInput = value;
       state.incomeFrequency = frequency;
       state.income = monthlyIncomeFromPay(value, frequency);
-      localStorage.setItem("bh_income_frequency", frequency);
-      if (state.user) await updateIncome(value, frequency);
-      saveMonthData();
-      renderView();
+      if (state.user) {
+        await updateIncome(value, frequency);
+      }
+      await reloadAfterFinancialMutation();
     });
   }
 
@@ -4706,11 +4772,12 @@ function bindViewActions() {
       if (!can("editData")) return showLimit(forbiddenMessage());
       const index = Number(button.getAttribute(attr));
       const item = state[key][index];
-      const syncAllowed = key === "transactions" || canSyncUndatedMonthlyData();
-      if (syncAllowed && state.user && item && item.id) await dbDelete(table, item.id);
-      state[key].splice(index, 1);
-      saveMonthData();
-      renderView();
+      if (state.user && item && item.id) {
+        await dbDelete(table, item.id);
+      } else {
+        state[key].splice(index, 1);
+      }
+      await reloadAfterFinancialMutation();
     }));
   });
 
