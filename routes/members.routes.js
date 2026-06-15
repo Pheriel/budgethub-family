@@ -1,6 +1,6 @@
 const express = require("express");
 
-const { requireAuth, requirePermission } = require("../middleware/auth");
+const { requireAuth, requirePermission, requireFamilyPlan } = require("../middleware/auth");
 const { ASSIGNABLE_ROLES } = require("../services/permissions");
 const { inviteMember, removeMember, changeMemberRole } = require("../services/members.service");
 
@@ -9,6 +9,7 @@ const router = express.Router();
 const isUuid = (value) => typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
 
 router.use(requireAuth);
+router.use(requireFamilyPlan);
 
 // Inviter un membre (Owner, Admin)
 router.post("/invite", requirePermission("inviteMembers"), async (req, res) => {

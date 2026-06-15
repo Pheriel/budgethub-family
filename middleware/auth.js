@@ -1,5 +1,6 @@
 const { createSupabaseAdminClient } = require("../config/supabase");
 const { normalizeRole, can } = require("../services/permissions");
+const FAMILY_PLANS = ["family", "familyPlus"];
 
 function superAdminEmails() {
   return (process.env.SUPER_ADMIN_EMAILS || "")
@@ -86,4 +87,14 @@ function requirePermission(action) {
   };
 }
 
-module.exports = { requireAuth, requirePermission };
+function requireFamilyPlan(req, res, next) {
+  if (!req.user || !FAMILY_PLANS.includes(req.user.plan)) {
+    return res.status(403).json({
+      error: "family_plan_required",
+      plans: FAMILY_PLANS
+    });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requirePermission, requireFamilyPlan, FAMILY_PLANS };

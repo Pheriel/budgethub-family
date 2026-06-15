@@ -353,7 +353,7 @@
             <button data-view="budget" data-i18n="appBudget">Dépenses</button>
             <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
             <button data-view="goals" data-i18n="appGoals">Objectifs</button>
-            <button data-view="family" data-i18n="appFamily">Famille</button>
+            <button data-view="family" id="familyNavButton" data-i18n="appFamily" hidden>Famille</button>
             <button data-view="support" id="supportNavButton">Mes tickets</button>
             <button data-view="admin" id="adminNavButton" data-i18n="appAdmin" hidden>Super Admin</button>
             <button data-view="settings" data-i18n="appSettings">Paramètres</button>
@@ -415,6 +415,17 @@
       <div class="modal-card support-modal-card">
         <button class="modal-close" id="supportClose" type="button" aria-label="Fermer">×</button>
         <div id="supportModalContent"></div>
+      </div>
+    </div>
+
+    <div id="familyUpgradeModal" class="modal-overlay" hidden>
+      <div class="modal-card">
+        <h2 id="familyUpgradeTitle">Passez au plan Family</h2>
+        <p id="familyUpgradeText">Passez au plan Family pour partager vos finances avec vos proches.</p>
+        <div class="account-actions">
+          <button class="primary-button" id="familyUpgradePlans" type="button">Voir les forfaits</button>
+          <button class="secondary-button" id="familyUpgradeLater" type="button">Plus tard</button>
+        </div>
       </div>
     </div>
 

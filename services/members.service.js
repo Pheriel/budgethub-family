@@ -2,6 +2,7 @@ const { createSupabaseAdminClient } = require("../config/supabase");
 const { ASSIGNABLE_ROLES, normalizeRole, can, canRemoveMember } = require("./permissions");
 
 const planMemberLimits = { free: 1, solo: 1, family: 5, familyPlus: 10 };
+const FAMILY_PLANS = ["family", "familyPlus"];
 const productionUrl = "https://budgethubfamily.com";
 
 function clientUrl() {
@@ -27,6 +28,9 @@ async function inviteMember({ inviter, email, name, role, lang = "en" }) {
 
   if (profileError || !ownerProfile) {
     return { status: 404, body: { error: "Owner profile not found." } };
+  }
+  if (!FAMILY_PLANS.includes(ownerProfile.plan)) {
+    return { status: 403, body: { error: "family_plan_required" } };
   }
 
   const limit = planMemberLimits[ownerProfile.plan] ?? 1;
@@ -137,6 +141,9 @@ async function removeMember({ actor, memberId }) {
   if (!member) {
     return { status: 404, body: { error: "member_not_found" } };
   }
+  if (!FAMILY_PLANS.includes(actor.plan)) {
+    return { status: 403, body: { error: "family_plan_required" } };
+  }
   // Le membre doit appartenir à la même famille que l'acteur
   if (member.user_id !== actor.familyOwnerId) {
     return { status: 403, body: { error: "forbidden", action: "removeMembers" } };
@@ -181,6 +188,9 @@ async function changeMemberRole({ actor, memberId, role }) {
   }
   if (!ASSIGNABLE_ROLES.includes(role)) {
     return { status: 400, body: { error: "invalid_role" } };
+  }
+  if (!FAMILY_PLANS.includes(actor.plan)) {
+    return { status: 403, body: { error: "family_plan_required" } };
   }
 
   const { data: member } = await supabase
