@@ -1010,9 +1010,17 @@ function normalizeExpense(item = {}) {
     planned: Math.max(0, clampNumber(item.planned)),
     dueDay: item.dueDay ?? item.due_day ?? "",
     isRecurring: item.isRecurring ?? item.is_recurring ?? true,
+    frequency: incomeFrequencies[item.frequency] ? item.frequency : "monthly",
     notes: item.notes || "",
     monthKey: item.monthKey || item.month_key || state.selectedMonth
   };
+}
+
+// Équivalent mensuel d'une dépense selon sa fréquence (ex. 512 aux 2 semaines = 1109.33/mois)
+function monthlyExpenseAmount(item) {
+  const planned = Math.max(0, clampNumber(item.planned));
+  const model = incomeFrequencies[item.frequency] || incomeFrequencies.monthly;
+  return planned * model.factor;
 }
 
 function incomeFrequencyLabel(value) {
@@ -1261,12 +1269,20 @@ async function loadUserData(shouldRender = true) {
   const { start, end } = selectedMonthRange();
   const [debts, budget, transactions, goals, members, incomes] = await Promise.all([
     supabaseClient.from("debts").select("id,name,balance,rate,min_payment,payment_day").order("created_at"),
-    supabaseClient.from("budget_categories").select("id,name,category,planned,spent,due_day,is_recurring,notes,month_key").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
+    supabaseClient.from("budget_categories").select("id,name,category,planned,spent,due_day,is_recurring,frequency,notes,month_key").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
     supabaseClient.from("transactions").select("id,date,name,category,amount").gte("date", start).lt("date", end).order("date", { ascending: false }),
     supabaseClient.from("goals").select("id,name,target,saved,monthly_contribution,created_at").order("created_at"),
     supabaseClient.from("family_members").select("id,name,role,email").order("created_at"),
     supabaseClient.from("profiles").select("monthly_income,income_amount,income_frequency")
   ]);
+  // Supabase ne rejette pas la promesse sur un 400: on inspecte chaque réponse
+  // pour rendre toute colonne/filtre invalide visible dans la console F12.
+  logSupabaseError("Load debts", debts.error);
+  logSupabaseError("Load budget_categories", budget.error);
+  logSupabaseError("Load transactions", transactions.error);
+  logSupabaseError("Load goals", goals.error);
+  logSupabaseError("Load family_members", members.error);
+  logSupabaseError("Load profiles", incomes.error);
   state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "" }));
   const seed = {
     debts: (debts.data || []).map((row) => ({
@@ -1280,6 +1296,7 @@ async function loadUserData(shouldRender = true) {
       spent: Number(row.spent || 0),
       dueDay: row.due_day || "",
       isRecurring: row.is_recurring !== false,
+      frequency: row.frequency || "monthly",
       notes: row.notes || "",
       monthKey: row.month_key || state.selectedMonth
     })),
@@ -1328,6 +1345,16 @@ async function refreshViewData(view, token = state.viewToken) {
   }
 }
 
+// Journalise une erreur Supabase de façon lisible (message + details + hint)
+// pour diagnostiquer rapidement les 400 Bad Request dans la console F12.
+function logSupabaseError(context, error) {
+  if (!error) return;
+  console.error(
+    `[Supabase] ${context} failed: ${error.message || "unknown error"}`,
+    { code: error.code, details: error.details, hint: error.hint }
+  );
+}
+
 async function dbInsert(table, payload) {
   if (!supabaseClient || !state.user) return null;
   const { data, error } = await supabaseClient
@@ -1336,7 +1363,7 @@ async function dbInsert(table, payload) {
     .select()
     .single();
   if (error) {
-    console.error(`Insert into ${table} failed:`, error.message);
+    logSupabaseError(`Insert into ${table}`, error);
     return null;
   }
   return data;
@@ -1351,7 +1378,7 @@ async function dbUpdate(table, id, payload) {
     .select()
     .single();
   if (error) {
-    console.error(`Update ${table} failed:`, error.message);
+    logSupabaseError(`Update ${table}`, error);
     return null;
   }
   return data;
@@ -1360,7 +1387,7 @@ async function dbUpdate(table, id, payload) {
 async function dbDelete(table, id) {
   if (!supabaseClient || !state.user || !id) return;
   const { error } = await supabaseClient.from(table).delete().eq("id", id);
-  if (error) console.error(`Delete from ${table} failed:`, error.message);
+  if (error) logSupabaseError(`Delete from ${table}`, error);
 }
 
 // Épargne actuelle d'un objectif: montant de départ + cotisation × mois écoulés depuis la création
@@ -1624,7 +1651,7 @@ function totals() {
   const debt = state.debts.reduce((sum, item) => sum + item.balance, 0);
   const debtPayments = state.debts.reduce((sum, item) => sum + item.minPayment, 0);
   const debtInterest = state.debts.reduce((sum, item) => sum + monthlyInterest(item), 0);
-  const monthlyExpenses = state.budget.reduce((sum, item) => sum + Math.max(0, clampNumber(item.planned)), 0);
+  const monthlyExpenses = state.budget.reduce((sum, item) => sum + monthlyExpenseAmount(normalizeExpense(item)), 0);
   const trackedSpending = transactionExpenses();
   const extraIncome = transactionIncome();
   const goalContributions = state.goals.reduce((sum, item) => sum + (item.monthlyContribution || 0), 0);
@@ -2501,7 +2528,8 @@ function renderBudget() {
       <form class="form-grid" id="budgetForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Appartement" : "Apartment"}" value="${b ? b.name : ""}" /></label>
         <label><span>${t("category")}</span><select name="category" required>${expenseCategoryOptions(b ? b.category : "housing")}</select></label>
-        <label><span>${fr ? "Montant mensuel prévu" : "Planned monthly amount"}</span><input name="planned" required ${decimalInputAttrs("1300.00")} value="${b ? b.planned : ""}" /></label>
+        <label><span>${fr ? "Montant prévu" : "Planned amount"}</span><input name="planned" required ${decimalInputAttrs("1300.00")} value="${b ? b.planned : ""}" /></label>
+        <label><span>${fr ? "Fréquence" : "Frequency"}</span><select name="frequency">${incomeFrequencyOptions(b ? b.frequency : "monthly")}</select></label>
         <label><span>${fr ? "Jour du mois (optionnel)" : "Day of month (optional)"}</span><input name="dueDay" type="number" min="1" max="31" placeholder="1" value="${b && b.dueDay ? b.dueDay : ""}" /></label>
         <label class="checkbox-field"><input name="isRecurring" type="checkbox" ${!b || b.isRecurring ? "checked" : ""} /><span>${fr ? "Récurrent chaque mois" : "Recurring monthly"}</span></label>
         <label><span>${fr ? "Notes (optionnel)" : "Notes (optional)"}</span><input name="notes" placeholder="${fr ? "Ex. loyer, forfait internet..." : "E.g. rent, internet plan..."}" value="${b ? b.notes : ""}" /></label>
@@ -2522,12 +2550,12 @@ function budgetTable(actions) {
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("name")}</th><th>${t("category")}</th><th>${fr ? "Mensuel prévu" : "Monthly planned"}</th><th>${fr ? "Jour" : "Day"}</th><th>${fr ? "Récurrent" : "Recurring"}</th><th>${fr ? "Dépensé suivi" : "Tracked spent"}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("category")}</th><th>${fr ? "Montant" : "Amount"}</th><th>${fr ? "Fréquence" : "Frequency"}</th><th>${fr ? "Équiv. mensuel" : "Monthly equiv."}</th><th>${fr ? "Jour" : "Day"}</th><th>${fr ? "Récurrent" : "Recurring"}</th><th>${fr ? "Dépensé suivi" : "Tracked spent"}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.budget.map((item, index) => {
             const expense = normalizeExpense(item);
             const spent = spentForCategory(expense.category);
-            return `<tr><td data-label="${t("name")}"><strong>${expense.name}</strong>${expense.notes ? `<small class="table-note">${expense.notes}</small>` : ""}</td><td data-label="${t("category")}">${expenseCategoryLabel(expense.category)}</td><td data-label="${fr ? "Mensuel prévu" : "Monthly planned"}">${money(expense.planned)}</td><td data-label="${fr ? "Jour" : "Day"}">${expense.dueDay || "—"}</td><td data-label="${fr ? "Récurrent" : "Recurring"}">${expense.isRecurring ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}</td><td data-label="${fr ? "Dépensé suivi" : "Tracked spent"}">${money(spent)}</td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${expense.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+            return `<tr><td data-label="${t("name")}"><strong>${expense.name}</strong>${expense.notes ? `<small class="table-note">${expense.notes}</small>` : ""}</td><td data-label="${t("category")}">${expenseCategoryLabel(expense.category)}</td><td data-label="${fr ? "Montant" : "Amount"}">${money(expense.planned)}</td><td data-label="${fr ? "Fréquence" : "Frequency"}">${incomeFrequencyLabel(expense.frequency)}</td><td data-label="${fr ? "Équiv. mensuel" : "Monthly equiv."}">${money(monthlyExpenseAmount(expense))}</td><td data-label="${fr ? "Jour" : "Day"}">${expense.dueDay || "—"}</td><td data-label="${fr ? "Récurrent" : "Recurring"}">${expense.isRecurring ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}</td><td data-label="${fr ? "Dépensé suivi" : "Tracked spent"}">${money(spent)}</td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${expense.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
@@ -4073,6 +4101,7 @@ function bindViewActions() {
         planned: Math.max(0, clampNumber(form.get("planned"))),
         due_day: form.get("dueDay") ? Math.round(clampNumber(form.get("dueDay"))) : null,
         is_recurring: form.get("isRecurring") === "on",
+        frequency: incomeFrequencies[form.get("frequency")] ? form.get("frequency") : "monthly",
         notes: form.get("notes") || "",
         month_key: state.selectedMonth
       };
@@ -4082,6 +4111,7 @@ function bindViewActions() {
         planned: payload.planned,
         dueDay: payload.due_day || "",
         isRecurring: payload.is_recurring,
+        frequency: payload.frequency,
         notes: payload.notes,
         monthKey: payload.month_key
       });
