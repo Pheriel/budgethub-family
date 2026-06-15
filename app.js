@@ -579,6 +579,7 @@ const state = {
     unreadCount: 0
   },
   currentView: "dashboard",
+  familySection: "members",
   viewToken: 0,
   incomeInput: 0,
   incomeFrequency: localStorage.getItem("bh_income_frequency") || "monthly",
@@ -1065,6 +1066,55 @@ function householdList() {
   return list;
 }
 
+function hasFamilyMembership() {
+  if (!state.user) return false;
+  const meId = state.user ? state.user.id : null;
+  const isFamilyPlan = ["family", "familyPlus"].includes(state.plan);
+  const joinedAnotherHousehold = Boolean(state.familyOwnerId && meId && state.familyOwnerId !== meId);
+  const householdMembers = (state.household || []).length;
+  return isFamilyPlan || joinedAnotherHousehold || state.members.length > 0 || householdMembers > 1;
+}
+
+function hasCommonFinancesAccess() {
+  return hasFamilyMembership() && householdList().length >= 2;
+}
+
+function familyBadgeLabel(item) {
+  const fr = state.lang === "fr";
+  return normalizeSharing(item).isShared
+    ? (fr ? "Commun" : "Common")
+    : (fr ? "Personnel" : "Personal");
+}
+
+function familyBadgeClass(item) {
+  return normalizeSharing(item).isShared ? "pill-good" : "pill-warn";
+}
+
+function familyAmountCell(item, amount) {
+  return normalizeSharing(item).isShared ? money(amount) : "—";
+}
+
+function familySplitCell(item) {
+  return normalizeSharing(item).isShared ? splitModeLabel(normalizeSharing(item).splitMode) : "—";
+}
+
+function familyTableHeaders() {
+  const fr = state.lang === "fr";
+  if (!hasFamilyMembership()) return "";
+  return `<th>${fr ? "Statut" : "Status"}</th><th>${fr ? "Commun" : "Common"}</th><th>${fr ? "Ma part" : "My share"}</th><th>${fr ? "Répartition" : "Split"}</th>`;
+}
+
+function familyTableCells(item, amount) {
+  const fr = state.lang === "fr";
+  if (!hasFamilyMembership()) return "";
+  return `
+    <td data-label="${fr ? "Statut" : "Status"}"><span class="${familyBadgeClass(item)}">${familyBadgeLabel(item)}</span></td>
+    <td data-label="${fr ? "Commun" : "Common"}">${familyAmountCell(item, amount)}</td>
+    <td data-label="${fr ? "Ma part" : "My share"}">${money(myShare(item, amount))}</td>
+    <td data-label="${fr ? "Répartition" : "Split"}">${familySplitCell(item)}</td>
+  `;
+}
+
 // Part d'un membre donné pour un montant total selon le mode de répartition.
 function memberShare(item, amount, memberKey) {
   const s = normalizeSharing(item);
@@ -1096,6 +1146,7 @@ function paidForItem(itemTable, itemId, memberKey) {
 // (toggle géré par bindSharingToggles).
 function sharingFormFields(item, options = {}) {
   const fr = state.lang === "fr";
+  if (!hasFamilyMembership()) return "";
   const label = options.label || (fr ? "Commun / partagé avec la famille" : "Common / shared with family");
   const s = normalizeSharing(item || {});
   const members = householdList();
@@ -1960,7 +2011,7 @@ function debtTable(actions) {
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${paymentDayLabel}</th><th>${recommendedLabel}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${paymentDayLabel}</th><th>${recommendedLabel}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.debts.map((debt, index) => `
             <tr>
@@ -1971,6 +2022,7 @@ function debtTable(actions) {
               <td data-label="${t("minPayment")}">${money(debt.minPayment)}</td>
               <td data-label="${paymentDayLabel}">${clampPaymentDay(debt.paymentDay)}</td>
               <td data-label="${recommendedLabel}">${money(recommendedPayment(debt))}</td>
+              ${familyTableCells(debt, Math.max(0, clampNumber(debt.minPayment)))}
               ${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-debt="${debt.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
             </tr>
           `).join("")}
@@ -2704,17 +2756,17 @@ function budgetTable(actions) {
   const fr = state.lang === "fr";
   const showActions = actions && can("editData");
   if (!state.budget.length) {
-    return `<p class="form-note">${fr ? "Aucune dépense mensuelle pour le moment." : "No monthly expenses yet."}</p>`;
+    return `<p class="form-note">${fr ? "Aucune depense mensuelle pour le moment." : "No monthly expenses yet."}</p>`;
   }
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("name")}</th><th>${t("category")}</th><th>${fr ? "Montant" : "Amount"}</th><th>${fr ? "Fréquence" : "Frequency"}</th><th>${fr ? "Équiv. mensuel" : "Monthly equiv."}</th><th>${fr ? "Jour" : "Day"}</th><th>${fr ? "Récurrent" : "Recurring"}</th><th>${fr ? "Dépensé suivi" : "Tracked spent"}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("category")}</th><th>${fr ? "Montant" : "Amount"}</th><th>${fr ? "Frequence" : "Frequency"}</th><th>${fr ? "Equiv. mensuel" : "Monthly equiv."}</th><th>${fr ? "Jour" : "Day"}</th><th>${fr ? "Recurrent" : "Recurring"}</th><th>${fr ? "Depense suivie" : "Tracked spent"}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.budget.map((item, index) => {
             const expense = normalizeExpense(item);
             const spent = spentForCategory(expense.category);
-            return `<tr><td data-label="${t("name")}"><strong>${expense.name}</strong>${expense.notes ? `<small class="table-note">${expense.notes}</small>` : ""}</td><td data-label="${t("category")}">${expenseCategoryLabel(expense.category)}</td><td data-label="${fr ? "Montant" : "Amount"}">${money(expense.planned)}</td><td data-label="${fr ? "Fréquence" : "Frequency"}">${incomeFrequencyLabel(expense.frequency)}</td><td data-label="${fr ? "Équiv. mensuel" : "Monthly equiv."}">${money(monthlyExpenseAmount(expense))}</td><td data-label="${fr ? "Jour" : "Day"}">${expense.dueDay || "—"}</td><td data-label="${fr ? "Récurrent" : "Recurring"}">${expense.isRecurring ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}</td><td data-label="${fr ? "Dépensé suivi" : "Tracked spent"}">${money(spent)}</td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${expense.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+            return `<tr><td data-label="${t("name")}"><strong>${expense.name}</strong>${expense.notes ? `<small class="table-note">${expense.notes}</small>` : ""}</td><td data-label="${t("category")}">${expenseCategoryLabel(expense.category)}</td><td data-label="${fr ? "Montant" : "Amount"}">${money(expense.planned)}</td><td data-label="${fr ? "Frequence" : "Frequency"}">${incomeFrequencyLabel(expense.frequency)}</td><td data-label="${fr ? "Equiv. mensuel" : "Monthly equiv."}">${money(monthlyExpenseAmount(expense))}</td><td data-label="${fr ? "Jour" : "Day"}">${expense.dueDay || "-"}</td><td data-label="${fr ? "Recurrent" : "Recurring"}">${expense.isRecurring ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}</td><td data-label="${fr ? "Depense suivie" : "Tracked spent"}">${money(spent)}</td>${familyTableCells(expense, monthlyExpenseAmount(expense))}${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${expense.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
@@ -2749,16 +2801,17 @@ function renderTransactions() {
 }
 
 function transactionTable(actions) {
+  const fr = state.lang === "fr";
   const showActions = actions && can("editData");
   if (!state.transactions.length) {
-    return `<p class="form-note">${state.lang === "fr" ? "Aucune transaction ce mois-ci." : "No transactions this month."}</p>`;
+    return `<p class="form-note">${fr ? "Aucune transaction ce mois-ci." : "No transactions this month."}</p>`;
   }
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th>${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${t("category")}</th><th>${t("amount")}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
-          ${state.transactions.map((item, index) => `<tr><td data-label="${t("date")}">${item.date}</td><td data-label="${t("name")}">${item.name}</td><td data-label="${t("category")}">${item.category}</td><td data-label="${t("amount")}">${money(item.amount)}</td>${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-transaction="${item.id || index}">${state.lang === "fr" ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
+          ${state.transactions.map((item, index) => `<tr><td data-label="${t("date")}">${item.date}</td><td data-label="${t("name")}">${item.name}</td><td data-label="${t("category")}">${item.category}</td><td data-label="${t("amount")}">${money(item.amount)}</td>${familyTableCells(item, Math.abs(clampNumber(item.amount)))}${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-transaction="${item.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-transaction="${index}">${t("remove")}</button></td>` : ""}</tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -2770,7 +2823,7 @@ function renderGoals() {
   const editing = state.editing.table === "goals";
   const g = editing ? findEditable(state.goals) : null;
   if (!can("editData")) {
-    return `<section class="panel">${readOnlyNote()}${goalsList(false)}</section>`;
+    return `<section class="panel">${readOnlyNote()}${goalsTable(false)}</section>`;
   }
   return `
     <section class="panel">
@@ -2786,7 +2839,7 @@ function renderGoals() {
       <p class="form-note">${fr
         ? "L'épargne monte automatiquement chaque mois selon la cotisation, depuis la date de création."
         : "Savings grow automatically each month based on the contribution, from the creation date."}</p>
-      ${goalsList(true)}
+      ${goalsTable(true)}
     </section>
   `;
 }
@@ -2800,13 +2853,13 @@ function goalsList(actions) {
     const current = goalCurrentSaved(goal);
     const pct = goal.target > 0 ? Math.min(100, (current / goal.target) * 100) : 0;
     const contribLine = goal.monthlyContribution
-      ? ` · ${money(goal.monthlyContribution)}${fr ? "/mois" : "/mo"}`
+      ? ` - ${money(goal.monthlyContribution)}${fr ? "/mois" : "/mo"}`
       : "";
     const showActions = actions && can("editData");
     return `
       <div class="goal-item">
         <strong>${goal.name}</strong>
-        <p>${money(current)} / ${money(goal.target)} · ${pct.toFixed(1)}%${contribLine}
+        <p>${money(current)} / ${money(goal.target)} - ${pct.toFixed(1)}%${contribLine}
           ${showActions ? `<button class="secondary-button" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button>
           <button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button>` : ""}</p>
         <div class="progress"><span style="width:${pct}%"></span></div>
@@ -2815,42 +2868,69 @@ function goalsList(actions) {
   }).join("");
 }
 
+function goalsTable(actions) {
+  const fr = state.lang === "fr";
+  const showActions = actions && can("editData");
+  if (!state.goals.length) {
+    return `<p class="form-note">${fr ? "Aucun objectif pour le moment." : "No goals yet."}</p>`;
+  }
+  return `
+    <div class="table-wrap">
+      <table class="responsive-table">
+        <thead><tr><th>${t("name")}</th><th>${fr ? "Cible" : "Target"}</th><th>${fr ? "Actuel" : "Current"}</th><th>${fr ? "Cotisation / mois" : "Contribution / month"}</th><th>${fr ? "Progression" : "Progress"}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <tbody>
+          ${state.goals.map((goal, index) => {
+            const current = goalCurrentSaved(goal);
+            const pct = goal.target > 0 ? Math.min(100, (current / goal.target) * 100) : 0;
+            const monthlyContribution = Math.max(0, clampNumber(goal.monthlyContribution));
+            return `<tr><td data-label="${t("name")}"><strong>${goal.name}</strong></td><td data-label="${fr ? "Cible" : "Target"}">${money(goal.target)}</td><td data-label="${fr ? "Actuel" : "Current"}">${money(current)}</td><td data-label="${fr ? "Cotisation / mois" : "Contribution / month"}">${money(monthlyContribution)}</td><td data-label="${fr ? "Progression" : "Progress"}">${pct.toFixed(1)}%</td>${familyTableCells(goal, monthlyContribution)}${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderFamily() {
   const fr = state.lang === "fr";
+  if (state.familySection === "common" && !hasCommonFinancesAccess()) state.familySection = "members";
   const canInvite = can("inviteMembers");
   const canChangeRoles = can("changeRoles");
   const roleOptions = ["Admin", "Editor", "Viewer"];
-  const inviteForm = canInvite ? `
-      <form class="form-grid" id="memberForm">
+  const inviteForm = canInvite ? 
+      `<form class="form-grid" id="memberForm">
         <label><span>${t("name")}</span><input name="name" required placeholder="Sam" /></label>
         <label><span>${t("email")}</span><input name="email" type="email" ${state.user ? "required" : ""} placeholder="sam@example.com" /></label>
-        <label><span>${t("role")}</span><select name="role">${roleOptions.map((r) => `<option value="${r}">${roleLabel(r)}</option>`).join("")}</select></label>
-        <button class="primary-button" type="submit">${state.user ? (fr ? "Inviter le membre" : "Invite member") : t("addMember")}</button>
+        <label><span>${t("role")}</span><select name="role">${roleOptions.map((role) => `<option value="${role}">${roleLabel(role)}</option>`).join("")}</select></label>
+        <button class="primary-button" type="submit">${fr ? "Inviter" : "Invite"}</button>
       </form>
       ${state.user ? `<p class="form-note">${fr
-        ? "Le membre recevra un courriel d'invitation pour créer son mot de passe. Son compte sera relié à votre famille et à votre plan."
+        ? "Le membre recevra un courriel d'invitation pour creer son mot de passe. Son compte sera rattache a votre famille et a votre plan."
         : "The member will receive an invitation email to create their password. Their account will be linked to your family and plan."}</p>` : ""}`
     : `<p class="form-note role-note">${fr
-        ? "Seuls le propriétaire et les admins peuvent inviter des membres."
-        : "Only the owner and admins can invite members."}</p>`;
+      ? "Votre plan ou votre role ne permet pas d'inviter des membres."
+      : "Your plan or role does not allow inviting members."}</p>`;
   const memberRows = state.members.map((member, index) => {
-    const roleCell = canChangeRoles && member.id
-      ? `<select class="role-select" data-role-member="${member.id}">${roleOptions.map((r) => `<option value="${r}" ${normalizeRole(member.role) === r ? "selected" : ""}>${roleLabel(r)}</option>`).join("")}</select>`
+    const roleCell = canChangeRoles
+      ? `<select class="role-select" data-role-member="${member.id}">${["Admin", "Editor", "Viewer"].map((role) => `<option value="${role}" ${normalizeRole(member.role) === role ? "selected" : ""}>${roleLabel(role)}</option>`).join("")}</select>`
       : roleLabel(member.role);
-    const removeCell = can("removeMembers") && canRemoveMemberRole(member.role)
+    const removeCell = can("removeMembers")
       ? `<button class="secondary-button" data-remove-member="${index}">${t("remove")}</button>`
-      : "—";
+      : "-";
     return `<tr>
       <td data-label="${t("member")}">${member.name}</td>
-      <td data-label="${t("email")}">${member.email || "—"}</td>
+      <td data-label="${t("email")}">${member.email || "-"}</td>
       <td data-label="${t("role")}">${roleCell}</td>
       <td data-label="${t("action")}" class="cell-actions">${removeCell}</td>
     </tr>`;
   }).join("");
-  return `
+  const familyTabs = [
+    { id: "members", label: fr ? "Membres" : "Members" },
+    { id: "invitations", label: fr ? "Invitations" : "Invitations" },
+    ...(hasCommonFinancesAccess() ? [{ id: "common", label: fr ? "Finances communes" : "Common finances" }] : [])
+  ];
+  const membersSection = `
     <section class="panel">
-      ${inviteForm}
-      <div id="limitMessage"></div>
       ${state.members.length ? `
       <div class="table-wrap">
         <table class="responsive-table">
@@ -2859,19 +2939,35 @@ function renderFamily() {
         </table>
       </div>` : `<p class="form-note">${fr ? "Aucun membre pour le moment." : "No members yet."}</p>`}
       ${state.user ? `<p class="form-note">${fr
-        ? `Votre rôle: ${roleLabel(state.role)}.`
+        ? `Votre role: ${roleLabel(state.role)}.`
         : `Your role: ${roleLabel(state.role)}.`}</p>` : ""}
     </section>
-    ${commonFinancesSection()}
+  `;
+  const invitationsSection = `
+    <section class="panel">
+      ${inviteForm}
+      <div id="limitMessage"></div>
+    </section>
+  `;
+  const content = state.familySection === "invitations"
+    ? invitationsSection
+    : (state.familySection === "common" ? commonFinancesSection() : membersSection);
+  return `
+    <section class="panel family-hub">
+      <div class="family-tabs" role="tablist" aria-label="${fr ? "Navigation famille" : "Family navigation"}">
+        ${familyTabs.map((tab) => `<button type="button" class="${tab.id === state.familySection ? "active" : ""}" data-family-section="${tab.id}">${tab.label}</button>`).join("")}
+      </div>
+      <p class="form-note">${fr ? "Espace dedie a la gestion familiale." : "Dedicated space for household management."}</p>
+    </section>
+    ${content}
   `;
 }
 
-// Tous les items marqués communs, avec leur montant mensuel de référence.
 function sharedItemsForFamily() {
   const fr = state.lang === "fr";
   const out = [];
   state.debts.forEach((it) => { if (normalizeSharing(it).isShared) out.push({ table: "debts", id: it.id, name: it.name, label: fr ? "Dette" : "Debt", total: Math.max(0, clampNumber(it.minPayment)), item: it }); });
-  state.budget.forEach((it) => { const e = normalizeExpense(it); if (normalizeSharing(it).isShared) out.push({ table: "budget_categories", id: it.id, name: e.name, label: fr ? "Dépense" : "Expense", total: Math.max(0, clampNumber(e.planned)), item: it }); });
+  state.budget.forEach((it) => { const e = normalizeExpense(it); if (normalizeSharing(it).isShared) out.push({ table: "budget_categories", id: it.id, name: e.name, label: fr ? "Dépense" : "Expense", total: Math.max(0, monthlyExpenseAmount(e)), item: it }); });
   state.transactions.forEach((it) => { if (normalizeSharing(it).isShared) out.push({ table: "transactions", id: it.id, name: it.name, label: fr ? "Transaction" : "Transaction", total: Math.abs(clampNumber(it.amount)), item: it }); });
   state.goals.forEach((it) => { if (normalizeSharing(it).isShared) out.push({ table: "goals", id: it.id, name: it.name, label: fr ? "Objectif" : "Goal", total: Math.max(0, clampNumber(it.monthlyContribution)), item: it }); });
   return out;
@@ -2880,6 +2976,7 @@ function sharedItemsForFamily() {
 // Dashboard famille: finances communes (total, part attendue / payée / restante par membre).
 function commonFinancesSection() {
   const fr = state.lang === "fr";
+  if (!hasCommonFinancesAccess()) return "";
   const shared = sharedItemsForFamily();
   const members = householdList();
   if (!shared.length) {
@@ -4203,6 +4300,7 @@ function bindViewActions() {
           if (response.ok && result.invited) {
             member.id = result.member.id;
             state.members.push(member);
+            await loadUserData(false);
             renderView();
             showLimit(result.linkedExisting
               ? (state.lang === "fr"
@@ -4460,6 +4558,11 @@ function bindViewActions() {
   });
 
   // Retrait d'un membre: passe par le backend qui applique les règles de rôle
+  $$("[data-family-section]").forEach((button) => button.addEventListener("click", () => {
+    state.familySection = button.getAttribute("data-family-section") || "members";
+    renderView();
+  }));
+
   $$("[data-remove-member]").forEach((button) => button.addEventListener("click", async () => {
     const index = Number(button.getAttribute("data-remove-member"));
     const member = state.members[index];
@@ -4480,7 +4583,11 @@ function bindViewActions() {
           : "Could not remove this member right now. Please try again.");
       }
     }
-    state.members.splice(index, 1);
+    if (state.user) {
+      await loadUserData(false);
+    } else {
+      state.members.splice(index, 1);
+    }
     renderView();
   }));
 
