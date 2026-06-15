@@ -2168,6 +2168,17 @@ h3 {
   min-height: auto;
 }
 
+.sharing-block {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.sharing-options {
+  display: grid;
+  gap: 0.6rem;
+}
+
 .split-config {
   grid-column: 1 / -1;
   border: 1px solid var(--border, rgba(255, 255, 255, 0.12));

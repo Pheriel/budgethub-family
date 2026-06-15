@@ -1092,8 +1092,11 @@ function paidForItem(itemTable, itemId, memberKey) {
 }
 
 // Champs de formulaire communs (case "Commun" + mode + parts par membre).
-function sharingFormFields(item) {
+// Les options de répartition n'apparaissent que si la case est cochée
+// (toggle géré par bindSharingToggles).
+function sharingFormFields(item, options = {}) {
   const fr = state.lang === "fr";
+  const label = options.label || (fr ? "Commun / partagé avec la famille" : "Common / shared with family");
   const s = normalizeSharing(item || {});
   const members = householdList();
   const memberInputs = members.map((m) => {
@@ -1101,10 +1104,34 @@ function sharingFormFields(item) {
     return `<label class="split-member"><span>${m.name}${m.self ? (fr ? " (moi)" : " (me)") : ""}</span>
       <input name="split_${m.key}" ${decimalInputAttrs("0")} value="${s.splitConfig[m.key] != null ? pct : ""}" /></label>`;
   }).join("");
+  const showOptions = s.isShared;
+  const showMembers = s.isShared && s.splitMode !== "equal";
   return `
-    <label class="checkbox-field"><input name="isShared" type="checkbox" ${s.isShared ? "checked" : ""} /><span>${fr ? "Commun / partagé avec la famille" : "Common / shared with family"}</span></label>
-    <label><span>${fr ? "Mode de répartition" : "Split mode"}</span><select name="splitMode">${splitModeOptions(s.splitMode)}</select></label>
-    <fieldset class="split-config"><legend>${fr ? "Parts par membre (pour % ou montant fixe)" : "Per-member shares (for % or fixed amount)"}</legend>${memberInputs || `<p class="form-note">${fr ? "Invitez des membres pour répartir." : "Invite members to split."}</p>`}</fieldset>`;
+    <div class="sharing-block" data-sharing-block>
+      <label class="checkbox-field"><input name="isShared" type="checkbox" data-sharing-toggle ${s.isShared ? "checked" : ""} /><span>${label}</span></label>
+      <div class="sharing-options" data-sharing-options ${showOptions ? "" : "hidden"}>
+        <label><span>${fr ? "Mode de répartition" : "Split mode"}</span><select name="splitMode" data-sharing-mode>${splitModeOptions(s.splitMode)}</select></label>
+        <fieldset class="split-config" data-sharing-members ${showMembers ? "" : "hidden"}><legend>${fr ? "Parts par membre (pour % ou montant fixe)" : "Per-member shares (for % or fixed amount)"}</legend>${memberInputs || `<p class="form-note">${fr ? "Invitez des membres pour répartir." : "Invite members to split."}</p>`}</fieldset>
+      </div>
+    </div>`;
+}
+
+// Affiche/masque les options de partage selon la case et le mode choisi.
+function bindSharingToggles(root = document) {
+  root.querySelectorAll("[data-sharing-block]").forEach((block) => {
+    const toggle = block.querySelector("[data-sharing-toggle]");
+    const optionsEl = block.querySelector("[data-sharing-options]");
+    const mode = block.querySelector("[data-sharing-mode]");
+    const membersEl = block.querySelector("[data-sharing-members]");
+    if (!toggle || !optionsEl) return;
+    const sync = () => {
+      optionsEl.hidden = !toggle.checked;
+      if (membersEl) membersEl.hidden = !toggle.checked || (mode && mode.value === "equal");
+    };
+    toggle.addEventListener("change", sync);
+    if (mode) mode.addEventListener("change", sync);
+    sync();
+  });
 }
 
 // Lit les champs de partage depuis un FormData -> payload Supabase.
@@ -1739,6 +1766,7 @@ function renderView() {
   };
   $("#viewContainer").innerHTML = renderers[state.currentView]();
   bindDecimalInputs($("#viewContainer"));
+  bindSharingToggles($("#viewContainer"));
   bindViewActions();
 }
 
@@ -1904,7 +1932,7 @@ function renderDebts() {
         <label><span>${t("rate")}</span><input name="rate" required ${decimalInputAttrs("18.99")} value="${d ? d.rate : ""}" /></label>
         <label><span>${t("minPayment")}</span><input name="minPayment" required ${decimalInputAttrs("75.00")} value="${d ? d.minPayment : ""}" /></label>
         <label><span>${fr ? "Jour du paiement" : "Payment day"}</span><input name="paymentDay" type="number" min="1" max="31" step="1" placeholder="15" value="${d ? clampPaymentDay(d.paymentDay) : ""}" /></label>
-        ${sharingFormFields(d)}
+        ${sharingFormFields(d, { label: fr ? "Dette commune / partager avec la famille" : "Shared debt / share with family" })}
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : t("addDebt")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
