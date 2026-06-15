@@ -2168,6 +2168,29 @@ h3 {
   min-height: auto;
 }
 
+.split-config {
+  grid-column: 1 / -1;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem 0.9rem;
+}
+
+.split-config legend {
+  padding: 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.split-member {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
 .table-note {
   display: block;
   margin-top: 0.15rem;

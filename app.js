@@ -1015,6 +1015,111 @@ function normalizeExpense(item = {}) {
   };
 }
 
+// ----- Partage familial par item -----
+const SPLIT_MODES = {
+  equal: { fr: "Parts égales", en: "Equal split" },
+  percent: { fr: "Pourcentage par membre", en: "Percent per member" },
+  fixed: { fr: "Montant fixe par membre", en: "Fixed amount per member" }
+};
+
+function mapSharing(row) {
+  return {
+    userId: row.user_id || null,
+    isShared: row.is_shared === true,
+    splitMode: SPLIT_MODES[row.split_mode] ? row.split_mode : "equal",
+    splitConfig: row.split_config && typeof row.split_config === "object" ? row.split_config : {}
+  };
+}
+
+function normalizeSharing(item = {}) {
+  const mode = item.splitMode || item.split_mode;
+  return {
+    isShared: item.isShared === true || item.is_shared === true,
+    splitMode: SPLIT_MODES[mode] ? mode : "equal",
+    splitConfig: item.splitConfig || item.split_config || {}
+  };
+}
+
+function splitModeLabel(value) {
+  const mode = SPLIT_MODES[value] || SPLIT_MODES.equal;
+  return mode[state.lang] || mode.fr;
+}
+
+function splitModeOptions(selected) {
+  return Object.entries(SPLIT_MODES).map(([value, item]) =>
+    `<option value="${value}" ${selected === value ? "selected" : ""}>${item[state.lang] || item.fr}</option>`
+  ).join("");
+}
+
+// Liste des membres du foyer servant aux répartitions. Source: profils famille;
+// repli sur l'utilisateur + membres invités si les profils ne sont pas chargés.
+function householdList() {
+  if (state.household && state.household.length) return state.household;
+  const meId = state.user ? state.user.id : "me";
+  const list = [{ key: meId, name: state.lang === "fr" ? "Moi" : "Me", self: true }];
+  (state.members || []).forEach((m) => {
+    const key = m.invitedUserId || `member:${m.id}`;
+    if (key !== meId) list.push({ key, name: m.name, self: false });
+  });
+  return list;
+}
+
+// Part d'un membre donné pour un montant total selon le mode de répartition.
+function memberShare(item, amount, memberKey) {
+  const s = normalizeSharing(item);
+  if (!s.isShared) return 0;
+  const members = householdList();
+  if (s.splitMode === "percent") return amount * (clampNumber(s.splitConfig[memberKey]) || 0) / 100;
+  if (s.splitMode === "fixed") return clampNumber(s.splitConfig[memberKey]) || 0;
+  return members.length ? amount / members.length : amount;
+}
+
+// Part de l'utilisateur connecté. Un item personnel chargé lui appartient (RLS),
+// donc son impact budget = montant complet. Un item commun = sa part seulement.
+function myShare(item, amount) {
+  const s = normalizeSharing(item);
+  if (!s.isShared) return amount;
+  const meId = state.user ? state.user.id : "me";
+  return memberShare(item, amount, meId);
+}
+
+// Total déjà payé par un membre pour un item commun.
+function paidForItem(itemTable, itemId, memberKey) {
+  return (state.contributions || [])
+    .filter((c) => c.itemTable === itemTable && String(c.itemId) === String(itemId) && c.memberUserId === memberKey)
+    .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+}
+
+// Champs de formulaire communs (case "Commun" + mode + parts par membre).
+function sharingFormFields(item) {
+  const fr = state.lang === "fr";
+  const s = normalizeSharing(item || {});
+  const members = householdList();
+  const memberInputs = members.map((m) => {
+    const pct = clampNumber(s.splitConfig[m.key]);
+    return `<label class="split-member"><span>${m.name}${m.self ? (fr ? " (moi)" : " (me)") : ""}</span>
+      <input name="split_${m.key}" ${decimalInputAttrs("0")} value="${s.splitConfig[m.key] != null ? pct : ""}" /></label>`;
+  }).join("");
+  return `
+    <label class="checkbox-field"><input name="isShared" type="checkbox" ${s.isShared ? "checked" : ""} /><span>${fr ? "Commun / partagé avec la famille" : "Common / shared with family"}</span></label>
+    <label><span>${fr ? "Mode de répartition" : "Split mode"}</span><select name="splitMode">${splitModeOptions(s.splitMode)}</select></label>
+    <fieldset class="split-config"><legend>${fr ? "Parts par membre (pour % ou montant fixe)" : "Per-member shares (for % or fixed amount)"}</legend>${memberInputs || `<p class="form-note">${fr ? "Invitez des membres pour répartir." : "Invite members to split."}</p>`}</fieldset>`;
+}
+
+// Lit les champs de partage depuis un FormData -> payload Supabase.
+function readSharingPayload(form) {
+  const isShared = form.get("isShared") === "on";
+  const splitMode = SPLIT_MODES[form.get("splitMode")] ? form.get("splitMode") : "equal";
+  const splitConfig = {};
+  if (isShared && splitMode !== "equal") {
+    householdList().forEach((m) => {
+      const raw = form.get(`split_${m.key}`);
+      if (raw != null && String(raw).trim() !== "") splitConfig[m.key] = Math.max(0, clampNumber(raw));
+    });
+  }
+  return { is_shared: isShared, split_mode: splitMode, split_config: splitConfig };
+}
+
 function incomeFrequencyLabel(value) {
   const frequency = incomeFrequencies[value] || incomeFrequencies.monthly;
   return frequency[state.lang] || frequency.fr;
@@ -1259,18 +1364,37 @@ async function loadProfilePlan() {
 async function loadUserData(shouldRender = true) {
   if (!supabaseClient || !state.user) return;
   const { start, end } = selectedMonthRange();
-  const [debts, budget, transactions, goals, members, incomes] = await Promise.all([
-    supabaseClient.from("debts").select("id,name,balance,rate,min_payment,payment_day").order("created_at"),
-    supabaseClient.from("budget_categories").select("id,name,category,planned,spent,due_day,is_recurring,notes,month_key").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
-    supabaseClient.from("transactions").select("id,date,name,category,amount").gte("date", start).lt("date", end).order("date", { ascending: false }),
-    supabaseClient.from("goals").select("id,name,target,saved,monthly_contribution,created_at").order("created_at"),
-    supabaseClient.from("family_members").select("id,name,role,email").order("created_at"),
-    supabaseClient.from("profiles").select("monthly_income,income_amount,income_frequency")
+  const [debts, budget, transactions, goals, members, incomes, contributions] = await Promise.all([
+    supabaseClient.from("debts").select("id,user_id,name,balance,rate,min_payment,payment_day,is_shared,split_mode,split_config").order("created_at"),
+    supabaseClient.from("budget_categories").select("id,user_id,name,category,planned,spent,due_day,is_recurring,notes,month_key,is_shared,split_mode,split_config").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
+    supabaseClient.from("transactions").select("id,user_id,date,name,category,amount,is_shared,split_mode,split_config").gte("date", start).lt("date", end).order("date", { ascending: false }),
+    supabaseClient.from("goals").select("id,user_id,name,target,saved,monthly_contribution,created_at,is_shared,split_mode,split_config").order("created_at"),
+    supabaseClient.from("family_members").select("id,name,role,email,invited_user_id").order("created_at"),
+    supabaseClient.from("profiles").select("id,display_name,email,family_owner_id,monthly_income,income_amount,income_frequency"),
+    supabaseClient.from("item_contributions").select("id,item_table,item_id,member_user_id,amount,note,paid_on")
   ]);
-  state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "" }));
+  state.members = (members.data || []).map((row) => ({ id: row.id, name: row.name, role: row.role, email: row.email || "", invitedUserId: row.invited_user_id || null }));
+
+  // Foyer = profils de la famille (propriétaire + membres invités), source des
+  // parts de répartition. Visible grâce à la policy "Family can view profiles".
+  const profileRows = incomes.data || [];
+  const ownerRow = profileRows.find((p) => !p.family_owner_id || p.family_owner_id === p.id);
+  state.familyOwnerId = ownerRow ? ownerRow.id : (state.user ? state.user.id : null);
+  state.household = profileRows.map((p) => ({
+    key: p.id,
+    name: p.display_name || p.email || (state.lang === "fr" ? "Membre" : "Member"),
+    self: p.id === (state.user && state.user.id)
+  }));
+  state.contributions = (contributions.data || []).map((row) => ({
+    id: row.id, itemTable: row.item_table, itemId: row.item_id,
+    memberUserId: row.member_user_id, amount: Number(row.amount || 0), note: row.note || "", paidOn: row.paid_on
+  }));
+  // Profil de l'utilisateur connecté (et non le premier de la famille).
+  const myProfile = profileRows.find((p) => p.id === (state.user && state.user.id)) || profileRows[0] || {};
+
   const seed = {
     debts: (debts.data || []).map((row) => ({
-      id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment), paymentDay: clampPaymentDay(row.payment_day || 1)
+      id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment), paymentDay: clampPaymentDay(row.payment_day || 1), ...mapSharing(row)
     })),
     budget: (budget.data || []).map((row) => normalizeExpense({
       id: row.id,
@@ -1281,19 +1405,20 @@ async function loadUserData(shouldRender = true) {
       dueDay: row.due_day || "",
       isRecurring: row.is_recurring !== false,
       notes: row.notes || "",
-      monthKey: row.month_key || state.selectedMonth
+      monthKey: row.month_key || state.selectedMonth,
+      ...mapSharing(row)
     })),
     transactions: (transactions.data || []).map((row) => ({
-      id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount)
+      id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount), ...mapSharing(row)
     })),
     goals: (goals.data || []).map((row) => ({
       id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved),
-      monthlyContribution: Number(row.monthly_contribution || 0), createdAt: row.created_at
+      monthlyContribution: Number(row.monthly_contribution || 0), createdAt: row.created_at, ...mapSharing(row)
     })),
     // Revenu du foyer = somme des salaires mensuels de tous les membres de la famille
     income: (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0),
-    incomeInput: Number((incomes.data || [])[0]?.income_amount ?? (incomes.data || [])[0]?.monthly_income ?? 0),
-    incomeFrequency: (incomes.data || [])[0]?.income_frequency || "monthly"
+    incomeInput: Number(myProfile.income_amount ?? myProfile.monthly_income ?? 0),
+    incomeFrequency: myProfile.income_frequency || "monthly"
   };
   loadMonthData(state.selectedMonth === currentMonthKey() ? seed : emptyMonthData());
   if (shouldRender) renderView();
@@ -1326,6 +1451,14 @@ async function refreshViewData(view, token = state.viewToken) {
   } catch (_error) {
     // Hors ligne: on garde l'affichage actuel
   }
+}
+
+function logSupabaseError(context, error) {
+  if (!error) return;
+  console.error(
+    `[Supabase] ${context} failed: ${error.message || "unknown error"}`,
+    { code: error.code, details: error.details, hint: error.hint }
+  );
 }
 
 async function dbInsert(table, payload) {
@@ -1602,13 +1735,13 @@ function monthlyInterest(debt) {
 function transactionExpenses() {
   return state.transactions
     .filter((item) => Number(item.amount) < 0)
-    .reduce((sum, item) => sum + Math.abs(Number(item.amount)), 0);
+    .reduce((sum, item) => sum + myShare(item, Math.abs(Number(item.amount))), 0);
 }
 
 function transactionIncome() {
   return state.transactions
     .filter((item) => Number(item.amount) > 0)
-    .reduce((sum, item) => sum + Number(item.amount), 0);
+    .reduce((sum, item) => sum + myShare(item, Number(item.amount)), 0);
 }
 
 function spentForCategory(category) {
@@ -1621,13 +1754,15 @@ function spentForCategory(category) {
 }
 
 function totals() {
-  const debt = state.debts.reduce((sum, item) => sum + item.balance, 0);
-  const debtPayments = state.debts.reduce((sum, item) => sum + item.minPayment, 0);
-  const debtInterest = state.debts.reduce((sum, item) => sum + monthlyInterest(item), 0);
-  const monthlyExpenses = state.budget.reduce((sum, item) => sum + Math.max(0, clampNumber(item.planned)), 0);
+  // Pour un item commun, le budget personnel ne tient compte que de la part de
+  // l'utilisateur connecté (myShare). Les items personnels comptent en entier.
+  const debt = state.debts.reduce((sum, item) => sum + myShare(item, item.balance), 0);
+  const debtPayments = state.debts.reduce((sum, item) => sum + myShare(item, item.minPayment), 0);
+  const debtInterest = state.debts.reduce((sum, item) => sum + myShare(item, monthlyInterest(item)), 0);
+  const monthlyExpenses = state.budget.reduce((sum, item) => sum + myShare(item, Math.max(0, clampNumber(item.planned))), 0);
   const trackedSpending = transactionExpenses();
   const extraIncome = transactionIncome();
-  const goalContributions = state.goals.reduce((sum, item) => sum + (item.monthlyContribution || 0), 0);
+  const goalContributions = state.goals.reduce((sum, item) => sum + myShare(item, item.monthlyContribution || 0), 0);
   const income = state.income + extraIncome;
   const availableAfterBills = income - monthlyExpenses - debtPayments;
   const leftover = availableAfterBills - goalContributions;
@@ -1748,6 +1883,7 @@ function renderDebts() {
         <label><span>${t("rate")}</span><input name="rate" required ${decimalInputAttrs("18.99")} value="${d ? d.rate : ""}" /></label>
         <label><span>${t("minPayment")}</span><input name="minPayment" required ${decimalInputAttrs("75.00")} value="${d ? d.minPayment : ""}" /></label>
         <label><span>${fr ? "Jour du paiement" : "Payment day"}</span><input name="paymentDay" type="number" min="1" max="31" step="1" placeholder="15" value="${d ? clampPaymentDay(d.paymentDay) : ""}" /></label>
+        ${sharingFormFields(d)}
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : t("addDebt")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
@@ -2505,6 +2641,7 @@ function renderBudget() {
         <label><span>${fr ? "Jour du mois (optionnel)" : "Day of month (optional)"}</span><input name="dueDay" type="number" min="1" max="31" placeholder="1" value="${b && b.dueDay ? b.dueDay : ""}" /></label>
         <label class="checkbox-field"><input name="isRecurring" type="checkbox" ${!b || b.isRecurring ? "checked" : ""} /><span>${fr ? "Récurrent chaque mois" : "Recurring monthly"}</span></label>
         <label><span>${fr ? "Notes (optionnel)" : "Notes (optional)"}</span><input name="notes" placeholder="${fr ? "Ex. loyer, forfait internet..." : "E.g. rent, internet plan..."}" value="${b ? b.notes : ""}" /></label>
+        ${sharingFormFields(b)}
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
@@ -2549,6 +2686,7 @@ function renderTransactions() {
         <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.name : ""}" /></label>
         <label><span>${t("category")}</span><input name="category" required placeholder="${fr ? "Épicerie" : "Groceries"}" value="${tr ? tr.category : ""}" /></label>
         <label><span>${t("amount")}</span><input name="amount" required ${signedDecimalInputAttrs("-50.00")} value="${tr ? tr.amount : ""}" /></label>
+        ${sharingFormFields(tr)}
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
@@ -2591,6 +2729,7 @@ function renderGoals() {
         <label><span>${fr ? "Cible" : "Target"}</span><input name="target" required ${decimalInputAttrs("15000.00")} value="${g ? g.target : ""}" /></label>
         <label><span>${fr ? "Déjà épargné" : "Already saved"}</span><input name="saved" ${decimalInputAttrs("0.00")} value="${g ? g.saved : ""}" /></label>
         <label><span>${fr ? "Cotisation par mois" : "Monthly contribution"}</span><input name="monthlyContribution" ${decimalInputAttrs("100.00")} value="${g ? g.monthlyContribution : ""}" /></label>
+        ${sharingFormFields(g)}
         <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
@@ -2672,6 +2811,70 @@ function renderFamily() {
       ${state.user ? `<p class="form-note">${fr
         ? `Votre rôle: ${roleLabel(state.role)}.`
         : `Your role: ${roleLabel(state.role)}.`}</p>` : ""}
+    </section>
+    ${commonFinancesSection()}
+  `;
+}
+
+// Tous les items marqués communs, avec leur montant mensuel de référence.
+function sharedItemsForFamily() {
+  const fr = state.lang === "fr";
+  const out = [];
+  state.debts.forEach((it) => { if (normalizeSharing(it).isShared) out.push({ table: "debts", id: it.id, name: it.name, label: fr ? "Dette" : "Debt", total: Math.max(0, clampNumber(it.minPayment)), item: it }); });
+  state.budget.forEach((it) => { const e = normalizeExpense(it); if (normalizeSharing(it).isShared) out.push({ table: "budget_categories", id: it.id, name: e.name, label: fr ? "Dépense" : "Expense", total: Math.max(0, clampNumber(e.planned)), item: it }); });
+  state.transactions.forEach((it) => { if (normalizeSharing(it).isShared) out.push({ table: "transactions", id: it.id, name: it.name, label: fr ? "Transaction" : "Transaction", total: Math.abs(clampNumber(it.amount)), item: it }); });
+  state.goals.forEach((it) => { if (normalizeSharing(it).isShared) out.push({ table: "goals", id: it.id, name: it.name, label: fr ? "Objectif" : "Goal", total: Math.max(0, clampNumber(it.monthlyContribution)), item: it }); });
+  return out;
+}
+
+// Dashboard famille: finances communes (total, part attendue / payée / restante par membre).
+function commonFinancesSection() {
+  const fr = state.lang === "fr";
+  const shared = sharedItemsForFamily();
+  const members = householdList();
+  if (!shared.length) {
+    return `<section class="panel"><h3>${fr ? "Finances communes" : "Common finances"}</h3>
+      <p class="form-note">${fr ? "Aucun item commun. Cochez « Commun / partagé » sur une dette, dépense, transaction ou objectif." : "No common item yet. Check \"Common / shared\" on a debt, expense, transaction or goal."}</p></section>`;
+  }
+  const totalCommon = shared.reduce((sum, s) => sum + s.total, 0);
+
+  const itemRows = shared.map((s) => {
+    const shares = members.map((m) => money(memberShare(s.item, s.total, m.key))).join("</td><td>");
+    return `<tr><td data-label="${fr ? "Item" : "Item"}"><strong>${s.name}</strong><small class="table-note">${s.label} · ${splitModeLabel(normalizeSharing(s.item).splitMode)}</small></td><td data-label="${fr ? "Total" : "Total"}">${money(s.total)}</td><td>${shares}</td></tr>`;
+  }).join("");
+
+  const memberSummary = members.map((m) => {
+    const expected = shared.reduce((sum, s) => sum + memberShare(s.item, s.total, m.key), 0);
+    const paid = shared.reduce((sum, s) => sum + paidForItem(s.table, s.id, m.key), 0);
+    const remaining = expected - paid;
+    return `<tr><td data-label="${t("member")}">${m.name}${m.self ? (fr ? " (moi)" : " (me)") : ""}</td><td data-label="${fr ? "Attendu" : "Expected"}">${money(expected)}</td><td data-label="${fr ? "Payé" : "Paid"}">${money(paid)}</td><td data-label="${fr ? "Reste" : "Remaining"}" class="${remaining > 0.005 ? "pill-warn" : "pill-good"}">${money(remaining)}</td></tr>`;
+  }).join("");
+
+  const itemOptions = shared.map((s) => `<option value="${s.table}|${s.id}">${s.name} (${money(s.total)})</option>`).join("");
+  const memberOptions = members.map((m) => `<option value="${m.key}">${m.name}</option>`).join("");
+  const contributionForm = (state.user && can("editData")) ? `
+    <form class="form-grid" id="contributionForm">
+      <label><span>${fr ? "Item commun" : "Common item"}</span><select name="item">${itemOptions}</select></label>
+      <label><span>${fr ? "Membre" : "Member"}</span><select name="member">${memberOptions}</select></label>
+      <label><span>${fr ? "Montant payé" : "Amount paid"}</span><input name="amount" required ${decimalInputAttrs("650.00")} /></label>
+      <button class="primary-button" type="submit">${fr ? "Enregistrer le paiement" : "Record payment"}</button>
+    </form>` : "";
+
+  return `
+    <section class="panel">
+      <h3>${fr ? "Finances communes" : "Common finances"}</h3>
+      <p class="form-note">${fr ? "Total commun (mensuel de référence)" : "Common total (monthly reference)"}: <strong>${money(totalCommon)}</strong></p>
+      <div class="table-wrap"><table class="responsive-table">
+        <thead><tr><th>${fr ? "Item" : "Item"}</th><th>${fr ? "Total" : "Total"}</th>${members.map((m) => `<th>${m.name}</th>`).join("")}</tr></thead>
+        <tbody>${itemRows}</tbody>
+      </table></div>
+      <h4>${fr ? "Contribution par membre" : "Contribution per member"}</h4>
+      <div class="table-wrap"><table class="responsive-table">
+        <thead><tr><th>${t("member")}</th><th>${fr ? "Attendu" : "Expected"}</th><th>${fr ? "Payé" : "Paid"}</th><th>${fr ? "Reste" : "Remaining"}</th></tr></thead>
+        <tbody>${memberSummary}</tbody>
+      </table></div>
+      ${contributionForm}
+      <div id="contributionMessage"></div>
     </section>
   `;
 }
@@ -3891,17 +4094,20 @@ function bindViewActions() {
     debtForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(debtForm);
+      const sharing = readSharingPayload(form);
+      const sharingLocal = mapSharing({ ...sharing, user_id: state.user ? state.user.id : null });
       const payload = {
         name: form.get("name"),
         balance: Math.max(0, clampNumber(form.get("balance"))),
         rate: Math.max(0, clampNumber(form.get("rate"))),
         min_payment: Math.max(0, clampNumber(form.get("minPayment"))),
-        payment_day: clampPaymentDay(form.get("paymentDay") || 1)
+        payment_day: clampPaymentDay(form.get("paymentDay") || 1),
+        ...sharing
       };
       if (state.editing.table === "debts") {
         const debt = findEditable(state.debts);
         if (canSyncUndatedMonthlyData() && debt.id) await dbUpdate("debts", debt.id, payload);
-        Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day });
+        Object.assign(debt, { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day, ...sharingLocal });
         saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
@@ -3909,7 +4115,7 @@ function bindViewActions() {
       }
       const plan = planDefinitions.find((item) => item.id === state.plan);
       if (state.debts.length >= plan.debts) return showLimit(planLimitMessage("debts"));
-      const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day };
+      const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day, ...sharingLocal };
       if (canSyncUndatedMonthlyData()) {
         const row = await dbInsert("debts", payload);
         if (row) debt.id = row.id;
@@ -4000,11 +4206,14 @@ function bindViewActions() {
     transactionForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(transactionForm);
+      const sharing = readSharingPayload(form);
+      const sharingLocal = mapSharing({ ...sharing, user_id: state.user ? state.user.id : null });
       const payload = {
         date: form.get("date"),
         name: form.get("name"),
         category: form.get("category"),
-        amount: clampNumber(form.get("amount"))
+        amount: clampNumber(form.get("amount")),
+        ...sharing
       };
       if (!payload.date.startsWith(state.selectedMonth)) {
         return showLimit(state.lang === "fr"
@@ -4014,7 +4223,7 @@ function bindViewActions() {
       if (state.editing.table === "transactions") {
         const tr = findEditable(state.transactions);
         if (state.user && tr.id) await dbUpdate("transactions", tr.id, payload);
-        Object.assign(tr, payload);
+        Object.assign(tr, payload, sharingLocal);
         saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
@@ -4036,22 +4245,25 @@ function bindViewActions() {
     goalForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(goalForm);
+      const sharing = readSharingPayload(form);
+      const sharingLocal = mapSharing({ ...sharing, user_id: state.user ? state.user.id : null });
       const payload = {
         name: form.get("name"),
         target: Math.max(0, clampNumber(form.get("target"))),
         saved: Math.max(0, clampNumber(form.get("saved") || 0)),
-        monthly_contribution: Math.max(0, clampNumber(form.get("monthlyContribution") || 0))
+        monthly_contribution: Math.max(0, clampNumber(form.get("monthlyContribution") || 0)),
+        ...sharing
       };
       if (state.editing.table === "goals") {
         const goal = findEditable(state.goals);
         if (canSyncUndatedMonthlyData() && goal.id) await dbUpdate("goals", goal.id, payload);
-        Object.assign(goal, { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution });
+        Object.assign(goal, { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, ...sharingLocal });
         saveMonthData();
         state.editing = { table: null, id: null };
         renderView();
         return;
       }
-      const goal = { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, createdAt: new Date().toISOString() };
+      const goal = { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, createdAt: new Date().toISOString(), ...sharingLocal };
       if (canSyncUndatedMonthlyData()) {
         const row = await dbInsert("goals", payload);
         if (row) { goal.id = row.id; goal.createdAt = row.created_at; }
@@ -4067,6 +4279,7 @@ function bindViewActions() {
     budgetForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(budgetForm);
+      const sharing = readSharingPayload(form);
       const payload = {
         name: form.get("name"),
         category: form.get("category"),
@@ -4074,7 +4287,8 @@ function bindViewActions() {
         due_day: form.get("dueDay") ? Math.round(clampNumber(form.get("dueDay"))) : null,
         is_recurring: form.get("isRecurring") === "on",
         notes: form.get("notes") || "",
-        month_key: state.selectedMonth
+        month_key: state.selectedMonth,
+        ...sharing
       };
       const localExpense = normalizeExpense({
         name: payload.name,
@@ -4083,7 +4297,8 @@ function bindViewActions() {
         dueDay: payload.due_day || "",
         isRecurring: payload.is_recurring,
         notes: payload.notes,
-        monthKey: payload.month_key
+        monthKey: payload.month_key,
+        ...mapSharing({ ...sharing, user_id: state.user ? state.user.id : null })
       });
       if (state.editing.table === "budget_categories") {
         const b = findEditable(state.budget);
@@ -4102,6 +4317,33 @@ function bindViewActions() {
       state.budget.push(item);
       saveMonthData();
       renderView();
+    });
+  }
+
+  const contributionForm = $("#contributionForm");
+  if (contributionForm) {
+    contributionForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!state.user || !state.familyOwnerId) return;
+      const form = new FormData(contributionForm);
+      const [itemTable, itemId] = String(form.get("item") || "").split("|");
+      const memberUserId = form.get("member");
+      const amount = Math.max(0, clampNumber(form.get("amount")));
+      if (!itemTable || !itemId || !memberUserId || amount <= 0) return;
+      // item_contributions n'a pas de colonne user_id: insertion directe (et non dbInsert).
+      const { data: row, error } = await supabaseClient
+        .from("item_contributions")
+        .insert({ owner_id: state.familyOwnerId, item_table: itemTable, item_id: itemId, member_user_id: memberUserId, amount })
+        .select()
+        .single();
+      if (!error && row) {
+        state.contributions.push({ id: row.id, itemTable, itemId, memberUserId, amount, note: "", paidOn: row.paid_on });
+        renderView();
+      } else {
+        logSupabaseError("Insert into item_contributions", error);
+        const msg = $("#contributionMessage");
+        if (msg) msg.innerHTML = `<p class="form-note role-note">${state.lang === "fr" ? "Le paiement n'a pas pu être enregistré." : "The payment could not be recorded."}</p>`;
+      }
     });
   }
 
