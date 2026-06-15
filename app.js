@@ -546,6 +546,12 @@ const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname
 const BACKEND_URL = isLocalHost ? "http://localhost:3000" : window.location.origin;
 const PRODUCTION_URL = "https://budgethubfamily.com";
 const authRedirectUrl = `${PRODUCTION_URL}/auth/confirm`;
+const FAMILY_PLAN_IDS = ["family", "familyPlus"];
+const FAMILY_ROUTE_SECTIONS = {
+  "/family": "members",
+  "/family/invitations": "invitations",
+  "/family/contributions": "common"
+};
 
 const state = {
   lang: localStorage.getItem("bh_lang") || detectDefaultLanguage(),
@@ -1066,17 +1072,114 @@ function householdList() {
   return list;
 }
 
+function hasFamilyPlanAccess(plan = state.plan) {
+  return Boolean(state.user) && FAMILY_PLAN_IDS.includes(plan);
+}
+
 function hasFamilyMembership() {
-  if (!state.user) return false;
-  const meId = state.user ? state.user.id : null;
-  const isFamilyPlan = ["family", "familyPlus"].includes(state.plan);
-  const joinedAnotherHousehold = Boolean(state.familyOwnerId && meId && state.familyOwnerId !== meId);
-  const householdMembers = (state.household || []).length;
-  return isFamilyPlan || joinedAnotherHousehold || state.members.length > 0 || householdMembers > 1;
+  return hasFamilyPlanAccess();
 }
 
 function hasCommonFinancesAccess() {
-  return hasFamilyMembership() && householdList().length >= 2;
+  return hasFamilyPlanAccess() && householdList().length >= 2;
+}
+
+function familyFeatureMessage() {
+  return state.lang === "fr"
+    ? "Cette fonctionnalité est réservée aux plans Family et Family Plus."
+    : "This feature is reserved for Family and Family Plus plans.";
+}
+
+function familyUpgradePrompt() {
+  return state.lang === "fr"
+    ? "Passez au plan Family pour partager vos finances avec vos proches."
+    : "Upgrade to the Family plan to share your finances with your household.";
+}
+
+function normalizePathname(pathname = window.location.pathname) {
+  const cleaned = (pathname || "/").replace(/\/+$/, "") || "/";
+  return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
+}
+
+function currentFamilySectionPath() {
+  return {
+    members: "/family",
+    invitations: "/family/invitations",
+    common: "/family/contributions"
+  }[state.familySection] || "/family";
+}
+
+function syncFamilyRoute() {
+  if (state.currentView !== "family") {
+    if (normalizePathname().startsWith("/family")) history.replaceState(null, "", "/");
+    return;
+  }
+  const targetPath = currentFamilySectionPath();
+  if (normalizePathname() !== targetPath) {
+    history.replaceState(null, "", targetPath);
+  }
+}
+
+function updateFamilyNavigation() {
+  const familyButton = $("#familyNavButton");
+  if (familyButton) familyButton.hidden = !hasFamilyPlanAccess();
+}
+
+function showFamilyUpgradeModal(message = familyUpgradePrompt()) {
+  const modal = $("#familyUpgradeModal");
+  if (!modal) return;
+  $("#familyUpgradeTitle").textContent = state.lang === "fr" ? "Passez au plan Family" : "Upgrade to Family";
+  $("#familyUpgradeText").textContent = message;
+  $("#familyUpgradePlans").textContent = state.lang === "fr" ? "Voir les forfaits" : "See plans";
+  $("#familyUpgradeLater").textContent = state.lang === "fr" ? "Plus tard" : "Later";
+  modal.hidden = false;
+}
+
+function hideFamilyUpgradeModal() {
+  const modal = $("#familyUpgradeModal");
+  if (modal) modal.hidden = true;
+}
+
+function openFamilyPricing() {
+  hideFamilyUpgradeModal();
+  history.replaceState(null, "", "#pricing");
+  showLandingPage("pricing");
+}
+
+function renderFamilyUpgradeGate() {
+  const fr = state.lang === "fr";
+  return `
+    <section class="panel">
+      <h3>${fr ? "Fonction famille" : "Family feature"}</h3>
+      <p class="form-note role-note">${familyFeatureMessage()}</p>
+      <div class="account-actions">
+        <button class="primary-button" id="familyUpgradeCta" type="button">${fr ? "Passer au plan Family" : "Upgrade to Family"}</button>
+      </div>
+    </section>
+  `;
+}
+
+function resolveProtectedRoute(pathname = window.location.pathname) {
+  const normalized = normalizePathname(pathname);
+  if (normalized === "/admin") return { view: "admin" };
+  if (FAMILY_ROUTE_SECTIONS[normalized]) {
+    return { view: "family", section: FAMILY_ROUTE_SECTIONS[normalized] };
+  }
+  return null;
+}
+
+async function initializeAuthenticatedWorkspace(user, options = {}) {
+  const { targetView = null, targetFamilySection = null } = options;
+  setSessionUser(user);
+  if (targetFamilySection) state.familySection = targetFamilySection;
+  if (targetView) state.currentView = targetView;
+  await loadProfilePlan();
+  await syncBillingPlan();
+  await loadUserData();
+  if (state.currentView === "family" && !hasFamilyPlanAccess()) {
+    state.familySection = "members";
+  }
+  openApp();
 }
 
 function familyBadgeLabel(item) {
@@ -1325,6 +1428,7 @@ function setSessionUser(user) {
     $("#startDemo").hidden = false;
     $("#openWorkspace").hidden = true;
   }
+  updateFamilyNavigation();
   const adminButton = $("#adminNavButton");
   if (adminButton) adminButton.hidden = !state.isSuperAdmin;
   updateUpgradeButton();
@@ -1441,6 +1545,7 @@ async function loadProfilePlan() {
       duration: data.billing_duration
     };
     $("#activePlanLabel").textContent = planDefinitions.find((plan) => plan.id === state.plan)?.name || data.plan;
+    updateFamilyNavigation();
     updateUpgradeButton();
     renderPricing();
     renderView();
@@ -1736,6 +1841,7 @@ function openApp() {
   if (!state.user && !state.debts.length) {
     applyMonthData(demoData);
   }
+  updateFamilyNavigation();
   showView("app");
   renderView();
 }
@@ -1776,6 +1882,10 @@ function closeAppMenu() {
 }
 
 function navigateAppView(nextView) {
+  if (nextView === "family" && !hasFamilyPlanAccess()) {
+    showFamilyUpgradeModal();
+    return;
+  }
   const token = state.viewToken + 1;
   state.viewToken = token;
   state.currentView = nextView;
@@ -1798,6 +1908,7 @@ function handleUpgradeAction() {
 
 function renderView() {
   if ($("#appView").hidden) return;
+  updateFamilyNavigation();
   hideDebtChartTooltip();
   $("#workspaceTitle").textContent = getViewTitle(state.currentView);
   $("#workspaceEyebrow").textContent = state.plan === "free" ? "Demo" : planDefinitions.find((plan) => plan.id === state.plan).name;
@@ -1816,6 +1927,7 @@ function renderView() {
     account: renderAccount
   };
   $("#viewContainer").innerHTML = renderers[state.currentView]();
+  syncFamilyRoute();
   bindDecimalInputs($("#viewContainer"));
   bindSharingToggles($("#viewContainer"));
   bindViewActions();
@@ -2893,6 +3005,9 @@ function goalsTable(actions) {
 
 function renderFamily() {
   const fr = state.lang === "fr";
+  if (!hasFamilyPlanAccess()) {
+    return renderFamilyUpgradeGate();
+  }
   if (state.familySection === "common" && !hasCommonFinancesAccess()) state.familySection = "members";
   const canInvite = can("inviteMembers");
   const canChangeRoles = can("changeRoles");
@@ -3874,6 +3989,11 @@ function applyAdminSectionVisibility() {
 function bindViewActions() {
   applyAdminSectionVisibility();
 
+  const familyUpgradeCta = $("#familyUpgradeCta");
+  if (familyUpgradeCta) {
+    familyUpgradeCta.addEventListener("click", openFamilyPricing);
+  }
+
   $$("[data-admin-section]").forEach((button) => {
     button.addEventListener("click", async () => {
       state.support.adminSection = button.dataset.adminSection;
@@ -4315,6 +4435,8 @@ function bindViewActions() {
               : "This member is already part of your family.");
           } else if (response.status === 403 && result.error === "forbidden") {
             showLimit(forbiddenMessage());
+          } else if (response.status === 403 && result.error === "family_plan_required") {
+            showFamilyUpgradeModal();
           } else if (result.error === "member_limit_reached") {
             showLimit(planLimitMessage("members"));
           } else if (result.error === "email_already_registered") {
@@ -4480,6 +4602,41 @@ function bindViewActions() {
       const memberUserId = form.get("member");
       const amount = Math.max(0, clampNumber(form.get("amount")));
       if (!itemTable || !itemId || !memberUserId || amount <= 0) return;
+      if (!hasFamilyPlanAccess()) {
+        showFamilyUpgradeModal();
+        return;
+      }
+      try {
+        const response = await authFetch("/api/family/contributions", {
+          method: "POST",
+          body: JSON.stringify({ itemTable, itemId, memberUserId, amount })
+        });
+        const result = await response.json();
+        if (response.status === 403 && result.error === "family_plan_required") {
+          showFamilyUpgradeModal();
+          return;
+        }
+        if (response.ok && result.contribution) {
+          state.contributions.push({
+            id: result.contribution.id,
+            itemTable: result.contribution.item_table,
+            itemId: result.contribution.item_id,
+            memberUserId: result.contribution.member_user_id,
+            amount: Number(result.contribution.amount || 0),
+            note: result.contribution.note || "",
+            paidOn: result.contribution.paid_on
+          });
+          renderView();
+          return;
+        }
+        const msg = $("#contributionMessage");
+        if (msg) msg.innerHTML = `<p class="form-note role-note">${state.lang === "fr" ? "Le paiement n'a pas pu être enregistré." : "The payment could not be recorded."}</p>`;
+        return;
+      } catch (_error) {
+        const msg = $("#contributionMessage");
+        if (msg) msg.innerHTML = `<p class="form-note role-note">${state.lang === "fr" ? "Le paiement n'a pas pu être enregistré." : "The payment could not be recorded."}</p>`;
+        return;
+      }
       // item_contributions n'a pas de colonne user_id: insertion directe (et non dbInsert).
       const { data: row, error } = await supabaseClient
         .from("item_contributions")
@@ -5029,7 +5186,8 @@ async function handleAuthEmailLink() {
 }
 
 function boot() {
-  const wantsAdmin = window.location.pathname === "/admin";
+  const routeIntent = resolveProtectedRoute();
+  const wantsAdmin = routeIntent && routeIntent.view === "admin";
   applyTheme();
   renderPricing();
   applyTranslations();
@@ -5090,6 +5248,8 @@ function boot() {
     if (event.key === "Escape") closeAppMenu();
   });
   $("#supportClose").addEventListener("click", () => { $("#supportModal").hidden = true; });
+  $("#familyUpgradeLater").addEventListener("click", hideFamilyUpgradeModal);
+  $("#familyUpgradePlans").addEventListener("click", openFamilyPricing);
 
   // Jauge de force en direct pendant la saisie du mot de passe
   $("#authForm").elements.password.addEventListener("input", (event) => {
@@ -5172,16 +5332,16 @@ function boot() {
   if (supabaseClient) {
     handleAuthEmailLink().then((handled) => {
       if (handled) return;
-      return supabaseClient.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        setSessionUser(data.session.user);
-        if (wantsAdmin) state.currentView = "admin";
-        loadProfilePlan();
-        syncBillingPlan();
-        loadUserData();
-        openApp();
-        handleCheckoutReturn();
-      }
+      return supabaseClient.auth.getSession().then(async ({ data }) => {
+        if (data.session) {
+          await initializeAuthenticatedWorkspace(data.session.user, {
+            targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
+            targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+          });
+          handleCheckoutReturn();
+        } else if (routeIntent && (routeIntent.view === "admin" || routeIntent.view === "family")) {
+          openAuth("login");
+        }
       });
     });
 
@@ -5195,12 +5355,10 @@ function boot() {
       }
       if (event === "SIGNED_IN" && session && !state.user && !handlingEmailLink) {
         // Connexion via lien de confirmation courriel
-        setSessionUser(session.user);
-        if (wantsAdmin) state.currentView = "admin";
-        loadProfilePlan();
-        syncBillingPlan();
-        loadUserData();
-        openApp();
+        initializeAuthenticatedWorkspace(session.user, {
+          targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
+          targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+        });
       }
     });
   }
@@ -5267,12 +5425,10 @@ function boot() {
         if (error) throw error;
         const { data } = await supabaseClient.auth.getSession();
         if (data.session) {
-          setSessionUser(data.session.user);
-          if (wantsAdmin) state.currentView = "admin";
-          await loadProfilePlan();
-          syncBillingPlan();
-          await loadUserData();
-          openApp();
+          await initializeAuthenticatedWorkspace(data.session.user, {
+            targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
+            targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+          });
           return;
         }
         // Pas de session (cas limite): retour connexion avec message clair
@@ -5302,11 +5458,11 @@ function boot() {
       } else {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        setSessionUser(data.user);
-        if (wantsAdmin) state.currentView = "admin";
-        loadProfilePlan();
-        syncBillingPlan();
-        loadUserData();
+        await initializeAuthenticatedWorkspace(data.user, {
+          targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
+          targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+        });
+        return;
       }
       openApp();
     } catch (error) {
@@ -5342,19 +5498,31 @@ function boot() {
 
   // Page d'atterrissage selon le hash (ex: #pricing), sans casser les liens de confirmation Supabase
   window.addEventListener("popstate", () => {
-    const page = window.location.pathname.replace("/", "");
-    if (page === "admin") {
+    const nextRoute = resolveProtectedRoute();
+    if (nextRoute && nextRoute.view === "admin") {
       state.currentView = "admin";
       if (state.user) openApp();
       else openAuth("login");
-    } else if (legalPages[page]) showLandingPage(page);
+    } else if (nextRoute && nextRoute.view === "family") {
+      state.currentView = "family";
+      state.familySection = nextRoute.section || "members";
+      if (state.user) openApp();
+      else openAuth("login");
+    } else if (legalPages[normalizePathname().replace("/", "")]) showLandingPage(normalizePathname().replace("/", ""));
     else showLandingPage(window.location.hash.replace("#", "") || "home");
   });
-  const pathPage = window.location.pathname.replace("/", "");
-  if (pathPage === "admin") {
-    if (!state.user) openAuth("login");
-    else {
+  const pathPage = normalizePathname().replace("/", "");
+  if (routeIntent && routeIntent.view === "admin") {
+    if (state.user) {
       state.currentView = "admin";
+      openApp();
+    }
+    return;
+  }
+  if (routeIntent && routeIntent.view === "family") {
+    if (state.user) {
+      state.currentView = "family";
+      state.familySection = routeIntent.section || "members";
       openApp();
     }
     return;
