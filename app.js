@@ -1390,6 +1390,19 @@ function expenseDueThisMonth(expense) {
   return myShare(expense, monthlyExpenseAmount(normalizeExpense(expense)));
 }
 
+// Une dépense planifiée est-elle prévue dans le mois sélectionné ?
+// - récurrente (active): comptée à partir de son mois d'origine (month_key) et tous les
+//   mois suivants -> elle reste visible quand on change de mois;
+// - ponctuelle / suspendue (is_recurring = false): uniquement son mois d'origine;
+// - sans month_key (données héritées): toujours visible.
+// month_key est au format 'YYYY-MM', donc la comparaison lexicographique = chronologique.
+function expenseVisibleInMonth(row, monthKey = state.selectedMonth) {
+  const rowMonth = row.month_key ?? row.monthKey;
+  if (!rowMonth) return true;
+  const recurring = (row.is_recurring ?? row.isRecurring) !== false;
+  return recurring ? rowMonth <= monthKey : rowMonth === monthKey;
+}
+
 // Total déjà payé ce mois pour une dépense via les transactions liées (source_expense_id).
 // Les transactions de state sont déjà filtrées sur le mois sélectionné -> le statut
 // repart à "Non payé" quand on change de mois, sans doublon.
@@ -1707,7 +1720,10 @@ async function loadUserData(shouldRender = true) {
   const { start, end } = selectedMonthRange();
   const [debts, budget, transactions, goals, members, incomes, contributions, goalContributions] = await Promise.all([
     supabaseClient.from("debts").select("id,user_id,name,balance,rate,min_payment,payment_day,is_shared,split_mode,split_config").order("created_at"),
-    supabaseClient.from("budget_categories").select("id,user_id,name,category,planned,spent,due_day,is_recurring,frequency,notes,month_key,is_shared,split_mode,split_config").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
+    // Toutes les dépenses planifiées de l'utilisateur (RLS limite aux siennes/partagées).
+    // Le filtrage par mois est fait côté client (expenseVisibleInMonth) pour qu'une
+    // dépense récurrente reste comptée chaque mois, et pas seulement son mois d'origine.
+    supabaseClient.from("budget_categories").select("id,user_id,name,category,planned,spent,due_day,is_recurring,frequency,notes,month_key,is_shared,split_mode,split_config").order("created_at"),
     supabaseClient.from("transactions").select("id,user_id,date,name,category,amount,source_expense_id,source_debt_id,is_shared,split_mode,split_config").gte("date", start).lt("date", end).order("date", { ascending: false }),
     supabaseClient.from("goals").select("id,user_id,name,target,saved,monthly_contribution,contribution_frequency,target_date,status,created_at,is_shared,split_mode,split_config").order("created_at"),
     supabaseClient.from("family_members").select("id,name,role,email,invited_user_id").order("created_at"),
@@ -1767,7 +1783,7 @@ async function loadUserData(shouldRender = true) {
     debts: (debts.data || []).map((row) => ({
       id: row.id, name: row.name, balance: Number(row.balance), rate: Number(row.rate), minPayment: Number(row.min_payment), paymentDay: clampPaymentDay(row.payment_day || 1), ...mapSharing(row)
     })),
-    budget: (budget.data || []).map((row) => normalizeExpense({
+    budget: (budget.data || []).filter((row) => expenseVisibleInMonth(row, state.selectedMonth)).map((row) => normalizeExpense({
       id: row.id,
       name: row.name,
       category: row.category,
