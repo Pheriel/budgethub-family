@@ -559,6 +559,36 @@ const FAMILY_ROUTE_SECTIONS = {
   "/family/contributions": "common"
 };
 
+// Routeur frontend (History API). Le serveur Express sert index.html sur "*",
+// donc un refresh sur /debts renvoie l'app (pas de 404) — aucune config Hostinger
+// supplémentaire requise. Une route = une vue (renderers de renderView).
+const APP_VIEW_PATHS = {
+  dashboard: "/dashboard",
+  debts: "/debts",
+  strategy: "/snowball",
+  budget: "/expenses",
+  transactions: "/transactions",
+  goals: "/goals",
+  support: "/tickets",
+  admin: "/admin",
+  account: "/account"
+  // "family" est résolu via currentFamilySectionPath() (sous-sections)
+};
+const PATH_TO_VIEW = {
+  "/dashboard": { view: "dashboard" },
+  "/debts": { view: "debts" },
+  "/snowball": { view: "strategy" },
+  "/expenses": { view: "budget" },
+  "/transactions": { view: "transactions" },
+  "/goals": { view: "goals" },
+  "/family": { view: "family", section: "members" },
+  "/family/invitations": { view: "family", section: "invitations" },
+  "/family/contributions": { view: "family", section: "common" },
+  "/tickets": { view: "support" },
+  "/admin": { view: "admin" },
+  "/account": { view: "account" }
+};
+
 const state = {
   lang: localStorage.getItem("bh_lang") || detectDefaultLanguage(),
   authMode: "login",
@@ -592,6 +622,8 @@ const state = {
   },
   currentView: "dashboard",
   familySection: "members",
+  // Session démo active (app ouverte sans compte): autorise les routes app sans redirection.
+  demoActive: false,
   viewToken: 0,
   incomeInput: 0,
   incomeFrequency: "monthly",
@@ -1216,6 +1248,8 @@ async function initializeAuthenticatedWorkspace(user, options = {}) {
   await syncBillingPlan();
   await loadUserData();
   if (state.currentView === "family" && !hasFamilyPlanAccess()) {
+    // Accès direct à /family sans plan famille -> tableau de bord.
+    state.currentView = "dashboard";
     state.familySection = "members";
   }
   openApp();
@@ -1947,8 +1981,12 @@ function openApp() {
     applyMonthData(demoData);
   }
   updateFamilyNavigation();
+  // Une session démo (sans compte) reste valide pour la navigation par route.
+  state.demoActive = !state.user;
   showView("app");
   renderView();
+  // L'URL reflète la vue active (ex: "/" connecté -> "/dashboard"), sans doublon d'historique.
+  syncAppUrl(state.currentView);
 }
 
 function getViewTitle(view) {
@@ -1986,11 +2024,30 @@ function closeAppMenu() {
   setAppMenu(false);
 }
 
-function navigateAppView(nextView) {
-  if (nextView === "family" && !hasFamilyPlanAccess()) {
-    showFamilyUpgradeModal();
-    return;
+// Chemin URL canonique d'une vue.
+function pathForView(view) {
+  if (view === "family") return currentFamilySectionPath();
+  return APP_VIEW_PATHS[view] || "/dashboard";
+}
+
+// Route applicative correspondant au pathname courant (null = landing/légal/inconnu).
+function resolveAppRoute(pathname = window.location.pathname) {
+  return PATH_TO_VIEW[normalizePathname(pathname)] || null;
+}
+
+// Met l'URL en phase avec la vue. push=true ajoute une entrée d'historique
+// (clic de navigation), sinon remplace (chargement/refresh, pas de doublon).
+function syncAppUrl(view, opts = {}) {
+  const path = pathForView(view);
+  if (normalizePathname() !== path) {
+    if (opts.push) history.pushState(null, "", path);
+    else history.replaceState(null, "", path);
   }
+  try { localStorage.setItem("bh_last_route", path); } catch (_error) { /* quota/private mode */ }
+}
+
+// Bascule la vue active sans toucher à l'URL (utilisé par la navigation et le routeur).
+function setCurrentAppView(nextView) {
   const token = state.viewToken + 1;
   state.viewToken = token;
   state.currentView = nextView;
@@ -2000,6 +2057,49 @@ function navigateAppView(nextView) {
   refreshViewData(nextView, token);
   closeAppMenu();
   closeUserMenu();
+}
+
+function navigateAppView(nextView) {
+  if (nextView === "family" && !hasFamilyPlanAccess()) {
+    showFamilyUpgradeModal();
+    return;
+  }
+  syncAppUrl(nextView, { push: true });
+  setCurrentAppView(nextView);
+}
+
+// Routeur central: affiche la bonne page à partir du pathname courant
+// (chargement initial, popstate back/forward, redirections).
+function routeFromLocation() {
+  const path = normalizePathname();
+  const legalKey = path.replace(/^\//, "");
+  if (legalPages[legalKey]) {
+    showLandingPage(legalKey);
+    return;
+  }
+  const route = resolveAppRoute(path);
+  if (route) {
+    if (!state.user && !state.demoActive) {
+      // Route protégée sans session ni démo: la landing sert les visiteurs non connectés.
+      history.replaceState(null, "", "/");
+      showLandingPage("home");
+      return;
+    }
+    if (route.view === "family" && !hasFamilyPlanAccess()) {
+      navigateAppView("dashboard");
+      return;
+    }
+    if (route.section) state.familySection = route.section;
+    showView("app");
+    setCurrentAppView(route.view);
+    return;
+  }
+  // "/" ou inconnu: connecté -> dashboard, sinon landing (selon le hash marketing).
+  if (state.user) {
+    navigateAppView("dashboard");
+    return;
+  }
+  showLandingPage(window.location.hash.replace("#", "") || "home");
 }
 
 function handleUpgradeAction() {
@@ -3502,9 +3602,7 @@ function renderSupportModal() {
   if (goTickets) {
     goTickets.addEventListener("click", () => {
       $("#supportModal").hidden = true;
-      state.currentView = "support";
-      openApp();
-      refreshViewData("support");
+      navigateAppView("support");
     });
   }
   $("#supportForm").addEventListener("submit", async (event) => {
@@ -4445,14 +4543,7 @@ function bindViewActions() {
 
   $$("[data-view-target]").forEach((button) => {
     button.addEventListener("click", () => {
-      const nextView = button.dataset.viewTarget;
-      const token = state.viewToken + 1;
-      state.viewToken = token;
-      state.currentView = nextView;
-      state.editing = { table: null, id: null };
-      renderView();
-      scrollWorkspaceToTop();
-      refreshViewData(nextView, token);
+      navigateAppView(button.dataset.viewTarget);
     });
   });
 
@@ -5335,8 +5426,9 @@ async function handleAuthEmailLink() {
 }
 
 function boot() {
-  const routeIntent = resolveProtectedRoute();
-  const wantsAdmin = routeIntent && routeIntent.view === "admin";
+  // Route demandée au chargement (refresh/deep-link): détermine la vue cible.
+  // resolveAppRoute couvre aussi /admin et /family/* (anciennement resolveProtectedRoute).
+  const initialRoute = resolveAppRoute();
   applyTheme();
   renderPricing();
   applyTranslations();
@@ -5455,7 +5547,10 @@ function boot() {
     if (supabaseClient) await supabaseClient.auth.signOut();
     setSessionUser(null);
     state.plan = "free";
+    state.currentView = "dashboard";
+    state.demoActive = false;
     loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
+    history.replaceState(null, "", "/");
     showLandingPage("home");
   };
   const menuLogout = $("#menuLogout");
@@ -5488,12 +5583,14 @@ function boot() {
       return supabaseClient.auth.getSession().then(async ({ data }) => {
         if (data.session) {
           await initializeAuthenticatedWorkspace(data.session.user, {
-            targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
-            targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+            targetView: initialRoute ? initialRoute.view : null,
+            targetFamilySection: initialRoute && initialRoute.view === "family" ? initialRoute.section : null
           });
           handleCheckoutReturn();
-        } else if (routeIntent && (routeIntent.view === "admin" || routeIntent.view === "family")) {
-          openAuth("login");
+        } else if (initialRoute) {
+          // Route applicative ouverte sans session -> landing (visiteurs non connectés).
+          history.replaceState(null, "", "/");
+          showLandingPage("home");
         }
       });
     });
@@ -5509,8 +5606,8 @@ function boot() {
       if (event === "SIGNED_IN" && session && !state.user && !handlingEmailLink) {
         // Connexion via lien de confirmation courriel
         initializeAuthenticatedWorkspace(session.user, {
-          targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
-          targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+          targetView: initialRoute ? initialRoute.view : null,
+          targetFamilySection: initialRoute && initialRoute.view === "family" ? initialRoute.section : null
         });
       }
     });
@@ -5604,8 +5701,8 @@ function boot() {
         const { data } = await supabaseClient.auth.getSession();
         if (data.session) {
           await initializeAuthenticatedWorkspace(data.session.user, {
-            targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
-            targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+            targetView: initialRoute ? initialRoute.view : null,
+            targetFamilySection: initialRoute && initialRoute.view === "family" ? initialRoute.section : null
           });
           return;
         }
@@ -5636,9 +5733,11 @@ function boot() {
       } else {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        // Recalcul à la connexion: après logout l'URL est "/" -> /dashboard.
+        const loginRoute = resolveAppRoute();
         await initializeAuthenticatedWorkspace(data.user, {
-          targetView: routeIntent ? routeIntent.view : (wantsAdmin ? "admin" : null),
-          targetFamilySection: routeIntent && routeIntent.view === "family" ? routeIntent.section : null
+          targetView: loginRoute ? loginRoute.view : null,
+          targetFamilySection: loginRoute && loginRoute.view === "family" ? loginRoute.section : null
         });
         return;
       }
@@ -5674,37 +5773,16 @@ function boot() {
     }, 3000);
   }
 
-  // Page d'atterrissage selon le hash (ex: #pricing), sans casser les liens de confirmation Supabase
-  window.addEventListener("popstate", () => {
-    const nextRoute = resolveProtectedRoute();
-    if (nextRoute && nextRoute.view === "admin") {
-      state.currentView = "admin";
-      if (state.user) openApp();
-      else openAuth("login");
-    } else if (nextRoute && nextRoute.view === "family") {
-      state.currentView = "family";
-      state.familySection = nextRoute.section || "members";
-      if (state.user) openApp();
-      else openAuth("login");
-    } else if (legalPages[normalizePathname().replace("/", "")]) showLandingPage(normalizePathname().replace("/", ""));
-    else showLandingPage(window.location.hash.replace("#", "") || "home");
-  });
+  // Back/forward navigateur: rejoue la route depuis l'URL (sans réécrire l'historique).
+  window.addEventListener("popstate", routeFromLocation);
+
+  // Affichage initial. Les routes applicatives sont gérées après résolution de
+  // session (getSession ci-dessus): on ne montre pas la landing par-dessus.
+  if (initialRoute) {
+    if (state.user) routeFromLocation();
+    return;
+  }
   const pathPage = normalizePathname().replace("/", "");
-  if (routeIntent && routeIntent.view === "admin") {
-    if (state.user) {
-      state.currentView = "admin";
-      openApp();
-    }
-    return;
-  }
-  if (routeIntent && routeIntent.view === "family") {
-    if (state.user) {
-      state.currentView = "family";
-      state.familySection = routeIntent.section || "members";
-      openApp();
-    }
-    return;
-  }
   if (legalPages[pathPage]) {
     showLandingPage(pathPage);
     return;
