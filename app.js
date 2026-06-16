@@ -633,6 +633,7 @@ const state = {
   budget: [],
   transactions: [],
   goals: [],
+  goalContributions: [],
   members: [],
   debtStrategy: {
     method: localStorage.getItem("bh_debt_strategy_method") || "snowball",
@@ -1384,6 +1385,38 @@ function monthlyExpenseAmount(item) {
   return planned * model.factor;
 }
 
+// Montant attendu ce mois pour une dépense (part de l'utilisateur si commune).
+function expenseDueThisMonth(expense) {
+  return myShare(expense, monthlyExpenseAmount(normalizeExpense(expense)));
+}
+
+// Total déjà payé ce mois pour une dépense via les transactions liées (source_expense_id).
+// Les transactions de state sont déjà filtrées sur le mois sélectionné -> le statut
+// repart à "Non payé" quand on change de mois, sans doublon.
+function expensePaidThisMonth(expense) {
+  if (!expense.id) return 0;
+  return state.transactions
+    .filter((tx) => String(tx.sourceExpenseId) === String(expense.id) && Number(tx.amount) < 0)
+    .reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0);
+}
+
+// Statut de paiement d'une dépense pour le mois sélectionné: paid | partial | unpaid.
+function expensePaymentStatus(expense) {
+  const due = expenseDueThisMonth(expense);
+  const paid = expensePaidThisMonth(expense);
+  let status = "unpaid";
+  if (due > 0 && paid >= due - 0.01) status = "paid";
+  else if (paid > 0.01) status = "partial";
+  return { status, due, paid, remaining: Math.max(0, due - paid) };
+}
+
+function expenseStatusBadge(status) {
+  const fr = state.lang === "fr";
+  if (status === "paid") return { cls: "pill-good", txt: fr ? "Payé" : "Paid" };
+  if (status === "partial") return { cls: "pill-warn", txt: fr ? "Partiel" : "Partial" };
+  return { cls: "pill-danger", txt: fr ? "Non payé" : "Unpaid" };
+}
+
 function incomeFrequencyLabel(value) {
   const frequency = incomeFrequencies[value] || incomeFrequencies.monthly;
   return frequency[state.lang] || frequency.fr;
@@ -1672,14 +1705,15 @@ async function loadProfilePlan() {
 async function loadUserData(shouldRender = true) {
   if (!supabaseClient || !state.user) return;
   const { start, end } = selectedMonthRange();
-  const [debts, budget, transactions, goals, members, incomes, contributions] = await Promise.all([
+  const [debts, budget, transactions, goals, members, incomes, contributions, goalContributions] = await Promise.all([
     supabaseClient.from("debts").select("id,user_id,name,balance,rate,min_payment,payment_day,is_shared,split_mode,split_config").order("created_at"),
     supabaseClient.from("budget_categories").select("id,user_id,name,category,planned,spent,due_day,is_recurring,frequency,notes,month_key,is_shared,split_mode,split_config").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
-    supabaseClient.from("transactions").select("id,user_id,date,name,category,amount,is_shared,split_mode,split_config").gte("date", start).lt("date", end).order("date", { ascending: false }),
-    supabaseClient.from("goals").select("id,user_id,name,target,saved,monthly_contribution,created_at,is_shared,split_mode,split_config").order("created_at"),
+    supabaseClient.from("transactions").select("id,user_id,date,name,category,amount,source_expense_id,is_shared,split_mode,split_config").gte("date", start).lt("date", end).order("date", { ascending: false }),
+    supabaseClient.from("goals").select("id,user_id,name,target,saved,monthly_contribution,contribution_frequency,target_date,status,created_at,is_shared,split_mode,split_config").order("created_at"),
     supabaseClient.from("family_members").select("id,name,role,email,invited_user_id").order("created_at"),
     supabaseClient.from("profiles").select("id,display_name,email,family_owner_id,monthly_income,income_amount,income_frequency"),
-    supabaseClient.from("item_contributions").select("id,item_table,item_id,member_user_id,amount,note,paid_on")
+    supabaseClient.from("item_contributions").select("id,item_table,item_id,member_user_id,amount,note,paid_on"),
+    supabaseClient.from("goal_contributions").select("id,goal_id,user_id,amount,note,contributed_on").order("contributed_on", { ascending: false })
   ]);
   // Supabase ne rejette pas la promesse sur un 400: on inspecte chaque réponse
   // pour rendre toute colonne/filtre invalide visible dans la console F12.
@@ -1690,6 +1724,7 @@ async function loadUserData(shouldRender = true) {
   logSupabaseError("Load family_members", members.error);
   logSupabaseError("Load profiles", incomes.error);
   logSupabaseError("Load item_contributions", contributions.error);
+  logSupabaseError("Load goal_contributions", goalContributions.error);
   const loadErrors = [
     debts.error,
     budget.error,
@@ -1697,7 +1732,8 @@ async function loadUserData(shouldRender = true) {
     goals.error,
     members.error,
     incomes.error,
-    contributions.error
+    contributions.error,
+    goalContributions.error
   ].filter(Boolean);
   if (loadErrors.length) {
     console.error("[Supabase] One or more financial loads failed.", loadErrors);
@@ -1717,6 +1753,11 @@ async function loadUserData(shouldRender = true) {
   state.contributions = (contributions.data || []).map((row) => ({
     id: row.id, itemTable: row.item_table, itemId: row.item_id,
     memberUserId: row.member_user_id, amount: Number(row.amount || 0), note: row.note || "", paidOn: row.paid_on
+  }));
+  // Historique des contributions ponctuelles aux objectifs (par objectif).
+  state.goalContributions = (goalContributions.data || []).map((row) => ({
+    id: row.id, goalId: row.goal_id, userId: row.user_id,
+    amount: Number(row.amount || 0), note: row.note || "", contributedOn: row.contributed_on
   }));
   // Profil de l'utilisateur connecté (et non le premier de la famille).
   const myProfile = profileRows.find((p) => p.id === (state.user && state.user.id)) || profileRows[0] || {};
@@ -1740,11 +1781,14 @@ async function loadUserData(shouldRender = true) {
       ...mapSharing(row)
     })),
     transactions: (transactions.data || []).map((row) => ({
-      id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount), ...mapSharing(row)
+      id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount),
+      sourceExpenseId: row.source_expense_id || null, ...mapSharing(row)
     })),
     goals: (goals.data || []).map((row) => ({
       id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved),
-      monthlyContribution: Number(row.monthly_contribution || 0), createdAt: row.created_at, ...mapSharing(row)
+      monthlyContribution: Number(row.monthly_contribution || 0),
+      contributionFrequency: incomeFrequencies[row.contribution_frequency] ? row.contribution_frequency : "monthly",
+      targetDate: row.target_date || "", status: goalStatusValue(row.status), createdAt: row.created_at, ...mapSharing(row)
     })),
     // Revenu du foyer = somme des salaires mensuels de tous les membres de la famille
     income: (incomes.data || []).reduce((sum, row) => sum + Number(row.monthly_income || 0), 0),
@@ -1849,13 +1893,154 @@ async function reloadAfterFinancialMutation() {
   renderView();
 }
 
-// Épargne actuelle d'un objectif: montant de départ + cotisation × mois écoulés depuis la création
+// Marquer une dépense récurrente comme payée pour le mois sélectionné: crée une
+// transaction liée (source_expense_id) du montant restant dû. Ne duplique jamais
+// la dépense récurrente, qui reste active pour les mois suivants.
+async function markExpensePaid(expenseId) {
+  if (!state.user) return;
+  const item = state.budget.find((b) => String(b.id) === String(expenseId));
+  if (!item) return;
+  const expense = normalizeExpense(item);
+  const pay = expensePaymentStatus(expense);
+  const amount = pay.remaining > 0.01 ? pay.remaining : pay.due;
+  if (amount <= 0.01) return;
+  await dbInsert("transactions", {
+    date: defaultTransactionDate(),
+    name: expense.name,
+    category: expenseCategoryLabel(expense.category),
+    amount: -(Math.round(amount * 100) / 100),
+    source_expense_id: expense.id
+  });
+  await reloadAfterFinancialMutation();
+}
+
+// Suspendre / réactiver la récurrence d'une dépense (n'efface aucune donnée).
+async function toggleExpenseRecurring(expenseId) {
+  if (!state.user) return;
+  const item = state.budget.find((b) => String(b.id) === String(expenseId));
+  if (!item || !item.id) return;
+  const next = !(item.isRecurring ?? item.is_recurring ?? true);
+  await dbUpdate("budget_categories", item.id, { is_recurring: next });
+  await reloadAfterFinancialMutation();
+}
+
+// Historique de tous les paiements liés à une dépense (tous mois confondus).
+async function showExpenseHistory(expenseId, name) {
+  const panel = $("#expenseHistory");
+  if (!panel || !supabaseClient) return;
+  const fr = state.lang === "fr";
+  panel.hidden = false;
+  panel.innerHTML = `<p class="form-note">${fr ? "Chargement de l'historique..." : "Loading history..."}</p>`;
+  const { data, error } = await supabaseClient
+    .from("transactions")
+    .select("id,date,name,amount")
+    .eq("source_expense_id", expenseId)
+    .order("date", { ascending: false });
+  if (error) {
+    logSupabaseError("Load expense history", error);
+    panel.innerHTML = `<p class="form-note role-note">${fr ? "Impossible de charger l'historique." : "Could not load history."}</p>`;
+    return;
+  }
+  const heading = `<h4>${fr ? "Historique" : "History"} — ${escapeHtml(name)}</h4>`;
+  if (!data || !data.length) {
+    panel.innerHTML = `${heading}<p class="form-note">${fr ? "Aucun paiement enregistré pour cette dépense." : "No payment recorded for this expense yet."}</p>
+      <button class="secondary-button btn-sm" id="closeExpenseHistory">${fr ? "Fermer" : "Close"}</button>`;
+  } else {
+    const rows = data.map((r) => `<tr><td data-label="${t("date")}">${r.date}</td><td data-label="${t("name")}">${escapeHtml(r.name)}</td><td data-label="${fr ? "Payé" : "Paid"}">${money(Math.abs(Number(r.amount)))}</td></tr>`).join("");
+    panel.innerHTML = `${heading}
+      <div class="table-wrap"><table class="responsive-table">
+        <thead><tr><th>${t("date")}</th><th>${t("name")}</th><th>${fr ? "Payé" : "Paid"}</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <button class="secondary-button btn-sm" id="closeExpenseHistory">${fr ? "Fermer" : "Close"}</button>`;
+  }
+  const close = $("#closeExpenseHistory");
+  if (close) close.addEventListener("click", () => { panel.hidden = true; panel.innerHTML = ""; });
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// Change le statut d'un objectif (active | reached | paused).
+async function setGoalStatus(goalId, status) {
+  if (!state.user) return;
+  const goal = state.goals.find((g) => String(g.id) === String(goalId));
+  if (!goal || !goal.id) return;
+  await dbUpdate("goals", goal.id, { status: goalStatusValue(status) });
+  await reloadAfterFinancialMutation();
+}
+
+// Enregistre une contribution ponctuelle: crée une ligne d'historique (goal_contributions)
+// ET augmente le montant actuel de l'objectif. La cotisation récurrente, elle, reste une
+// simple projection (jamais écrite) -> aucun doublon en base.
+async function addGoalContribution(goalId, amount, note) {
+  if (!state.user) return;
+  const goal = state.goals.find((g) => String(g.id) === String(goalId));
+  if (!goal || !goal.id) return;
+  const inserted = await dbInsert("goal_contributions", {
+    goal_id: goal.id,
+    amount,
+    note: note || "",
+    contributed_on: defaultTransactionDate()
+  });
+  if (!inserted) return;
+  const nextSaved = Math.max(0, clampNumber(goal.saved) + amount);
+  const reached = goal.target > 0 && nextSaved >= goal.target;
+  await dbUpdate("goals", goal.id, reached ? { saved: nextSaved, status: "reached" } : { saved: nextSaved });
+  await reloadAfterFinancialMutation();
+}
+
+// Épargne réelle d'un objectif: solde de départ + contributions ponctuelles enregistrées.
+// La cotisation récurrente est une PROJECTION (voir goalProjection) et n'est jamais
+// ajoutée automatiquement en base: aucun doublon, le montant reflète l'argent réel.
 function goalCurrentSaved(goal) {
-  if (!goal.monthlyContribution || !goal.createdAt) return goal.saved;
-  const created = new Date(goal.createdAt).getTime();
-  const monthsElapsed = (Date.now() - created) / (1000 * 60 * 60 * 24 * 30.44);
-  const grown = goal.saved + goal.monthlyContribution * Math.max(0, monthsElapsed);
-  return Math.min(goal.target, grown);
+  return Math.max(0, clampNumber(goal.saved));
+}
+
+// Statut normalisé d'un objectif: active | reached | paused.
+function goalStatusValue(value) {
+  return ["active", "reached", "paused"].includes(value) ? value : "active";
+}
+
+function goalStatusLabel(value) {
+  const fr = state.lang === "fr";
+  const status = goalStatusValue(value);
+  if (status === "reached") return fr ? "Atteint" : "Reached";
+  if (status === "paused") return fr ? "Suspendu" : "Paused";
+  return fr ? "Actif" : "Active";
+}
+
+// Équivalent mensuel de la cotisation récurrente selon la fréquence choisie.
+// Un objectif suspendu/atteint ne pèse plus sur le budget.
+function goalMonthlyContribution(goal) {
+  if (goalStatusValue(goal.status) !== "active") return 0;
+  const amount = Math.max(0, clampNumber(goal.monthlyContribution));
+  const model = incomeFrequencies[goal.contributionFrequency] || incomeFrequencies.monthly;
+  return amount * model.factor;
+}
+
+// Projection d'un objectif: progression, mois restants estimés et date estimée d'atteinte.
+function goalProjection(goal) {
+  const current = goalCurrentSaved(goal);
+  const target = Math.max(0, clampNumber(goal.target));
+  const pct = target > 0 ? Math.min(100, (current / target) * 100) : (current > 0 ? 100 : 0);
+  const remaining = Math.max(0, target - current);
+  const monthly = goalMonthlyContribution(goal);
+  const reached = goalStatusValue(goal.status) === "reached" || (target > 0 && current >= target);
+  let monthsRemaining = null;
+  let estimatedDate = null;
+  if (!reached && remaining > 0 && monthly > 0) {
+    monthsRemaining = Math.ceil(remaining / monthly);
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + monthsRemaining);
+    estimatedDate = d;
+  }
+  return { current, target, pct, remaining, monthly, reached, monthsRemaining, estimatedDate };
+}
+
+// Historique des contributions ponctuelles pour un objectif donné, plus récent d'abord.
+function goalContributionsFor(goalId) {
+  return (state.goalContributions || [])
+    .filter((c) => String(c.goalId) === String(goalId))
+    .sort((a, b) => String(b.contributedOn).localeCompare(String(a.contributedOn)));
 }
 
 // Met à jour le salaire de l'utilisateur connecté
@@ -2190,7 +2375,7 @@ function totals() {
   const monthlyExpenses = state.budget.reduce((sum, item) => sum + myShare(item, monthlyExpenseAmount(normalizeExpense(item))), 0);
   const trackedSpending = transactionExpenses();
   const extraIncome = transactionIncome();
-  const goalContributions = state.goals.reduce((sum, item) => sum + myShare(item, item.monthlyContribution || 0), 0);
+  const goalContributions = state.goals.reduce((sum, item) => sum + myShare(item, goalMonthlyContribution(item)), 0);
   const income = state.income + extraIncome;
   const availableAfterBills = income - monthlyExpenses - debtPayments;
   const leftover = availableAfterBills - goalContributions;
@@ -3089,17 +3274,39 @@ function budgetTable(actions) {
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("name")}</th><th>${t("category")}</th><th>${fr ? "Montant" : "Amount"}</th><th>${fr ? "Frequence" : "Frequency"}</th><th>${fr ? "Equiv. mensuel" : "Monthly equiv."}</th><th>${fr ? "Jour" : "Day"}</th><th>${fr ? "Recurrent" : "Recurring"}</th><th>${fr ? "Depense suivie" : "Tracked spent"}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("category")}</th><th>${fr ? "Montant" : "Amount"}</th><th>${fr ? "Frequence" : "Frequency"}</th><th>${fr ? "Equiv. mensuel" : "Monthly equiv."}</th><th>${fr ? "Jour" : "Day"}</th><th>${fr ? "Recurrent" : "Recurring"}</th><th>${fr ? "Statut" : "Status"}</th><th>${fr ? "Depense suivie" : "Tracked spent"}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
           ${state.budget.map((item, index) => {
             const expense = normalizeExpense(item);
             const spent = spentForCategory(expense.category);
-            return `<tr><td data-label="${t("name")}"><strong>${expense.name}</strong>${expense.notes ? `<small class="table-note">${expense.notes}</small>` : ""}</td><td data-label="${t("category")}">${expenseCategoryLabel(expense.category)}</td><td data-label="${fr ? "Montant" : "Amount"}">${money(expense.planned)}</td><td data-label="${fr ? "Frequence" : "Frequency"}">${incomeFrequencyLabel(expense.frequency)}</td><td data-label="${fr ? "Equiv. mensuel" : "Monthly equiv."}">${money(monthlyExpenseAmount(expense))}</td><td data-label="${fr ? "Jour" : "Day"}">${expense.dueDay || "-"}</td><td data-label="${fr ? "Recurrent" : "Recurring"}">${expense.isRecurring ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}</td><td data-label="${fr ? "Depense suivie" : "Tracked spent"}">${money(spent)}</td>${familyTableCells(expense, monthlyExpenseAmount(expense))}${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-budget="${expense.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-budget="${index}">${t("remove")}</button></td>` : ""}</tr>`;
+            const pay = expensePaymentStatus(expense);
+            const badge = expenseStatusBadge(pay.status);
+            const statusCell = `<span class="pill ${badge.cls}">${badge.txt}</span>${pay.status === "partial" ? `<small class="table-note">${money(pay.paid)} / ${money(pay.due)}</small>` : ""}`;
+            return `<tr><td data-label="${t("name")}"><strong>${expense.name}</strong>${expense.notes ? `<small class="table-note">${expense.notes}</small>` : ""}</td><td data-label="${t("category")}">${expenseCategoryLabel(expense.category)}</td><td data-label="${fr ? "Montant" : "Amount"}">${money(expense.planned)}</td><td data-label="${fr ? "Frequence" : "Frequency"}">${incomeFrequencyLabel(expense.frequency)}</td><td data-label="${fr ? "Equiv. mensuel" : "Monthly equiv."}">${money(monthlyExpenseAmount(expense))}</td><td data-label="${fr ? "Jour" : "Day"}">${expense.dueDay || "-"}</td><td data-label="${fr ? "Recurrent" : "Recurring"}">${expense.isRecurring ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}</td><td data-label="${fr ? "Statut" : "Status"}">${statusCell}</td><td data-label="${fr ? "Depense suivie" : "Tracked spent"}">${money(spent)}</td>${familyTableCells(expense, monthlyExpenseAmount(expense))}${showActions ? `<td class="cell-actions">${expenseActionsCell(expense, index, pay)}</td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table>
     </div>
+    <div id="expenseHistory" class="history-panel" hidden></div>
   `;
+}
+
+// Boutons d'action d'une dépense récurrente: marquer payé/compléter, suspendre, historique, modifier, supprimer.
+function expenseActionsCell(expense, index, pay) {
+  const fr = state.lang === "fr";
+  const buttons = [];
+  if (state.user && expense.id) {
+    if (pay.status === "unpaid") {
+      buttons.push(`<button class="primary-button btn-sm" data-pay-expense="${expense.id}">${fr ? "Marquer payé" : "Mark paid"}</button>`);
+    } else if (pay.status === "partial") {
+      buttons.push(`<button class="primary-button btn-sm" data-pay-expense="${expense.id}">${fr ? "Compléter le paiement" : "Complete payment"}</button>`);
+    }
+    buttons.push(`<button class="secondary-button btn-sm" data-toggle-recurring="${expense.id}">${expense.isRecurring ? (fr ? "Suspendre" : "Pause") : (fr ? "Réactiver" : "Resume")}</button>`);
+    buttons.push(`<button class="secondary-button btn-sm" data-history-expense="${expense.id}" data-history-name="${escapeHtml(expense.name)}">${fr ? "Historique" : "History"}</button>`);
+  }
+  buttons.push(`<button class="secondary-button btn-sm" data-edit-budget="${expense.id || index}">${fr ? "Modifier" : "Edit"}</button>`);
+  buttons.push(`<button class="secondary-button btn-sm" data-remove-budget="${index}">${t("remove")}</button>`);
+  return buttons.join(" ");
 }
 
 function renderTransactions() {
@@ -3151,71 +3358,139 @@ function renderGoals() {
   const editing = state.editing.table === "goals";
   const g = editing ? findEditable(state.goals) : null;
   if (!can("editData")) {
-    return `<section class="panel">${readOnlyNote()}${goalsTable(false)}</section>`;
+    return `<section class="panel">${readOnlyNote()}${goalsCards(false)}</section>`;
   }
+  const monthlyPlanned = state.goals.reduce((sum, goal) => sum + goalMonthlyContribution(goal), 0);
   return `
     <section class="panel">
       <form class="form-grid" id="goalForm">
-        <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Fonds urgence" : "Emergency fund"}" value="${g ? g.name : ""}" /></label>
-        <label><span>${fr ? "Cible" : "Target"}</span><input name="target" required ${decimalInputAttrs("15000.00")} value="${g ? g.target : ""}" /></label>
-        <label><span>${fr ? "Déjà épargné" : "Already saved"}</span><input name="saved" ${decimalInputAttrs("0.00")} value="${g ? g.saved : ""}" /></label>
-        <label><span>${fr ? "Cotisation par mois" : "Monthly contribution"}</span><input name="monthlyContribution" ${decimalInputAttrs("100.00")} value="${g ? g.monthlyContribution : ""}" /></label>
+        <label><span>${t("name")}</span><input name="name" required placeholder="${fr ? "Fonds bébé" : "Baby fund"}" value="${g ? escapeHtml(g.name) : ""}" /></label>
+        <label><span>${fr ? "Montant cible" : "Target amount"}</span><input name="target" required ${decimalInputAttrs("3000.00")} value="${g ? g.target : ""}" /></label>
+        <label><span>${fr ? "Montant actuel" : "Current amount"}</span><input name="saved" ${decimalInputAttrs("0.00")} value="${g ? g.saved : ""}" /></label>
+        <label><span>${fr ? "Contribution récurrente" : "Recurring contribution"}</span><input name="monthlyContribution" ${decimalInputAttrs("100.00")} value="${g ? g.monthlyContribution : ""}" /></label>
+        <label><span>${fr ? "Fréquence de contribution" : "Contribution frequency"}</span><select name="contributionFrequency">${incomeFrequencyOptions(g ? g.contributionFrequency : "monthly")}</select></label>
+        <label><span>${fr ? "Date cible (optionnel)" : "Target date (optional)"}</span><input name="targetDate" type="date" value="${g && g.targetDate ? g.targetDate : ""}" /></label>
+        ${editing ? `<label><span>${fr ? "Statut" : "Status"}</span><select name="status">
+          <option value="active" ${goalStatusValue(g.status) === "active" ? "selected" : ""}>${fr ? "Actif" : "Active"}</option>
+          <option value="paused" ${goalStatusValue(g.status) === "paused" ? "selected" : ""}>${fr ? "Suspendu" : "Paused"}</option>
+          <option value="reached" ${goalStatusValue(g.status) === "reached" ? "selected" : ""}>${fr ? "Atteint" : "Reached"}</option>
+        </select></label>` : ""}
         ${sharingFormFields(g)}
-        <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter" : "Add")}</button>
+        <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : (fr ? "Ajouter l'objectif" : "Add goal")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
       <p class="form-note">${fr
-        ? "L'épargne monte automatiquement chaque mois selon la cotisation, depuis la date de création."
-        : "Savings grow automatically each month based on the contribution, from the creation date."}</p>
-      ${goalsTable(true)}
+        ? `Total des contributions mensuelles prévues: <strong>${money(monthlyPlanned)}</strong>. La contribution récurrente est une projection: elle réduit le reste à vivre mais n'est jamais enregistrée automatiquement (aucun doublon). Utilisez « Ajouter une contribution » pour enregistrer un versement réel.`
+        : `Total planned monthly contributions: <strong>${money(monthlyPlanned)}</strong>. The recurring contribution is a projection: it lowers your available cash but is never recorded automatically (no duplicates). Use "Add a contribution" to record a real deposit.`}</p>
     </section>
+    ${goalsCards(true)}
   `;
 }
 
+// Liste compacte des objectifs pour le tableau de bord (avec estimation).
 function goalsList(actions) {
   const fr = state.lang === "fr";
   if (!state.goals.length) {
     return `<p class="form-note">${fr ? "Aucun objectif pour le moment." : "No goals yet."}</p>`;
   }
+  const showActions = actions && can("editData");
   return state.goals.map((goal, index) => {
-    const current = goalCurrentSaved(goal);
-    const pct = goal.target > 0 ? Math.min(100, (current / goal.target) * 100) : 0;
-    const contribLine = goal.monthlyContribution
-      ? ` - ${money(goal.monthlyContribution)}${fr ? "/mois" : "/mo"}`
+    const p = goalProjection(goal);
+    const contribLine = p.monthly
+      ? ` · ${money(clampNumber(goal.monthlyContribution))} ${incomeFrequencyLabel(goal.contributionFrequency)}`
       : "";
-    const showActions = actions && can("editData");
+    const eta = p.reached
+      ? (fr ? "Atteint" : "Reached")
+      : (p.estimatedDate ? `${fr ? "≈" : "≈"} ${monthLabel(monthKeyFromDate(p.estimatedDate))}` : "");
     return `
       <div class="goal-item">
-        <strong>${goal.name}</strong>
-        <p>${money(current)} / ${money(goal.target)} - ${pct.toFixed(1)}%${contribLine}
-          ${showActions ? `<button class="secondary-button" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button>
-          <button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button>` : ""}</p>
-        <div class="progress"><span style="width:${pct}%"></span></div>
+        <strong>${escapeHtml(goal.name)}</strong> <span class="pill ${goalStatusBadgeClass(goal)}">${goalStatusLabel(goal.status)}</span>
+        <p>${money(p.current)} / ${money(p.target)} - ${p.pct.toFixed(1)}%${contribLine}${eta ? ` · ${eta}` : ""}
+          ${showActions ? `<button class="secondary-button btn-sm" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button>` : ""}</p>
+        <div class="progress"><span style="width:${p.pct}%"></span></div>
       </div>
     `;
   }).join("");
 }
 
-function goalsTable(actions) {
+function goalStatusBadgeClass(goal) {
+  const status = goalStatusValue(goal.status);
+  if (status === "paused") return "pill-warn";
+  return "pill-good";
+}
+
+function monthKeyFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Objectifs en cartes claires: cible, actuel, contribution, progression, estimation, statut, actions.
+function goalsCards(actions) {
   const fr = state.lang === "fr";
   const showActions = actions && can("editData");
   if (!state.goals.length) {
-    return `<p class="form-note">${fr ? "Aucun objectif pour le moment." : "No goals yet."}</p>`;
+    return `<section class="panel"><p class="form-note">${fr ? "Aucun objectif pour le moment." : "No goals yet."}</p></section>`;
   }
+  return `<div class="goal-card-grid">${state.goals.map((goal, index) => goalCard(goal, index, showActions)).join("")}</div>`;
+}
+
+function goalCard(goal, index, showActions) {
+  const fr = state.lang === "fr";
+  const p = goalProjection(goal);
+  const status = goalStatusValue(goal.status);
+  const contribAmount = Math.max(0, clampNumber(goal.monthlyContribution));
+  const estimation = p.reached
+    ? `<span class="pill pill-good">${fr ? "Objectif atteint 🎉" : "Goal reached 🎉"}</span>`
+    : (p.monthsRemaining != null
+      ? `${fr ? "Atteint dans" : "Reached in"} <strong>${p.monthsRemaining} ${fr ? "mois" : "months"}</strong> · ${fr ? "Date estimée" : "Estimated date"}: <strong>${monthLabel(monthKeyFromDate(p.estimatedDate))}</strong>`
+      : `<span class="form-note">${fr ? "Ajoutez une contribution récurrente pour estimer la date." : "Add a recurring contribution to estimate the date."}</span>`);
+  const targetDateLine = goal.targetDate
+    ? `<div><small>${fr ? "Date cible" : "Target date"}</small><strong>${fmtDate(goal.targetDate)}</strong></div>`
+    : "";
+  // Parts par membre pour un objectif commun (contribution mensuelle équivalente).
+  const sharingInfo = (normalizeSharing(goal).isShared && hasFamilyMembership())
+    ? `<div class="goal-shares"><small>${fr ? "Parts mensuelles par membre" : "Monthly share per member"}</small>${householdList().map((m) => `<span>${escapeHtml(m.name)}${m.self ? (fr ? " (moi)" : " (me)") : ""}: <strong>${money(memberShare(goal, p.monthly, m.key))}</strong></span>`).join("")}</div>`
+    : "";
+  const history = goalContributionsFor(goal.id);
+  const historyBlock = history.length
+    ? `<details class="goal-history"><summary>${fr ? "Historique des contributions" : "Contribution history"} (${history.length})</summary>
+        <ul>${history.map((c) => `<li>${c.contributedOn} · <strong>${money(c.amount)}</strong>${c.note ? ` · ${escapeHtml(c.note)}` : ""}</li>`).join("")}</ul></details>`
+    : "";
+  const contribForm = showActions
+    ? `<form class="goal-contrib-form" data-goal-contrib="${goal.id}">
+        <input name="amount" ${decimalInputAttrs("100.00")} placeholder="${fr ? "Montant" : "Amount"}" required />
+        <input name="note" placeholder="${fr ? "Note (optionnel)" : "Note (optional)"}" />
+        <button class="primary-button btn-sm" type="submit">${fr ? "Ajouter une contribution" : "Add a contribution"}</button>
+      </form>`
+    : "";
+  const actionButtons = showActions
+    ? `<div class="goal-actions">
+        ${status !== "reached" ? `<button class="secondary-button btn-sm" data-goal-status="reached" data-goal-id="${goal.id}">${fr ? "Marquer atteint" : "Mark reached"}</button>` : ""}
+        ${status === "paused"
+          ? `<button class="secondary-button btn-sm" data-goal-status="active" data-goal-id="${goal.id}">${fr ? "Réactiver" : "Resume"}</button>`
+          : `<button class="secondary-button btn-sm" data-goal-status="paused" data-goal-id="${goal.id}">${fr ? "Suspendre" : "Pause"}</button>`}
+        <button class="secondary-button btn-sm" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button>
+        <button class="secondary-button btn-sm" data-remove-goal="${index}">${t("remove")}</button>
+      </div>`
+    : "";
   return `
-    <div class="table-wrap">
-      <table class="responsive-table">
-        <thead><tr><th>${t("name")}</th><th>${fr ? "Cible" : "Target"}</th><th>${fr ? "Actuel" : "Current"}</th><th>${fr ? "Cotisation / mois" : "Contribution / month"}</th><th>${fr ? "Progression" : "Progress"}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
-        <tbody>
-          ${state.goals.map((goal, index) => {
-            const current = goalCurrentSaved(goal);
-            const pct = goal.target > 0 ? Math.min(100, (current / goal.target) * 100) : 0;
-            const monthlyContribution = Math.max(0, clampNumber(goal.monthlyContribution));
-            return `<tr><td data-label="${t("name")}"><strong>${goal.name}</strong></td><td data-label="${fr ? "Cible" : "Target"}">${money(goal.target)}</td><td data-label="${fr ? "Actuel" : "Current"}">${money(current)}</td><td data-label="${fr ? "Cotisation / mois" : "Contribution / month"}">${money(monthlyContribution)}</td><td data-label="${fr ? "Progression" : "Progress"}">${pct.toFixed(1)}%</td>${familyTableCells(goal, monthlyContribution)}${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-goal="${goal.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-goal="${index}">${t("remove")}</button></td>` : ""}</tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
+    <article class="panel goal-card">
+      <header class="goal-card-head">
+        <h3>${escapeHtml(goal.name)}</h3>
+        <span class="pill ${goalStatusBadgeClass(goal)}">${goalStatusLabel(goal.status)}</span>
+      </header>
+      <div class="goal-figures">
+        <div><small>${fr ? "Objectif" : "Target"}</small><strong>${money(p.target)}</strong></div>
+        <div><small>${fr ? "Actuel" : "Current"}</small><strong>${money(p.current)}</strong></div>
+        <div><small>${fr ? "Contribution" : "Contribution"}</small><strong>${contribAmount ? `${money(contribAmount)} ${incomeFrequencyLabel(goal.contributionFrequency)}` : "—"}</strong></div>
+        ${targetDateLine}
+      </div>
+      <div class="progress"><span style="width:${p.pct}%"></span></div>
+      <p class="goal-progress-line">${fr ? "Progression" : "Progress"}: <strong>${p.pct.toFixed(1)} %</strong> · ${estimation}</p>
+      ${sharingInfo}
+      ${contribForm}
+      ${actionButtons}
+      ${historyBlock}
+    </article>
   `;
 }
 
@@ -3417,6 +3692,30 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+// Liste des règles de mot de passe (mêmes critères qu'à l'inscription), surlignées en direct.
+function passwordRulesList(id) {
+  return `<ul class="password-criteria" id="${id}">${passwordCriteria("").map((c) => `<li data-key="${c.key}">${c.label}</li>`).join("")}</ul>`;
+}
+
+// Formulaire sécurisé de changement de mot de passe: actuel + nouveau + confirmation,
+// règles affichées, validation identique à l'inscription, ré-authentification avant maj.
+function passwordChangeSection(headingFr, headingEn) {
+  const fr = state.lang === "fr";
+  return `
+    <section class="panel">
+      <h3>${fr ? headingFr : headingEn}</h3>
+      <form class="form-grid" id="passwordForm" autocomplete="off">
+        <label><span>${fr ? "Mot de passe actuel" : "Current password"}</span><input name="currentPassword" type="password" required autocomplete="current-password" /></label>
+        <label><span>${fr ? "Nouveau mot de passe" : "New password"}</span><input name="newPassword" type="password" required autocomplete="new-password" /></label>
+        <label><span>${fr ? "Confirmer le nouveau mot de passe" : "Confirm new password"}</span><input name="confirmPassword" type="password" required autocomplete="new-password" /></label>
+        <p class="form-note">${fr ? "Le nouveau mot de passe doit contenir:" : "The new password must contain:"}</p>
+        ${passwordRulesList("pwChangeCriteria")}
+        <button class="primary-button" type="submit">${fr ? "Mettre à jour le mot de passe" : "Update password"}</button>
+      </form>
+      <p class="form-note" id="passwordNote" hidden></p>
+    </section>`;
+}
+
 function renderAccount() {
   const plan = planDefinitions.find((item) => item.id === state.plan) || planDefinitions[0];
   const fr = state.lang === "fr";
@@ -3465,15 +3764,7 @@ function renderAccount() {
         <label><span>${t("darkMode")}</span><select id="settingsTheme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
       </div>
     </section>
-    ${state.user ? `
-    <section class="panel">
-      <h3>${fr ? "Sécurité" : "Security"}</h3>
-      <form class="form-grid" id="passwordForm">
-        <label><span>${fr ? "Nouveau mot de passe" : "New password"}</span><input name="newPassword" type="password" minlength="6" required autocomplete="new-password" /></label>
-        <button class="primary-button" type="submit">${fr ? "Mettre à jour" : "Update"}</button>
-      </form>
-      <p class="form-note" id="passwordNote" hidden></p>
-    </section>` : ""}
+    ${state.user ? passwordChangeSection("Sécurité", "Security") : ""}
   `;
 }
 
@@ -3973,16 +4264,9 @@ function updateUpgradeButton() {
 }
 
 function renderSettings() {
-  const passwordSection = state.user ? `
-    <section class="panel">
-      <h3>${state.lang === "fr" ? "Changer le mot de passe" : "Change password"}</h3>
-      <form class="form-grid" id="passwordForm">
-        <label><span>${state.lang === "fr" ? "Nouveau mot de passe" : "New password"}</span><input name="newPassword" type="password" minlength="6" required autocomplete="new-password" /></label>
-        <button class="primary-button" type="submit">${state.lang === "fr" ? "Mettre à jour" : "Update"}</button>
-      </form>
-      <p class="form-note" id="passwordNote" hidden></p>
-    </section>
-  ` : "";
+  const passwordSection = state.user
+    ? passwordChangeSection("Changer le mot de passe", "Change password")
+    : "";
   return `
     <section class="panel">
       <p>${t("settingsCopy")}</p>
@@ -4753,26 +5037,33 @@ function bindViewActions() {
       const form = new FormData(goalForm);
       const sharing = readSharingPayload(form);
       const sharingLocal = mapSharing({ ...sharing, user_id: state.user ? state.user.id : null });
+      const frequency = incomeFrequencies[form.get("contributionFrequency")] ? form.get("contributionFrequency") : "monthly";
+      const status = goalStatusValue(form.get("status"));
+      const targetDate = form.get("targetDate") || null;
       const payload = {
         name: form.get("name"),
         target: Math.max(0, clampNumber(form.get("target"))),
         saved: Math.max(0, clampNumber(form.get("saved") || 0)),
         monthly_contribution: Math.max(0, clampNumber(form.get("monthlyContribution") || 0)),
+        contribution_frequency: frequency,
+        target_date: targetDate,
+        status,
         ...sharing
       };
+      const localGoal = { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, contributionFrequency: frequency, targetDate: targetDate || "", status, ...sharingLocal };
       if (state.editing.table === "goals") {
         const goal = findEditable(state.goals);
         if (state.user && goal.id) {
           await dbUpdate("goals", goal.id, payload);
         } else {
-          Object.assign(goal, { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, ...sharingLocal });
+          Object.assign(goal, localGoal);
         }
         saveMonthData();
         state.editing = { table: null, id: null };
         await reloadAfterFinancialMutation();
         return;
       }
-      const goal = { name: payload.name, target: payload.target, saved: payload.saved, monthlyContribution: payload.monthly_contribution, createdAt: new Date().toISOString(), ...sharingLocal };
+      const goal = { ...localGoal, createdAt: new Date().toISOString() };
       if (state.user) {
         const row = await dbInsert("goals", payload);
         if (row) { goal.id = row.id; goal.createdAt = row.created_at; }
@@ -4948,6 +5239,38 @@ function bindViewActions() {
     }));
   });
 
+  // Dépenses récurrentes: marquer payé / compléter, suspendre la récurrence, voir l'historique.
+  $$("[data-pay-expense]").forEach((button) => button.addEventListener("click", async () => {
+    if (!can("editData")) return showLimit(forbiddenMessage());
+    button.disabled = true;
+    await markExpensePaid(button.getAttribute("data-pay-expense"));
+  }));
+  $$("[data-toggle-recurring]").forEach((button) => button.addEventListener("click", async () => {
+    if (!can("editData")) return showLimit(forbiddenMessage());
+    button.disabled = true;
+    await toggleExpenseRecurring(button.getAttribute("data-toggle-recurring"));
+  }));
+  $$("[data-history-expense]").forEach((button) => button.addEventListener("click", () => {
+    showExpenseHistory(button.getAttribute("data-history-expense"), button.getAttribute("data-history-name") || "");
+  }));
+
+  // Objectifs: changer le statut (atteint / suspendre / réactiver) et enregistrer une contribution ponctuelle.
+  $$("[data-goal-status]").forEach((button) => button.addEventListener("click", async () => {
+    if (!can("editData")) return showLimit(forbiddenMessage());
+    button.disabled = true;
+    await setGoalStatus(button.getAttribute("data-goal-id"), button.getAttribute("data-goal-status"));
+  }));
+  $$("[data-goal-contrib]").forEach((formEl) => formEl.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!can("editData")) return showLimit(forbiddenMessage());
+    const data = new FormData(formEl);
+    const amount = Math.max(0, clampNumber(data.get("amount")));
+    if (amount <= 0) return;
+    const submit = formEl.querySelector("button[type=submit]");
+    if (submit) submit.disabled = true;
+    await addGoalContribution(formEl.getAttribute("data-goal-contrib"), amount, (data.get("note") || "").toString().trim());
+  }));
+
   // Retrait d'un membre: passe par le backend qui applique les règles de rôle
   $$("[data-family-section]").forEach((button) => button.addEventListener("click", () => {
     state.familySection = button.getAttribute("data-family-section") || "members";
@@ -5091,17 +5414,55 @@ function bindViewActions() {
 
   const passwordForm = $("#passwordForm");
   if (passwordForm) {
+    // Surlignage en direct des critères respectés (mêmes règles qu'à l'inscription).
+    const newPwInput = passwordForm.elements.newPassword;
+    const critList = $("#pwChangeCriteria");
+    if (newPwInput && critList) {
+      newPwInput.addEventListener("input", () => {
+        passwordCriteria(newPwInput.value).forEach((c) => {
+          const li = critList.querySelector(`[data-key="${c.key}"]`);
+          if (li) li.classList.toggle("met", c.met);
+        });
+      });
+    }
     passwordForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const form = new FormData(passwordForm);
-      const newPassword = form.get("newPassword");
+      const fr = state.lang === "fr";
       const note = $("#passwordNote");
+      const form = new FormData(passwordForm);
+      const currentPassword = (form.get("currentPassword") || "").toString();
+      const newPassword = (form.get("newPassword") || "").toString();
+      const confirmPassword = (form.get("confirmPassword") || "").toString();
+      const fail = (msg) => {
+        note.textContent = msg;
+        note.classList.remove("success");
+        note.hidden = false;
+      };
+      if (!currentPassword) return fail(fr ? "Entrez votre mot de passe actuel." : "Enter your current password.");
+      if (!newPassword || !confirmPassword) return fail(fr ? "Entrez et confirmez le nouveau mot de passe." : "Enter and confirm the new password.");
+      if (newPassword !== confirmPassword) return fail(fr ? "Le nouveau mot de passe et la confirmation ne sont pas identiques." : "The new password and confirmation do not match.");
+      if (!passwordIsStrong(newPassword)) return fail(fr ? "Le nouveau mot de passe ne respecte pas tous les critères de sécurité." : "The new password does not meet all security criteria.");
+      if (!supabaseClient || !state.user) return fail(fr ? "Service indisponible. Réessayez plus tard." : "Service unavailable. Please try again later.");
+      const submit = passwordForm.querySelector("button[type=submit]");
+      if (submit) submit.disabled = true;
+      // 1) Vérifie le mot de passe actuel par ré-authentification (méthode recommandée Supabase).
+      const { error: signInError } = await supabaseClient.auth.signInWithPassword({
+        email: state.user.email,
+        password: currentPassword
+      });
+      if (signInError) {
+        if (submit) submit.disabled = false;
+        return fail(fr ? "Le mot de passe actuel est incorrect." : "The current password is incorrect.");
+      }
+      // 2) Met à jour le mot de passe une fois l'identité confirmée.
       const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
-      note.textContent = error
-        ? (state.lang === "fr" ? "Impossible de changer le mot de passe: " : "Could not change password: ") + error.message
-        : (state.lang === "fr" ? "Mot de passe mis à jour." : "Password updated.");
+      if (submit) submit.disabled = false;
+      if (error) return fail((fr ? "Impossible de changer le mot de passe: " : "Could not change password: ") + error.message);
+      note.textContent = fr ? "Mot de passe mis à jour avec succès." : "Password updated successfully.";
+      note.classList.add("success");
       note.hidden = false;
-      if (!error) passwordForm.reset();
+      passwordForm.reset();
+      if (critList) critList.querySelectorAll(".met").forEach((li) => li.classList.remove("met"));
     });
   }
 
