@@ -83,6 +83,9 @@ const translations = {
     appFamily: "Famille",
     appAdmin: "Super Admin",
     appSettings: "Paramètres",
+    menuWorkspace: "Mon espace",
+    menuSubscription: "Mon abonnement",
+    menuLogout: "Déconnexion",
     backLanding: "Retour accueil",
     createAccount: "Créer un compte",
     upgrade: "Passer Pro",
@@ -236,6 +239,9 @@ const translations = {
     appFamily: "Family",
     appAdmin: "Super Admin",
     appSettings: "Settings",
+    menuWorkspace: "My space",
+    menuSubscription: "My subscription",
+    menuLogout: "Sign out",
     backLanding: "Back home",
     createAccount: "Create account",
     upgrade: "Upgrade",
@@ -786,6 +792,7 @@ function applyTranslations() {
   renderPricing();
   renderMoneyTags();
   renderLegalPage();
+  updateUserMenu();
   renderView();
 }
 
@@ -1153,8 +1160,8 @@ function syncFamilyRoute() {
 }
 
 function updateFamilyNavigation() {
-  const familyButton = $("#familyNavButton");
-  if (familyButton) familyButton.hidden = !hasFamilyPlanAccess();
+  const show = hasFamilyPlanAccess();
+  $$('#appView [data-view="family"]').forEach((button) => { button.hidden = !show; });
 }
 
 function showFamilyUpgradeModal(message = familyUpgradePrompt()) {
@@ -1367,19 +1374,18 @@ function badgeText(label, count) {
 
 function updateSupportBadges() {
   const supportLabelText = "Support";
-  const myTicketsLabel = state.lang === "fr" ? "Mes tickets" : "My tickets";
   const adminLabel = t("appAdmin") || "Super Admin";
   const userCount = state.support.unreadCount || 0;
   const adminCount = state.support.adminUnreadCount || 0;
   const supportCount = state.isSuperAdmin ? adminCount : userCount;
   const openSupport = $("#openSupport");
   const appSupport = $("#appSupportButton");
-  const supportNav = $("#supportNavButton");
-  const adminNav = $("#adminNavButton");
-  if (openSupport) openSupport.innerHTML = supportCount ? `${supportLabelText} <span class="notification-badge">${supportCount}</span>` : supportLabelText;
-  if (appSupport) appSupport.innerHTML = supportCount ? `${supportLabelText} <span class="notification-badge">${supportCount}</span>` : supportLabelText;
-  if (supportNav) supportNav.innerHTML = userCount ? `${myTicketsLabel} <span class="notification-badge">${userCount}</span>` : myTicketsLabel;
-  if (adminNav) adminNav.innerHTML = adminCount ? `${adminLabel} <span class="notification-badge">${adminCount}</span>` : adminLabel;
+  const supportBadge = supportCount ? `${supportLabelText} <span class="notification-badge">${supportCount}</span>` : supportLabelText;
+  if (openSupport) openSupport.innerHTML = supportBadge;
+  if (appSupport) appSupport.innerHTML = supportBadge;
+  $$('#appView [data-view="admin"]').forEach((button) => {
+    button.innerHTML = adminCount ? `${adminLabel} <span class="notification-badge">${adminCount}</span>` : adminLabel;
+  });
 }
 
 function forbiddenMessage() {
@@ -1433,15 +1439,9 @@ function setSessionUser(user) {
     state.isSuperAdmin = false;
     state.admin = { query: "", users: [], selected: null, logs: [], message: "", page: 1, pageSize: 20, total: 0, hasPrevious: false, hasNext: false, loaded: false };
   }
-  const chip = $("#userEmailChip");
-  const logoutButton = $("#logoutButton");
   const registerButton = $("#openRegister");
   if (user) {
-    chip.textContent = user.email;
-    chip.hidden = false;
-    logoutButton.textContent = state.lang === "fr" ? "Déconnexion" : "Sign out";
-    logoutButton.hidden = false;
-    registerButton.hidden = true;
+    if (registerButton) registerButton.hidden = true;
     $("#demoNotice").hidden = true;
     $("#openLogin").hidden = true;
     $("#topRegister").hidden = true;
@@ -1451,20 +1451,63 @@ function setSessionUser(user) {
     workspaceButton.hidden = false;
     checkSuperAdminAccess();
   } else {
-    chip.hidden = true;
-    logoutButton.hidden = true;
-    registerButton.hidden = false;
+    if (registerButton) registerButton.hidden = false;
     $("#demoNotice").hidden = false;
     $("#openLogin").hidden = false;
     $("#topRegister").hidden = false;
     $("#startDemo").hidden = false;
     $("#openWorkspace").hidden = true;
   }
+  updateUserMenu();
   updateFamilyNavigation();
-  const adminButton = $("#adminNavButton");
-  if (adminButton) adminButton.hidden = !state.isSuperAdmin;
+  $$('#appView [data-view="admin"]').forEach((button) => { button.hidden = !state.isSuperAdmin; });
   updateUpgradeButton();
   updateSupportBadges();
+}
+
+function displayName() {
+  const meta = state.user && state.user.user_metadata;
+  return (meta && (meta.display_name || meta.full_name || meta.name)) || "";
+}
+
+function avatarInitial() {
+  const source = (state.user && (displayName() || state.user.email)) || "";
+  const ch = source.trim().charAt(0);
+  return ch ? ch.toUpperCase() : "·";
+}
+
+function setUserMenu(open) {
+  const dropdown = $("#userMenuDropdown");
+  const button = $("#avatarButton");
+  if (dropdown) dropdown.hidden = !open;
+  if (button) button.setAttribute("aria-expanded", String(open));
+}
+
+function closeUserMenu() {
+  setUserMenu(false);
+}
+
+// Met à jour l'avatar et le menu utilisateur (visible uniquement connecté)
+function updateUserMenu() {
+  const menu = $("#userMenu");
+  const loginButton = $("#appLoginButton");
+  if (state.user) {
+    if (menu) menu.hidden = false;
+    if (loginButton) loginButton.hidden = true;
+    const initial = avatarInitial();
+    const avatar = $("#userAvatar");
+    const avatarLarge = $("#userAvatarLarge");
+    const nameEl = $("#userMenuName");
+    const emailEl = $("#userMenuEmail");
+    if (avatar) avatar.textContent = initial;
+    if (avatarLarge) avatarLarge.textContent = initial;
+    if (nameEl) nameEl.textContent = displayName() || (state.lang === "fr" ? "Mon espace" : "My space");
+    if (emailEl) emailEl.textContent = state.user.email || "";
+  } else {
+    if (menu) menu.hidden = true;
+    if (loginButton) loginButton.hidden = false;
+    closeUserMenu();
+  }
 }
 
 async function checkSuperAdminAccess() {
@@ -1475,11 +1518,10 @@ async function checkSuperAdminAccess() {
   } catch (_error) {
     state.isSuperAdmin = false;
   }
-  const adminButton = $("#adminNavButton");
-  if (adminButton) {
-    adminButton.hidden = !state.isSuperAdmin;
-    adminButton.textContent = t("appAdmin") || "Super Admin";
-  }
+  $$('#appView [data-view="admin"]').forEach((button) => {
+    button.hidden = !state.isSuperAdmin;
+    button.textContent = t("appAdmin") || "Super Admin";
+  });
   if (state.currentView === "admin" && !$("#appView").hidden) renderView();
   if (state.isSuperAdmin && !state.admin.loaded) {
     try {
@@ -1910,7 +1952,7 @@ function openApp() {
 }
 
 function getViewTitle(view) {
-  if (view === "account") return state.lang === "fr" ? "Mon compte" : "My account";
+  if (view === "account") return state.lang === "fr" ? "Mon espace" : "My space";
   if (view === "support") return state.lang === "fr" ? "Mes tickets" : "My tickets";
   const keys = {
     dashboard: "dashboardTitle",
@@ -1957,6 +1999,7 @@ function navigateAppView(nextView) {
   scrollWorkspaceToTop();
   refreshViewData(nextView, token);
   closeAppMenu();
+  closeUserMenu();
 }
 
 function handleUpgradeAction() {
@@ -1975,7 +2018,7 @@ function renderView() {
   hideDebtChartTooltip();
   $("#workspaceTitle").textContent = getViewTitle(state.currentView);
   $("#workspaceEyebrow").textContent = state.plan === "free" ? "Demo" : planDefinitions.find((plan) => plan.id === state.plan).name;
-  $$("#appNav button").forEach((button) => button.classList.toggle("active", button.dataset.view === state.currentView));
+  $$('#appView [data-view]').forEach((button) => button.classList.toggle("active", button.dataset.view === state.currentView));
   const renderers = {
     dashboard: renderDashboard,
     debts: renderDebts,
@@ -3255,6 +3298,15 @@ function renderSubscriptionDetails(plan) {
   `;
 }
 
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function renderAccount() {
   const plan = planDefinitions.find((item) => item.id === state.plan) || planDefinitions[0];
   const fr = state.lang === "fr";
@@ -3262,13 +3314,16 @@ function renderAccount() {
   const targets = state.subscription && !isAdminGranted ? upgradeTargets() : [];
   return `
     <section class="panel">
-      <h3>${fr ? "Mon compte" : "My account"}</h3>
-      <div class="form-grid">
-        <label><span>${t("email")}</span><input value="${state.user ? state.user.email : ""}" disabled /></label>
-      </div>
+      <h3>${fr ? "Informations personnelles" : "Personal information"}</h3>
+      <form class="form-grid" id="profileForm">
+        <label><span>${fr ? "Nom affiché" : "Display name"}</span><input name="displayName" value="${escapeHtml(displayName())}" placeholder="${fr ? "Votre nom" : "Your name"}" ${state.user ? "" : "disabled"} /></label>
+        <label><span>${t("email")}</span><input value="${escapeHtml(state.user ? state.user.email : "")}" disabled /></label>
+        ${state.user ? `<button class="primary-button" type="submit">${fr ? "Enregistrer" : "Save"}</button>` : ""}
+      </form>
+      <p class="form-note" id="profileNote" hidden></p>
     </section>
     <section class="panel">
-      <h3>${fr ? "Mon abonnement" : "My subscription"}</h3>
+      <h3>${fr ? "Abonnement" : "Subscription"}</h3>
       ${renderSubscriptionDetails(plan)}
       ${can("manageBilling") ? `
       <div class="account-actions">
@@ -3281,7 +3336,7 @@ function renderAccount() {
     </section>
     ${can("manageBilling") && targets.length ? `
     <section class="panel">
-      <h3>${fr ? "Mettre à niveau" : "Upgrade"}</h3>
+      <h3>${fr ? "Facturation" : "Billing"}</h3>
       <form class="form-grid upgrade-grid" id="upgradePreviewForm">
         <label><span>${fr ? "Plan actuel" : "Current plan"}</span><input value="${plan.name}" disabled /></label>
         <label><span>${fr ? "Nouveau plan" : "New plan"}</span><select name="targetPlan">
@@ -3293,13 +3348,22 @@ function renderAccount() {
       <div id="upgradePreviewBox"></div>
     </section>` : ""}
     <section class="panel">
-      <h3>${fr ? "Changer le mot de passe" : "Change password"}</h3>
+      <h3>${fr ? "Préférences" : "Preferences"}</h3>
+      <div class="form-grid">
+        <label><span>${t("language")}</span><select id="settingsLang"><option value="fr">Français</option><option value="en">English</option></select></label>
+        <label><span>${t("currency")}</span><select id="settingsCurrency"><option>CAD</option><option>USD</option><option>EUR</option></select></label>
+        <label><span>${t("darkMode")}</span><select id="settingsTheme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+      </div>
+    </section>
+    ${state.user ? `
+    <section class="panel">
+      <h3>${fr ? "Sécurité" : "Security"}</h3>
       <form class="form-grid" id="passwordForm">
         <label><span>${fr ? "Nouveau mot de passe" : "New password"}</span><input name="newPassword" type="password" minlength="6" required autocomplete="new-password" /></label>
         <button class="primary-button" type="submit">${fr ? "Mettre à jour" : "Update"}</button>
       </form>
       <p class="form-note" id="passwordNote" hidden></p>
-    </section>
+    </section>` : ""}
   `;
 }
 
@@ -3786,16 +3850,18 @@ function renderAdmin() {
 
 function updateUpgradeButton() {
   const button = $("#upgradeButton");
-  const mobileButton = $("#mobileUpgradeButton");
-  const label = state.user && state.plan !== "free"
-    ? `Plan: ${planDefinitions.find((item) => item.id === state.plan).name}`
-    : t("upgrade");
-  if (mobileButton) mobileButton.textContent = label;
-  if (state.user && state.plan !== "free") {
-    button.textContent = label;
-  } else {
-    button.textContent = label;
+  // Pour un abonné payant, le plan est visible dans l'éyebrow + le menu avatar:
+  // on retire le bouton "Plan: X" de la topbar pour éviter la redondance.
+  if (button) {
+    if (state.user && state.plan !== "free") {
+      button.hidden = true;
+    } else {
+      button.hidden = false;
+      button.textContent = t("upgrade");
+    }
   }
+  const mobileButton = $("#mobileUpgradeButton");
+  if (mobileButton) mobileButton.hidden = true;
 }
 
 function renderSettings() {
@@ -4938,6 +5004,22 @@ function bindViewActions() {
     });
   }
 
+  const profileForm = $("#profileForm");
+  if (profileForm && state.user && supabaseClient) {
+    profileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const note = $("#profileNote");
+      const nextName = new FormData(profileForm).get("displayName").toString().trim();
+      const { data, error } = await supabaseClient.auth.updateUser({ data: { display_name: nextName } });
+      if (!error && data && data.user) state.user = data.user;
+      note.textContent = error
+        ? (state.lang === "fr" ? "Impossible d'enregistrer le profil." : "Could not save the profile.")
+        : (state.lang === "fr" ? "Profil mis à jour." : "Profile updated.");
+      note.hidden = false;
+      if (!error) updateUserMenu();
+    });
+  }
+
   const settingsLang = $("#settingsLang");
   if (settingsLang) {
     settingsLang.value = state.lang;
@@ -5134,7 +5216,7 @@ async function openRecoverySession(user) {
   await loadProfilePlan();
   await syncBillingPlan();
   await loadUserData();
-  state.currentView = "settings";
+  state.currentView = "account";
   openApp();
 }
 
@@ -5267,7 +5349,6 @@ function boot() {
     select.addEventListener("change", (event) => updatePreference("currency", event.target.value));
   });
   $("#themeToggle").addEventListener("click", () => updatePreference("theme", state.theme === "dark" ? "light" : "dark"));
-  $("#appThemeToggle").addEventListener("click", () => updatePreference("theme", state.theme === "dark" ? "light" : "dark"));
   $("#appMonthSelect").addEventListener("change", (event) => changeSelectedMonth(event.target.value));
   const setMobileMenu = (open) => {
     $(".topbar").classList.toggle("menu-open", open);
@@ -5338,7 +5419,6 @@ function boot() {
     $("#emailModal").hidden = true;
     openAuth("login");
   });
-  $("#backToLanding").addEventListener("click", () => showLandingPage("home"));
   $("#authBack").addEventListener("click", () => showLandingPage("home"));
 
   // Navigation multi-pages: Fonctions / Tarifs / Sécurité sont des pages distinctes
@@ -5369,13 +5449,19 @@ function boot() {
   $("#topRegister").addEventListener("click", () => openAuth("register"));
   $("#openRegister").addEventListener("click", () => openAuth("register"));
   $("#authSwitch").addEventListener("click", () => openAuth(state.authMode === "register" ? "login" : "register"));
-  $("#logoutButton").addEventListener("click", async () => {
+  const handleLogout = async () => {
+    closeUserMenu();
+    closeAppMenu();
     if (supabaseClient) await supabaseClient.auth.signOut();
     setSessionUser(null);
     state.plan = "free";
     loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
     showLandingPage("home");
-  });
+  };
+  const menuLogout = $("#menuLogout");
+  if (menuLogout) menuLogout.addEventListener("click", handleLogout);
+  const mobileLogoutButton = $("#mobileLogoutButton");
+  if (mobileLogoutButton) mobileLogoutButton.addEventListener("click", handleLogout);
 
   $("#forgotPassword").addEventListener("click", async () => {
     const email = $("#authForm").elements.email.value.trim();
@@ -5414,9 +5500,9 @@ function boot() {
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY" && session) {
-        // L'utilisateur arrive depuis le lien de réinitialisation: ouvrir les paramètres
+        // L'utilisateur arrive depuis le lien de réinitialisation: ouvrir Mon espace (Sécurité)
         setSessionUser(session.user);
-        state.currentView = "settings";
+        state.currentView = "account";
         openApp();
         renderView();
       }
@@ -5436,12 +5522,37 @@ function boot() {
     showView("app");
     renderView();
   });
-  $("#userEmailChip").addEventListener("click", () => {
-    state.currentView = "account";
-    showView("app");
-    renderView();
-    refreshViewData("account");
+  // Logo de l'app: utilisateur connecté -> tableau de bord (jamais la landing)
+  const appBrand = $("#appBrand");
+  if (appBrand) appBrand.addEventListener("click", (event) => {
+    event.preventDefault();
+    navigateAppView("dashboard");
   });
+  // Menu avatar (espace utilisateur centralisé)
+  const avatarButton = $("#avatarButton");
+  if (avatarButton) avatarButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setUserMenu($("#userMenuDropdown").hidden);
+  });
+  document.addEventListener("click", (event) => {
+    const menu = $("#userMenu");
+    if (menu && !menu.contains(event.target)) closeUserMenu();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeUserMenu();
+  });
+  const menuSubscription = $("#menuSubscription");
+  if (menuSubscription) menuSubscription.addEventListener("click", () => {
+    closeUserMenu();
+    navigateAppView("account");
+  });
+  const menuSupport = $("#menuSupport");
+  if (menuSupport) menuSupport.addEventListener("click", () => {
+    closeUserMenu();
+    openSupportModal();
+  });
+  const appLoginButton = $("#appLoginButton");
+  if (appLoginButton) appLoginButton.addEventListener("click", () => openAuth("login"));
   // Au retour d'un paiement Stripe (autre onglet), re-synchroniser le plan
   window.addEventListener("focus", () => {
     if (state.user) syncBillingPlan();
@@ -5546,7 +5657,7 @@ function boot() {
       submitButton.disabled = false;
     }
   });
-  $$("#appNav button").forEach((button) => button.addEventListener("click", () => {
+  $$('#appView [data-view]').forEach((button) => button.addEventListener("click", () => {
     navigateAppView(button.dataset.view);
   }));
 

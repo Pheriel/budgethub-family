@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=19" />
+    <link rel="stylesheet" href="/styles.css?v=20" />
   </head>
   <body>
     <div class="app-shell">
@@ -331,38 +331,72 @@
         </section>
       </main>
 
-      <main id="appView" class="dashboard-layout" hidden>
-        <div class="mobile-app-header">
-          <div class="sidebar-head">
+      <main id="appView" class="app-view" hidden>
+        <header class="app-topbar">
+          <a class="brand app-brand" id="appBrand" href="#dashboard" aria-label="BudgetHub — Tableau de bord">
             <img class="brand-logo" src="/assets/logo.svg" alt="" />
-            <div><strong>BudgetHub</strong><small id="mobileActivePlanLabel">Free</small></div>
-          </div>
-          <button class="icon-button app-menu-toggle" id="appMenuToggle" type="button" aria-label="Ouvrir le menu" aria-controls="appSidebar" aria-expanded="false">☰</button>
-        </div>
-        <div class="app-menu-backdrop" id="appMenuBackdrop" hidden></div>
-        <aside class="sidebar" id="appSidebar">
-          <button class="icon-button app-menu-close" id="appMenuClose" type="button" aria-label="Fermer le menu">×</button>
-          <div class="sidebar-head">
-            <img class="brand-logo" src="/assets/logo.svg" alt="" />
-            <div><strong>BudgetHub</strong><small id="activePlanLabel">Free</small></div>
-          </div>
-          <nav class="app-nav" id="appNav" aria-label="Application">
+            <span><strong>BudgetHub</strong></span>
+          </a>
+
+          <nav class="app-topnav" id="appNav" aria-label="Navigation principale">
             <button class="active" data-view="dashboard" data-i18n="appDashboard">Tableau</button>
             <button data-view="debts" data-i18n="appDebts">Dettes</button>
             <button data-view="strategy" data-i18n="appStrategy">Snowball/Avalanche</button>
             <button data-view="budget" data-i18n="appBudget">Dépenses</button>
             <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
             <button data-view="goals" data-i18n="appGoals">Objectifs</button>
-            <button data-view="family" id="familyNavButton" data-i18n="appFamily" hidden>Famille</button>
-            <button data-view="support" id="supportNavButton">Mes tickets</button>
-            <button data-view="admin" id="adminNavButton" data-i18n="appAdmin" hidden>Super Admin</button>
-            <button data-view="settings" data-i18n="appSettings">Paramètres</button>
+            <button data-view="family" id="familyNavButton" class="family-nav" data-i18n="appFamily" hidden>Famille</button>
+            <button data-view="admin" id="adminNavButton" class="admin-nav" data-i18n="appAdmin" hidden>Super Admin</button>
+          </nav>
+
+          <div class="app-topbar-actions">
+            <label class="compact-control" for="appMonthSelect">
+              <span id="appMonthLabel">Juin 2026</span>
+              <input id="appMonthSelect" type="month" />
+            </label>
+            <button class="ghost-button" id="appSupportButton" type="button">Support</button>
+            <button class="ghost-button" id="appLoginButton" type="button" data-i18n="login" hidden>Connexion</button>
+            <div class="user-menu" id="userMenu" hidden>
+              <button class="avatar-button" id="avatarButton" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuDropdown">
+                <span class="avatar" id="userAvatar">·</span>
+              </button>
+              <div class="user-menu-dropdown" id="userMenuDropdown" hidden>
+                <div class="user-menu-head">
+                  <span class="avatar" id="userAvatarLarge" aria-hidden="true">·</span>
+                  <div class="user-menu-id"><strong id="userMenuName"></strong><small id="userMenuEmail"></small></div>
+                </div>
+                <button class="user-menu-item" data-view="account" type="button" data-i18n="menuWorkspace">Mon espace</button>
+                <button class="user-menu-item" id="menuSubscription" type="button" data-i18n="menuSubscription">Mon abonnement</button>
+                <button class="user-menu-item" id="menuSupport" type="button">Support</button>
+                <button class="user-menu-item danger" id="menuLogout" type="button" data-i18n="menuLogout">Déconnexion</button>
+              </div>
+            </div>
+            <button class="app-burger" id="appMenuToggle" type="button" aria-label="Ouvrir le menu" aria-controls="appMobileMenu" aria-expanded="false">☰</button>
+          </div>
+        </header>
+
+        <div class="app-menu-backdrop" id="appMenuBackdrop" hidden></div>
+        <aside class="app-drawer" id="appMobileMenu" aria-label="Menu">
+          <button class="icon-button app-menu-close" id="appMenuClose" type="button" aria-label="Fermer le menu">×</button>
+          <div class="sidebar-head">
+            <img class="brand-logo" src="/assets/logo.svg" alt="" />
+            <div><strong>BudgetHub</strong><small id="activePlanLabel">Free</small></div>
+          </div>
+          <nav class="app-nav" aria-label="Application (mobile)">
+            <button data-view="dashboard" data-i18n="appDashboard">Tableau</button>
+            <button data-view="debts" data-i18n="appDebts">Dettes</button>
+            <button data-view="strategy" data-i18n="appStrategy">Snowball/Avalanche</button>
+            <button data-view="budget" data-i18n="appBudget">Dépenses</button>
+            <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
+            <button data-view="goals" data-i18n="appGoals">Objectifs</button>
+            <button data-view="family" class="family-nav" data-i18n="appFamily" hidden>Famille</button>
+            <button data-view="admin" class="admin-nav" data-i18n="appAdmin" hidden>Super Admin</button>
+            <button data-view="account" data-i18n="menuWorkspace">Mon espace</button>
           </nav>
           <div class="mobile-drawer-actions">
             <button class="ghost-button full" id="mobileSupportButton" type="button">Support</button>
-            <button class="primary-button full" id="mobileUpgradeButton" type="button">Passer Pro</button>
+            <button class="ghost-button full" id="mobileLogoutButton" type="button" data-i18n="menuLogout">Déconnexion</button>
           </div>
-          <button class="ghost-button full" id="backToLanding" type="button" data-i18n="backLanding">Retour accueil</button>
         </aside>
 
         <section class="workspace">
@@ -372,24 +406,7 @@
               <h2 id="workspaceTitle">Tableau de bord</h2>
             </div>
             <div class="workspace-actions">
-              <label class="compact-control" for="appMonthSelect">
-                <span id="appMonthLabel">Juin 2026</span>
-                <input id="appMonthSelect" type="month" />
-              </label>
-              <select id="appLanguageSelect" class="language-select" aria-label="Langue">
-                <option value="fr">FR</option>
-                <option value="en">EN</option>
-              </select>
-              <select id="appCurrencySelect" class="currency-select" aria-label="Devise">
-                <option value="CAD">CAD</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-              </select>
-              <button class="icon-button" id="appThemeToggle" type="button" aria-label="Changer le thème">☾</button>
-              <span class="chip" id="userEmailChip" hidden></span>
-              <button class="ghost-button" id="appSupportButton" type="button">Support</button>
               <button class="ghost-button" id="openRegister" type="button" data-i18n="createAccount">Créer un compte</button>
-              <button class="ghost-button" id="logoutButton" type="button" hidden></button>
               <button class="primary-button" id="upgradeButton" type="button" data-i18n="upgrade">Passer Pro</button>
             </div>
           </div>
@@ -430,6 +447,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="/app.js?v=29"></script>
+    <script src="/app.js?v=30"></script>
   </body>
 </html>
