@@ -1708,7 +1708,7 @@ async function loadUserData(shouldRender = true) {
   const [debts, budget, transactions, goals, members, incomes, contributions, goalContributions] = await Promise.all([
     supabaseClient.from("debts").select("id,user_id,name,balance,rate,min_payment,payment_day,is_shared,split_mode,split_config").order("created_at"),
     supabaseClient.from("budget_categories").select("id,user_id,name,category,planned,spent,due_day,is_recurring,frequency,notes,month_key,is_shared,split_mode,split_config").or(`month_key.eq.${state.selectedMonth},month_key.is.null`).order("created_at"),
-    supabaseClient.from("transactions").select("id,user_id,date,name,category,amount,source_expense_id,is_shared,split_mode,split_config").gte("date", start).lt("date", end).order("date", { ascending: false }),
+    supabaseClient.from("transactions").select("id,user_id,date,name,category,amount,source_expense_id,source_debt_id,is_shared,split_mode,split_config").gte("date", start).lt("date", end).order("date", { ascending: false }),
     supabaseClient.from("goals").select("id,user_id,name,target,saved,monthly_contribution,contribution_frequency,target_date,status,created_at,is_shared,split_mode,split_config").order("created_at"),
     supabaseClient.from("family_members").select("id,name,role,email,invited_user_id").order("created_at"),
     supabaseClient.from("profiles").select("id,display_name,email,family_owner_id,monthly_income,income_amount,income_frequency"),
@@ -1782,7 +1782,7 @@ async function loadUserData(shouldRender = true) {
     })),
     transactions: (transactions.data || []).map((row) => ({
       id: row.id, date: row.date, name: row.name, category: row.category, amount: Number(row.amount),
-      sourceExpenseId: row.source_expense_id || null, ...mapSharing(row)
+      sourceExpenseId: row.source_expense_id || null, sourceDebtId: row.source_debt_id || null, ...mapSharing(row)
     })),
     goals: (goals.data || []).map((row) => ({
       id: row.id, name: row.name, target: Number(row.target), saved: Number(row.saved),
@@ -1984,6 +1984,60 @@ async function addGoalContribution(goalId, amount, note) {
   const nextSaved = Math.max(0, clampNumber(goal.saved) + amount);
   const reached = goal.target > 0 && nextSaved >= goal.target;
   await dbUpdate("goals", goal.id, reached ? { saved: nextSaved, status: "reached" } : { saved: nextSaved });
+  await reloadAfterFinancialMutation();
+}
+
+// ----- Dettes: projection mensuelle et paiement réel -----
+
+// Vrai si un paiement lié à cette dette existe déjà ce mois (anti-doublon).
+function debtPaidThisMonth(debt) {
+  if (!debt || !debt.id) return false;
+  return state.transactions.some((tx) => String(tx.sourceDebtId) === String(debt.id) && Number(tx.amount) < 0);
+}
+
+// Projection par dette (à partir du mois courant) selon la méthode et l'extra
+// Snowball/Avalanche choisis: solde projeté le mois prochain + date estimée de
+// remboursement. Aucune écriture en base: pur calcul affiché.
+function debtProjectionMap() {
+  const method = state.debtStrategy.method === "snowball" ? "snowball" : "avalanche";
+  const extraPayment = Math.max(0, clampNumber(state.debtStrategy.extraPayment));
+  const plan = simulateDebtPlanCached(state.debts, { method, extraPayment, startMonth: currentMonthKey() });
+  const firstMonth = plan.timeline[0];
+  const map = new Map();
+  plan.debts.forEach((d) => {
+    const projected = firstMonth
+      ? firstMonth.debtBalances.find((b) => String(b.id) === String(d.id))
+      : null;
+    map.set(String(d.id), {
+      nextBalance: projected ? projected.balance : d.originalBalance,
+      payoffMonth: d.payoffMonth,
+      payoffDate: d.payoffDate
+    });
+  });
+  return map;
+}
+
+// Marquer un paiement de dette comme effectué pour le mois sélectionné: crée une
+// transaction liée (source_debt_id) du paiement mensuel ET réduit le solde RÉEL en
+// base (solde + intérêt du mois - paiement, planché à 0). Anti-doublon par mois.
+async function markDebtPaid(debtId) {
+  if (!state.user) return;
+  const debt = state.debts.find((d) => String(d.id) === String(debtId));
+  if (!debt || !debt.id || debtPaidThisMonth(debt)) return;
+  const balance = Math.max(0, clampNumber(debt.balance));
+  if (balance <= 0.005) return;
+  const interest = monthlyInterest(debt);
+  const payment = Math.min(Math.max(0, clampNumber(debt.minPayment)), balance + interest);
+  if (payment <= 0.005) return;
+  const newBalance = Math.max(0, Math.round((balance + interest - payment) * 100) / 100);
+  await dbInsert("transactions", {
+    date: defaultTransactionDate(),
+    name: debt.name,
+    category: state.lang === "fr" ? "Dette" : "Debt",
+    amount: -(Math.round(payment * 100) / 100),
+    source_debt_id: debt.id
+  });
+  await dbUpdate("debts", debt.id, { balance: newBalance });
   await reloadAfterFinancialMutation();
 }
 
@@ -2515,34 +2569,67 @@ function recommendedPayment(debt) {
 function debtTable(actions) {
   const fr = state.lang === "fr";
   const showActions = actions && can("editData");
-  const paymentDayLabel = fr ? "Jour paiement" : "Payment day";
-  const recommendedLabel = fr ? "Paiement recommandé" : "Recommended payment";
-  const interestLabel = fr ? "Intérêts/mois" : "Interest/mo";
+  const nextPayLabel = fr ? "Prochain paiement" : "Next payment";
+  const projectedLabel = fr ? "Solde projeté (M+1)" : "Projected (next mo.)";
+  const payoffLabel = fr ? "Fin estimée" : "Estimated payoff";
+  const statusLabel = fr ? "Statut" : "Status";
   if (!state.debts.length) {
     return `<p class="form-note">${fr ? "Aucune dette pour le moment." : "No debts yet."}</p>`;
   }
+  const projection = debtProjectionMap();
   return `
     <div class="table-wrap">
       <table class="responsive-table">
-        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${interestLabel}</th><th>${t("minPayment")}</th><th>${paymentDayLabel}</th><th>${recommendedLabel}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
+        <thead><tr><th>${t("name")}</th><th>${t("balance")}</th><th>${t("rate")}</th><th>${t("minPayment")}</th><th>${nextPayLabel}</th><th>${projectedLabel}</th><th>${payoffLabel}</th><th>${statusLabel}</th>${familyTableHeaders()}${showActions ? `<th>${t("action")}</th>` : ""}</tr></thead>
         <tbody>
-          ${state.debts.map((debt, index) => `
+          ${state.debts.map((debt, index) => {
+            const balance = Math.max(0, clampNumber(debt.balance));
+            const paidOff = balance <= 0.005;
+            const proj = projection.get(String(debt.id || `debt-${index}`));
+            const nextBalance = paidOff ? 0 : (proj ? proj.nextBalance : Math.max(0, balance + monthlyInterest(debt) - clampNumber(debt.minPayment)));
+            const nextPayment = paidOff ? "—" : formatDateShort(paymentDateForDebt(currentMonthKey(), debt.paymentDay, 1));
+            const payoff = paidOff
+              ? "—"
+              : (proj && proj.payoffDate ? formatDateShort(new Date(proj.payoffDate)) : (fr ? "Non calculable" : "Not calculable"));
+            const statusBadge = paidOff
+              ? { cls: "pill-good", txt: fr ? "Remboursée" : "Paid off" }
+              : { cls: "pill-warn", txt: fr ? "Active" : "Active" };
+            const paidThisMonth = debtPaidThisMonth(debt);
+            return `
             <tr>
               <td data-label="${t("name")}">${debt.name}</td>
-              <td data-label="${t("balance")}">${money(debt.balance)}</td>
+              <td data-label="${t("balance")}">${money(balance)}</td>
               <td data-label="${t("rate")}">${debt.rate.toFixed(2)}%</td>
-              <td data-label="${interestLabel}">${money(monthlyInterest(debt))}</td>
               <td data-label="${t("minPayment")}">${money(debt.minPayment)}</td>
-              <td data-label="${paymentDayLabel}">${clampPaymentDay(debt.paymentDay)}</td>
-              <td data-label="${recommendedLabel}">${money(recommendedPayment(debt))}</td>
+              <td data-label="${nextPayLabel}">${nextPayment}</td>
+              <td data-label="${projectedLabel}">${money(nextBalance)}</td>
+              <td data-label="${payoffLabel}">${payoff}</td>
+              <td data-label="${statusLabel}"><span class="pill ${statusBadge.cls}">${statusBadge.txt}</span>${!paidOff && paidThisMonth ? `<small class="table-note">${fr ? "Payé ce mois" : "Paid this month"}</small>` : ""}</td>
               ${familyTableCells(debt, Math.max(0, clampNumber(debt.minPayment)))}
-              ${showActions ? `<td class="cell-actions"><button class="secondary-button" data-edit-debt="${debt.id || index}">${fr ? "Modifier" : "Edit"}</button> <button class="secondary-button" data-remove-debt="${index}">${t("remove")}</button></td>` : ""}
+              ${showActions ? `<td class="cell-actions">${debtActionsCell(debt, index, paidOff, paidThisMonth)}</td>` : ""}
             </tr>
-          `).join("")}
+          `;
+          }).join("")}
         </tbody>
       </table>
     </div>
   `;
+}
+
+// Boutons d'action d'une dette: marquer paiement effectué, modifier, supprimer.
+function debtActionsCell(debt, index, paidOff, paidThisMonth) {
+  const fr = state.lang === "fr";
+  const buttons = [];
+  if (state.user && debt.id && !paidOff) {
+    if (paidThisMonth) {
+      buttons.push(`<button class="secondary-button btn-sm" disabled>${fr ? "Payé ce mois ✓" : "Paid this month ✓"}</button>`);
+    } else {
+      buttons.push(`<button class="primary-button btn-sm" data-pay-debt="${debt.id}">${fr ? "Marquer paiement effectué" : "Mark payment made"}</button>`);
+    }
+  }
+  buttons.push(`<button class="secondary-button btn-sm" data-edit-debt="${debt.id || index}">${fr ? "Modifier" : "Edit"}</button>`);
+  buttons.push(`<button class="secondary-button btn-sm" data-remove-debt="${index}">${t("remove")}</button>`);
+  return buttons.join(" ");
 }
 
 function clampNumber(value, fallback = 0) {
@@ -2889,6 +2976,45 @@ function renderRemainingDebtBars(plan) {
   `;
 }
 
+// Tableau de projection mois par mois: solde projeté de chaque dette, total,
+// dettes terminées dans le mois et paiement mensuel libéré cumulé. Cap à 12 mois.
+function renderMonthlyProjectionTable(plan, startMonth) {
+  const fr = state.lang === "fr";
+  if (!plan.debts.length || !plan.timeline.length) {
+    return `<p class="form-note">${fr ? "Aucune projection à afficher." : "No projection to display."}</p>`;
+  }
+  const debts = plan.debts;
+  const rows = plan.timeline.slice(0, 12);
+  const clearedByMonth = (month) => (plan.payoffEvents || []).filter((e) => e.month === month).map((e) => e.name);
+  const headerCells = debts.map((d) => `<th>${d.name}</th>`).join("");
+  const monthRow = (label, balances, total, freed, cleared) => `
+    <tr>
+      <td data-label="${fr ? "Mois" : "Month"}"><strong>${label}</strong></td>
+      ${debts.map((d) => {
+        const b = balances.find((x) => String(x.id) === String(d.id));
+        const val = b ? b.balance : 0;
+        return `<td data-label="${d.name}">${val <= 0.005 ? `<span class="pill pill-good">${fr ? "Soldée" : "Cleared"}</span>` : money(val)}</td>`;
+      }).join("")}
+      <td data-label="${fr ? "Total" : "Total"}"><strong>${money(total)}</strong></td>
+      <td data-label="${fr ? "Libéré cumulé" : "Freed cumulative"}">${money(freed)}</td>
+      <td data-label="${fr ? "Terminées" : "Cleared"}">${cleared && cleared.length ? cleared.join(", ") : "—"}</td>
+    </tr>`;
+  const startBalances = debts.map((d) => ({ id: d.id, balance: d.originalBalance }));
+  const startTotal = debts.reduce((sum, d) => sum + d.originalBalance, 0);
+  return `
+    <div class="table-wrap">
+      <table class="responsive-table">
+        <thead><tr><th>${fr ? "Mois" : "Month"}</th>${headerCells}<th>${fr ? "Total" : "Total"}</th><th>${fr ? "Libéré cumulé" : "Freed cumulative"}</th><th>${fr ? "Terminées" : "Cleared"}</th></tr></thead>
+        <tbody>
+          ${monthRow(fr ? "Aujourd'hui" : "Today", startBalances, startTotal, 0, [])}
+          ${rows.map((item) => monthRow(formatMonthOffset(startMonth, item.month), item.debtBalances, item.totalBalance, item.recovered, clearedByMonth(item.month))).join("")}
+        </tbody>
+      </table>
+      ${plan.timeline.length > 12 ? `<p class="form-note">${fr ? "Projection limitée aux 12 premiers mois. Voir la date libre de dettes ci-dessus pour la suite." : "Projection limited to the first 12 months. See the debt-free date above for the rest."}</p>` : ""}
+    </div>
+  `;
+}
+
 // Prochaine dette qui disparaît à partir d'aujourd'hui.
 function nextDebtToClear(plan) {
   if (!plan.payoffEvents || !plan.payoffEvents.length) return null;
@@ -3171,6 +3297,15 @@ function renderStrategy() {
         ${renderRemainingDebtBars(selected)}
       </section>
     </div>
+    <section class="panel">
+      <div class="strategy-panel-head">
+        <div>
+          <span class="chip">${fr ? "Projection" : "Projection"}</span>
+          <h3>${fr ? "Soldes projetés mois par mois" : "Projected balances month by month"}</h3>
+        </div>
+      </div>
+      ${renderMonthlyProjectionTable(selected, startMonth)}
+    </section>
     <section class="panel comparison-panel">
       <div class="section-heading compact-heading">
         <p class="eyebrow">${fr ? "Comparaison" : "Comparison"}</p>
@@ -5252,6 +5387,13 @@ function bindViewActions() {
   }));
   $$("[data-history-expense]").forEach((button) => button.addEventListener("click", () => {
     showExpenseHistory(button.getAttribute("data-history-expense"), button.getAttribute("data-history-name") || "");
+  }));
+
+  // Dettes: marquer un paiement comme réellement effectué (réduit le solde réel en DB).
+  $$("[data-pay-debt]").forEach((button) => button.addEventListener("click", async () => {
+    if (!can("editData")) return showLimit(forbiddenMessage());
+    button.disabled = true;
+    await markDebtPaid(button.getAttribute("data-pay-debt"));
   }));
 
   // Objectifs: changer le statut (atteint / suspendre / réactiver) et enregistrer une contribution ponctuelle.
