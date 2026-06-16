@@ -622,6 +622,8 @@ const state = {
   },
   currentView: "dashboard",
   familySection: "members",
+  // Nom affiché chargé depuis public.profiles.display_name (source de vérité).
+  displayName: "",
   // Session démo active (app ouverte sans compte): autorise les routes app sans redirection.
   demoActive: false,
   viewToken: 0,
@@ -1471,6 +1473,7 @@ function setSessionUser(user) {
   if (!user) {
     state.role = "Owner";
     state.isSuperAdmin = false;
+    state.displayName = "";
     state.admin = { query: "", users: [], selected: null, logs: [], message: "", page: 1, pageSize: 20, total: 0, hasPrevious: false, hasNext: false, loaded: false };
   }
   const registerButton = $("#openRegister");
@@ -1500,6 +1503,9 @@ function setSessionUser(user) {
 }
 
 function displayName() {
+  // Source de vérité = public.profiles.display_name (state.displayName).
+  // user_metadata reste un repli pour la 1re frame avant chargement du profil.
+  if (state.displayName) return state.displayName;
   const meta = state.user && state.user.user_metadata;
   return (meta && (meta.display_name || meta.full_name || meta.name)) || "";
 }
@@ -1599,17 +1605,20 @@ async function loadProfilePlan() {
 
   let { data, error } = await supabaseClient
     .from("profiles")
-    .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id,is_suspended")
+    .select("display_name,plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id,is_suspended")
     .eq("id", state.user.id)
     .single();
   if (error && error.code === "42703") {
     const fallback = await supabaseClient
       .from("profiles")
-      .select("plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id")
+      .select("display_name,plan,subscription_status,cancel_at_period_end,current_period_end,billing_duration,family_owner_id")
       .eq("id", state.user.id)
       .single();
     data = fallback.data;
     error = fallback.error;
+  }
+  if (!error && data && "display_name" in data) {
+    state.displayName = data.display_name || "";
   }
   if (!error && data && billingProfile) {
     data = {
@@ -1711,6 +1720,7 @@ async function loadUserData(shouldRender = true) {
   }));
   // Profil de l'utilisateur connecté (et non le premier de la famille).
   const myProfile = profileRows.find((p) => p.id === (state.user && state.user.id)) || profileRows[0] || {};
+  if ("display_name" in myProfile) state.displayName = myProfile.display_name || "";
 
   const seed = {
     debts: (debts.data || []).map((row) => ({
@@ -5100,14 +5110,37 @@ function bindViewActions() {
     profileForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const note = $("#profileNote");
+      const submit = profileForm.querySelector("button[type=submit]");
       const nextName = new FormData(profileForm).get("displayName").toString().trim();
-      const { data, error } = await supabaseClient.auth.updateUser({ data: { display_name: nextName } });
-      if (!error && data && data.user) state.user = data.user;
-      note.textContent = error
-        ? (state.lang === "fr" ? "Impossible d'enregistrer le profil." : "Could not save the profile.")
-        : (state.lang === "fr" ? "Profil mis à jour." : "Profile updated.");
-      note.hidden = false;
-      if (!error) updateUserMenu();
+      if (submit) submit.disabled = true;
+      // Source de vérité = public.profiles. RLS: "Users can update own profile" (auth.uid() = id).
+      const { error } = await supabaseClient
+        .from("profiles")
+        .update({ display_name: nextName })
+        .eq("id", state.user.id);
+      if (error) {
+        logSupabaseError("Update profiles display_name", error);
+        note.textContent = state.lang === "fr" ? "Impossible d'enregistrer le profil." : "Could not save the profile.";
+        note.hidden = false;
+        if (submit) submit.disabled = false;
+        return;
+      }
+      // Met à jour le foyer en mémoire pour les vues Famille/Contributions.
+      const selfMember = (state.household || []).find((m) => m.self);
+      if (selfMember && nextName) selfMember.name = nextName;
+      // Recharge le profil depuis Supabase (source de vérité, confirme l'écriture).
+      // loadProfilePlan() peut déclencher un renderView() (selon le plan) qui recrée
+      // #profileNote: on re-sélectionne le message/bouton APRÈS pour ne pas viser un noeud détaché.
+      await loadProfilePlan();
+      state.displayName = nextName;
+      updateUserMenu();
+      const freshNote = $("#profileNote");
+      if (freshNote) {
+        freshNote.textContent = state.lang === "fr" ? "Profil mis à jour." : "Profile updated.";
+        freshNote.hidden = false;
+      }
+      const freshSubmit = $("#profileForm button[type=submit]");
+      if (freshSubmit) freshSubmit.disabled = false;
     });
   }
 
