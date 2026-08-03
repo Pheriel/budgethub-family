@@ -89,7 +89,7 @@ const translations = {
     backLanding: "Retour accueil",
     createAccount: "Créer un compte",
     upgrade: "Passer Pro",
-    demoNotice: "Démo gratuite: 2 dettes maximum et 1 membre famille maximum. Les données restent dans le navigateur.",
+    demoNotice: "Démo gratuite: 10 dettes maximum et 1 membre famille maximum. Les données restent dans le navigateur.",
     email: "Courriel",
     password: "Mot de passe",
     continue: "Continuer",
@@ -113,7 +113,7 @@ const translations = {
     savingsRate: "Taux d’épargne",
     addDebt: "Ajouter une dette",
     addMember: "Ajouter un membre",
-    demoLimitDebt: "Limite démo atteinte: 2 dettes maximum.",
+    demoLimitDebt: "Vous avez atteint la limite de 10 dettes incluse dans la version gratuite. Passez à un abonnement pour ajouter un nombre illimité de dettes.",
     demoLimitMember: "Limite démo atteinte: 1 membre maximum.",
     name: "Nom",
     balance: "Solde",
@@ -245,7 +245,7 @@ const translations = {
     backLanding: "Back home",
     createAccount: "Create account",
     upgrade: "Upgrade",
-    demoNotice: "Free demo: 2 debts maximum and 1 family member maximum. Data stays in the browser.",
+    demoNotice: "Free demo: 10 debts maximum and 1 family member maximum. Data stays in the browser.",
     email: "Email",
     password: "Password",
     continue: "Continue",
@@ -269,7 +269,7 @@ const translations = {
     savingsRate: "Savings rate",
     addDebt: "Add debt",
     addMember: "Add member",
-    demoLimitDebt: "Demo limit reached: 2 debts maximum.",
+    demoLimitDebt: "You have reached the 10-debt limit included in the free version. Upgrade to a subscription to add unlimited debts.",
     demoLimitMember: "Demo limit reached: 1 family member maximum.",
     name: "Name",
     balance: "Balance",
@@ -440,13 +440,22 @@ const legalPages = {
   }
 };
 
+const { FREE_DEBT_LIMIT, debtLimitForPlan, canAddDebt, hasReachedDebtLimit: isDebtLimitReached, debtUsageSummary } = globalThis.BudgetHubPlanLimits;
+
 const planDefinitions = [
-  { id: "free", name: "Free", price: 0, members: 1, debts: 2, featured: false },
+  { id: "free", name: "Free", price: 0, members: 1, debts: FREE_DEBT_LIMIT, featured: false },
   { id: "solo", name: "Solo", price: 10, members: 1, debts: Infinity, featured: false },
   { id: "family", name: "Family", price: 15, members: 5, debts: Infinity, featured: true },
   { id: "familyPlus", name: "Family Plus", price: 20, members: 10, debts: Infinity, featured: false }
 ];
 const planRank = { free: 0, solo: 1, family: 2, familyPlus: 3 };
+
+translations.fr.demoNotice = `DÃ©mo gratuite: ${FREE_DEBT_LIMIT} dettes maximum et 1 membre famille maximum. Les donnÃ©es restent dans le navigateur.`;
+translations.en.demoNotice = `Free demo: ${FREE_DEBT_LIMIT} debts maximum and 1 family member maximum. Data stays in the browser.`;
+translations.fr.demoLimitDebt = `Vous avez atteint la limite de ${FREE_DEBT_LIMIT} dettes incluse dans la version gratuite. Passez Ã  un abonnement pour ajouter un nombre illimitÃ© de dettes.`;
+translations.en.demoLimitDebt = `You have reached the ${FREE_DEBT_LIMIT}-debt limit included in the free version. Upgrade to a subscription to add unlimited debts.`;
+translations.fr.debtUsage = "Dettes utilisÃ©es";
+translations.en.debtUsage = "Debts used";
 
 // Taux de secours si l'API de taux de change est injoignable
 const currencyMeta = {
@@ -463,6 +472,22 @@ const incomeFrequencies = {
   monthly: { fr: "Par mois", en: "Monthly", factor: 1 },
   annual: { fr: "Annuel", en: "Annual", factor: 1 / 12 }
 };
+
+function currentPlanDefinition() {
+  return planDefinitions.find((plan) => plan.id === state.plan) || planDefinitions[0];
+}
+
+function currentDebtUsage() {
+  return state.debts.length;
+}
+
+function hasReachedDebtLimit() {
+  return isDebtLimitReached(currentDebtUsage(), state.plan);
+}
+
+function debtUsageLabel() {
+  return `${t("debtUsage")}: ${debtUsageSummary(currentDebtUsage(), state.plan)}`;
+}
 
 function detectDefaultCurrency() {
   const locale = navigator.language || (navigator.languages && navigator.languages[0]) || "fr-CA";
@@ -843,13 +868,13 @@ function renderPricing() {
     free: {
       fr: [
         "1 membre",
-        "2 dettes",
+        "10 dettes",
         "Données locales dans le navigateur",
         "Parfait pour essayer"
       ],
       en: [
         "1 member",
-        "2 debts",
+        "10 debts",
         "Local browser data",
         "Perfect for trying it out"
       ]
@@ -901,6 +926,8 @@ function renderPricing() {
       ]
     }
   };
+  planFeatures.free.fr[1] = `${FREE_DEBT_LIMIT} dettes`;
+  planFeatures.free.en[1] = `${FREE_DEBT_LIMIT} debts`;
   const months = durationMonths[state.billingDuration];
   const manualAccess = state.subscription && state.subscription.status === "admin_granted";
   grid.innerHTML = planDefinitions.map((plan) => {
@@ -2552,6 +2579,11 @@ function renderDebts() {
   const fr = state.lang === "fr";
   const editing = state.editing.table === "debts";
   const d = editing ? findEditable(state.debts) : null;
+  const isFreePlan = state.plan === "free";
+  const debtLimitReached = isFreePlan && hasReachedDebtLimit() && !editing;
+  const debtUsageNote = isFreePlan
+    ? `<p class="form-note"><strong>${debtUsageLabel()}</strong></p>`
+    : "";
   if (!can("editData")) {
     return `<section class="panel">${readOnlyNote()}${debtTable(false)}</section>`;
   }
@@ -2567,10 +2599,12 @@ function renderDebts() {
         <label><span>${t("minPayment")}</span><input name="minPayment" required ${decimalInputAttrs("75.00")} value="${d ? d.minPayment : ""}" /></label>
         <label><span>${fr ? "Jour du paiement" : "Payment day"}</span><input name="paymentDay" type="number" min="1" max="31" step="1" placeholder="15" value="${d ? clampPaymentDay(d.paymentDay) : ""}" /></label>
         ${sharingFormFields(d, { label: fr ? "Dette commune / partager avec la famille" : "Shared debt / share with family" })}
-        <button class="primary-button" type="submit">${editing ? (fr ? "Enregistrer" : "Save") : t("addDebt")}</button>
+        <button class="primary-button" type="submit" ${debtLimitReached ? "disabled" : ""}>${editing ? (fr ? "Enregistrer" : "Save") : t("addDebt")}</button>
         ${editing ? `<button class="secondary-button" type="button" id="cancelEdit">${fr ? "Annuler" : "Cancel"}</button>` : ""}
       </form>
+      ${debtUsageNote}
       <div id="limitMessage"></div>
+      ${debtLimitReached ? `<p class="form-note">${t("demoLimitDebt")}</p>` : ""}
       ${debtTable(true)}
     </section>
   `;
@@ -5048,8 +5082,8 @@ function bindViewActions() {
         await reloadAfterFinancialMutation();
         return;
       }
-      const plan = planDefinitions.find((item) => item.id === state.plan);
-      if (state.debts.length >= plan.debts) return showLimit(planLimitMessage("debts"));
+      const plan = currentPlanDefinition();
+      if (!canAddDebt(currentDebtUsage(), state.plan)) return showLimit(planLimitMessage("debts"));
       const debt = { name: payload.name, balance: payload.balance, rate: payload.rate, minPayment: payload.min_payment, paymentDay: payload.payment_day, ...sharingLocal };
       if (state.user) {
         const row = await dbInsert("debts", payload);
@@ -5676,13 +5710,13 @@ function bindViewActions() {
 
 // Message de limite adapté au plan réel de l'utilisateur
 function planLimitMessage(kind) {
-  const plan = planDefinitions.find((item) => item.id === state.plan);
+  const plan = currentPlanDefinition();
   const fr = state.lang === "fr";
   if (kind === "debts") {
     if (!state.user) return t("demoLimitDebt");
     return fr
-      ? `Limite du plan ${plan.name}: ${plan.debts} dettes maximum. Passez à un plan supérieur pour des dettes illimitées.`
-      : `${plan.name} plan limit: ${plan.debts} debts maximum. Upgrade for unlimited debts.`;
+      ? `Limite du plan ${plan.name}: ${plan.debts} dettes maximum. Passez à un abonnement pour ajouter un nombre illimité de dettes.`
+      : `${plan.name} plan limit: ${plan.debts} debts maximum. Upgrade to a subscription to add unlimited debts.`;
   }
   if (!state.user) return t("demoLimitMember");
   const upgradeHint = plan.id === "family"
