@@ -17,11 +17,13 @@ const {
 } = require("../services/billing.service");
 
 const router = express.Router();
+const STRIPE_WEBHOOK_BODY_LIMIT = "1mb";
+const BILLING_JSON_BODY_LIMIT = "100kb";
 
 const isUuid = (value) => typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
 
 // Stripe exige le corps brut pour vérifier la signature du webhook
-router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+router.post("/webhook", express.raw({ type: "application/json", limit: STRIPE_WEBHOOK_BODY_LIMIT }), async (req, res) => {
   const stripe = createStripeClient();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -55,7 +57,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
 // Les routes ci-dessous (hors webhook) reçoivent du JSON: ce routeur est monté
 // avant express.json() global pour préserver le corps brut du webhook.
-router.use(express.json());
+router.use(express.json({ limit: BILLING_JSON_BODY_LIMIT }));
 
 // Seul le Owner de la famille peut gérer l'abonnement Stripe
 router.post("/checkout", requireAuth, requirePermission("manageBilling"), async (req, res) => {

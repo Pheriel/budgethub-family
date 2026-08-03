@@ -15,6 +15,7 @@ const familyRoutes = require("./routes/family.routes");
 
 const app = express();
 const port = process.env.PORT || 3000;
+const JSON_BODY_LIMIT = "100kb";
 
 app.use(helmet({
   contentSecurityPolicy: false
@@ -31,7 +32,7 @@ app.use(cors({ origin: allowedOrigins }));
 
 // Le webhook Stripe doit recevoir le corps brut, avant express.json().
 app.use("/api/billing", billingRoutes);
-app.use(express.json());
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 app.get("/health", (_req, res) => {
