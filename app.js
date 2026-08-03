@@ -440,7 +440,23 @@ const legalPages = {
   }
 };
 
-const { FREE_DEBT_LIMIT, debtLimitForPlan, canAddDebt, hasReachedDebtLimit: isDebtLimitReached, debtUsageSummary } = globalThis.BudgetHubPlanLimits;
+const planLimitsApi = globalThis.BudgetHubPlanLimits || {
+  FREE_DEBT_LIMIT: 10,
+  debtLimitForPlan(planId) {
+    return planId === "free" ? 10 : Infinity;
+  },
+  canAddDebt(currentCount, planId) {
+    return currentCount < this.debtLimitForPlan(planId);
+  },
+  hasReachedDebtLimit(currentCount, planId) {
+    return !this.canAddDebt(currentCount, planId);
+  },
+  debtUsageSummary(currentCount, planId) {
+    return `${currentCount} / ${this.debtLimitForPlan(planId)}`;
+  }
+};
+
+const { FREE_DEBT_LIMIT, debtLimitForPlan, canAddDebt, hasReachedDebtLimit: isDebtLimitReached, debtUsageSummary } = planLimitsApi;
 
 const planDefinitions = [
   { id: "free", name: "Free", price: 0, members: 1, debts: FREE_DEBT_LIMIT, featured: false },

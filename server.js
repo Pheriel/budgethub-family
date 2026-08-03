@@ -55,6 +55,7 @@ app.get(["/app.js", "/styles.css"], (req, res) => {
 });
 
 app.use("/assets", express.static(path.join(staticRoot, "assets")));
+app.use("/shared", express.static(path.join(staticRoot, "shared")));
 
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) {
