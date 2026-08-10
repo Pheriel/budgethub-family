@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const fs = require("fs");
 const path = require("path");
 
 const memberRoutes = require("./routes/members.routes");
@@ -16,6 +17,60 @@ const familyRoutes = require("./routes/family.routes");
 const app = express();
 const port = process.env.PORT || 3000;
 const JSON_BODY_LIMIT = "100kb";
+const staticRoot = __dirname;
+const indexTemplate = fs.readFileSync(path.join(staticRoot, "index.html"), "utf8");
+const PUBLIC_PAGE_META = Object.freeze({
+  "/": {
+    title: "BudgetHub Family | Budget familial moderne",
+    description: "BudgetHub Family rassemble vos dettes, votre budget, vos transactions et vos objectifs dans un espace simple, seul ou en famille."
+  },
+  "/pricing": {
+    title: "Tarifs | BudgetHub Family",
+    description: "Comparez les plans Free, Solo, Family et Family Plus de BudgetHub Family, à partir de 0 $ par mois."
+  },
+  "/terms": {
+    title: "Conditions d’utilisation | BudgetHub Family",
+    description: "Consultez les conditions d’utilisation de BudgetHub Family, notamment les règles relatives aux comptes et aux abonnements."
+  },
+  "/privacy": {
+    title: "Politique de confidentialité | BudgetHub Family",
+    description: "Découvrez comment BudgetHub Family traite et protège les données nécessaires au fonctionnement du service."
+  },
+  "/cookies": {
+    title: "Politique relative aux cookies | BudgetHub Family",
+    description: "Consultez la politique de BudgetHub Family concernant les cookies, le stockage local et les technologies essentielles."
+  },
+  "/legal": {
+    title: "Mentions légales | BudgetHub Family",
+    description: "Consultez les mentions légales, les coordonnées de l’exploitant et les fournisseurs techniques de BudgetHub Family."
+  },
+  "/refund-policy": {
+    title: "Politique de remboursement | BudgetHub Family",
+    description: "Consultez les conditions d’annulation et de remboursement des abonnements BudgetHub Family."
+  },
+  "/login": {
+    title: "Connexion | BudgetHub Family",
+    description: "Connectez-vous à votre espace BudgetHub Family."
+  },
+  "/register": {
+    title: "Créer un compte | BudgetHub Family",
+    description: "Créez votre compte BudgetHub Family pour accéder à votre espace."
+  },
+  "/signup": {
+    title: "Créer un compte | BudgetHub Family",
+    description: "Créez votre compte BudgetHub Family pour accéder à votre espace."
+  }
+});
+
+function renderIndexForPath(requestPath) {
+  const page = PUBLIC_PAGE_META[requestPath] || PUBLIC_PAGE_META["/"];
+  const canonicalPath = requestPath === "/signup" ? "/register" : requestPath;
+  const canonical = `https://budgethubfamily.com${canonicalPath === "/" ? "/" : canonicalPath}`;
+  return indexTemplate
+    .replace(/<title>[^<]*<\/title>/, `<title>${page.title}</title>`)
+    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, `<meta name="description" content="${page.description}" />`)
+    .replace(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i, `<link rel="canonical" href="${canonical}" />`);
+}
 
 app.use(helmet({
   contentSecurityPolicy: false
@@ -45,10 +100,12 @@ app.use("/api/diagnostics", diagnosticsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/support", supportRoutes);
 
-const staticRoot = __dirname;
+app.get("/index.html", (_req, res) => {
+  res.type("html").send(renderIndexForPath("/"));
+});
 
-app.get(["/", "/index.html"], (_req, res) => {
-  res.sendFile(path.join(staticRoot, "index.html"));
+app.get(Object.keys(PUBLIC_PAGE_META), (req, res) => {
+  res.type("html").send(renderIndexForPath(req.path));
 });
 
 app.get(["/app.js", "/styles.css"], (req, res) => {
@@ -70,6 +127,10 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(port, () => {
-  console.log(`BudgetHub Family backend listening on port ${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`BudgetHub Family backend listening on port ${port}`);
+  });
+}
+
+module.exports = { app, PUBLIC_PAGE_META, renderIndexForPath };

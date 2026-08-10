@@ -6,8 +6,11 @@
   "main": "server.js",
   "scripts": {
     "apply:auth-emails": "node scripts/apply-supabase-auth-emails.js",
+    "build": "npm run check",
+    "check": "node --check server.js && node --check app.js",
     "dev": "node --watch server.js",
     "start": "node server.js",
+    "test": "node --test tests/*.test.js",
     "test:limits": "node tests/debt-limit.test.js"
   },
   "keywords": [

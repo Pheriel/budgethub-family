@@ -8,9 +8,10 @@
     <meta http-equiv="Expires" content="0" />
     <meta
       name="description"
-      content="BudgetHub Family aide les familles a gerer budget, dettes, objectifs et transactions dans une experience simple et collaborative."
+      content="BudgetHub Family rassemble vos dettes, votre budget, vos transactions et vos objectifs dans un espace simple, seul ou en famille."
     />
-    <title>BudgetHub Family - Budget familial moderne</title>
+    <title>BudgetHub Family | Budget familial moderne</title>
+    <link rel="canonical" href="https://budgethubfamily.com/" />
     <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,7 +24,7 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand" href="#home" aria-label="BudgetHub Family">
+        <a class="brand" href="/" aria-label="BudgetHub Family — Accueil">
           <img class="brand-logo" src="/assets/logo.svg" alt="" />
           <span>
             <strong>BudgetHub</strong>
@@ -57,7 +58,7 @@
             <button class="ghost-button" id="openSupport" type="button">Support</button>
             <button class="ghost-button" id="openLogin" type="button" data-i18n="login">Connexion</button>
             <button class="ghost-button" id="topRegister" type="button" data-i18n="createAccount">Créer un compte</button>
-            <button class="primary-button" id="startDemo" type="button" data-i18n="freeDemo">Démo gratuite</button>
+            <button class="primary-button" id="startDemo" type="button" data-i18n="freeDemo">Essayer gratuitement</button>
           </div>
         </div>
 
@@ -70,16 +71,16 @@
             <p class="eyebrow" data-i18n="heroEyebrow">Budget familial moderne</p>
             <h1 data-i18n="heroTitle">Une vue claire pour piloter les finances du foyer.</h1>
             <p class="hero-copy" data-i18n="heroCopy">
-              BudgetHub Family rassemble dettes, budget mensuel, transactions, objectifs et membres de la famille dans un espace simple, bilingue et connecte a Supabase et Stripe.
+              BudgetHub Family rassemble vos dettes, votre budget, vos transactions et vos objectifs dans un espace simple et facile à utiliser, seul ou en famille.
             </p>
             <div class="hero-actions">
-              <button class="primary-button large" id="heroDemo" type="button" data-i18n="tryDemo">Tester la demo</button>
+              <button class="primary-button large" id="heroDemo" type="button" data-i18n="tryDemo">Essayer gratuitement</button>
               <button class="ghost-button large" id="heroRegister" type="button" data-i18n="createAccount">Creer un compte</button>
               <a class="secondary-link" href="#pricing" data-i18n="seePricing">Voir les tarifs</a>
             </div>
             <div class="trust-row" aria-label="Indicateurs">
-              <span data-i18n="trustNoCard">Demo sans carte</span>
-              <span data-i18n="trustTrial">Donnees demo locales</span>
+              <span data-i18n="trustNoCard">Aucune carte requise</span>
+              <span data-i18n="trustTrial">Jusqu’à 10 dettes</span>
               <span data-i18n="trustFamily">Plans Solo et famille</span>
             </div>
           </div>
@@ -217,11 +218,11 @@
             <h2 data-i18n="securityTitle">Des comptes proteges, des paiements confies a Stripe.</h2>
           </div>
           <div class="security-list">
-            <p data-i18n="securityCopy">L'authentification et la base de donnees utilisent Supabase. Les paiements, abonnements, factures et recus sont traites par Stripe Checkout. La demo gratuite garde ses donnees dans le navigateur.</p>
+            <p data-i18n="securityCopy">Les paiements, abonnements, factures et reçus sont traités par Stripe Checkout. Les forfaits compatibles utilisent une sauvegarde cloud, tandis que l’expérience Free conserve ses données dans le navigateur.</p>
             <div class="trust-row">
               <span data-i18n="securityAuth">Auth Supabase</span>
               <span data-i18n="securityStripe">Paiements Stripe</span>
-              <span data-i18n="securityLocal">Demo locale</span>
+              <span data-i18n="securityLocal">Données Free locales</span>
             </div>
           </div>
         </section>
@@ -229,8 +230,8 @@
         <section class="section pricing-section" id="pricing">
           <div class="section-heading">
             <p class="eyebrow" data-i18n="pricingEyebrow">Plans et prix</p>
-            <h2 data-i18n="pricingTitle">Commencez gratuitement, passez au cloud quand vous etes pret.</h2>
-            <p data-i18n="pricingCopy">Le plan gratuit sert a essayer. Les plans payants deverrouillent la sauvegarde cloud, plus de dettes et les limites de membres selon le plan.</p>
+            <h2 data-i18n="pricingTitle">Commencez avec le plan Free, passez au cloud quand vous êtes prêt.</h2>
+            <p data-i18n="pricingCopy">Le plan Free coûte 0 $ par mois, comprend 1 membre et jusqu’à 10 dettes, avec des données enregistrées localement dans le navigateur. Il est parfait pour essayer BudgetHub Family.</p>
           </div>
           <div class="duration-picker">
             <label for="durationSelect" data-i18n="durationLabel">Duree d'engagement</label>
@@ -255,8 +256,8 @@
               <p data-i18n="faqOneA">Non. Le code actuel fonctionne avec des donnees que vous saisissez dans l'application: dettes, budgets, transactions, objectifs et membres.</p>
             </details>
             <details>
-              <summary data-i18n="faqTwoQ">Quelle est la difference entre la demo et un compte?</summary>
-              <p data-i18n="faqTwoA">La demo gratuite garde les donnees dans le navigateur et limite les dettes et membres. Un compte utilise Supabase pour sauvegarder les donnees selon votre plan.</p>
+              <summary data-i18n="faqTwoQ">Quelle est la différence entre le plan Free et les plans payants?</summary>
+              <p data-i18n="faqTwoA">Le plan Free permet d’essayer BudgetHub Family avec 1 membre et jusqu’à 10 dettes enregistrées dans le navigateur. Les plans payants ajoutent la sauvegarde cloud et les limites prévues par chaque forfait.</p>
             </details>
             <details>
               <summary data-i18n="faqThreeQ">Comment fonctionnent les paiements?</summary>
@@ -333,7 +334,7 @@
 
       <main id="appView" class="app-view" hidden>
         <header class="app-topbar">
-          <a class="brand app-brand" id="appBrand" href="#dashboard" aria-label="BudgetHub — Tableau de bord">
+          <a class="brand app-brand" id="appBrand" href="/" aria-label="BudgetHub Family — Accueil">
             <img class="brand-logo" src="/assets/logo.svg" alt="" />
             <span><strong>BudgetHub</strong></span>
           </a>
@@ -346,7 +347,6 @@
             <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
             <button data-view="goals" data-i18n="appGoals">Objectifs</button>
             <button data-view="family" id="familyNavButton" class="family-nav" data-i18n="appFamily" hidden>Famille</button>
-            <button data-view="admin" id="adminNavButton" class="admin-nav" data-i18n="appAdmin" hidden>Super Admin</button>
           </nav>
 
           <div class="app-topbar-actions">
@@ -390,7 +390,6 @@
             <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
             <button data-view="goals" data-i18n="appGoals">Objectifs</button>
             <button data-view="family" class="family-nav" data-i18n="appFamily" hidden>Famille</button>
-            <button data-view="admin" class="admin-nav" data-i18n="appAdmin" hidden>Super Admin</button>
             <button data-view="account" data-i18n="menuWorkspace">Mon espace</button>
           </nav>
           <div class="mobile-drawer-actions">
@@ -402,7 +401,7 @@
         <section class="workspace">
           <div class="workspace-head">
             <div>
-              <p class="eyebrow" id="workspaceEyebrow">Demo</p>
+              <p class="eyebrow" id="workspaceEyebrow">Free</p>
               <h2 id="workspaceTitle">Tableau de bord</h2>
             </div>
             <div class="workspace-actions">
@@ -411,7 +410,7 @@
             </div>
           </div>
           <div class="notice" id="demoNotice" data-i18n="demoNotice">
-            Démo gratuite: 10 dettes maximum et 1 membre famille maximum. Les données restent dans le navigateur.
+            Plan Free : 10 dettes maximum et 1 membre. Les données restent dans le navigateur.
           </div>
           <div id="viewContainer"></div>
         </section>
@@ -448,6 +447,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="/shared/plan-limits.js"></script>
-    <script src="/app.js?v=37"></script>
+    <script src="/app.js?v=38"></script>
   </body>
 </html>

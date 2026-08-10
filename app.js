@@ -6,14 +6,17 @@ const translations = {
     navPricing: "Tarifs",
     navSecurity: "Sécurité",
     login: "Connexion",
-    freeDemo: "Démo gratuite",
+    freeDemo: "Essayer gratuitement",
     heroEyebrow: "Budget familial moderne",
     heroTitle: "Une vue claire pour piloter les finances du foyer.",
-    heroCopy: "BudgetHub Family rassemble dettes, budget mensuel, transactions, objectifs et membres de la famille dans un espace simple, bilingue et connecté à Supabase et Stripe.",
-    tryDemo: "Tester la démo",
+    heroCopy: "BudgetHub Family rassemble vos dettes, votre budget, vos transactions et vos objectifs dans un espace simple et facile à utiliser, seul ou en famille.",
+    tryDemo: "Essayer gratuitement",
+    dashboardCta: "Tableau de bord",
+    tryFree: "Essayer gratuitement",
+    freeCtaNote: "Aucune carte requise • Jusqu’à 10 dettes",
     seePricing: "Voir les tarifs",
-    trustNoCard: "Démo sans carte",
-    trustTrial: "Données démo locales",
+    trustNoCard: "Aucune carte requise",
+    trustTrial: "Jusqu’à 10 dettes",
     trustFamily: "Plans Solo et famille",
     heroDebtFree: "Dette totale",
     heroMonthlyBudget: "Budget mensuel",
@@ -56,20 +59,20 @@ const translations = {
     roleEditorCopy: "Ajoute et modifie les données.",
     roleViewerCopy: "Consulte sans modifier.",
     pricingEyebrow: "Plans et prix",
-    pricingTitle: "Commencez gratuitement, passez au cloud quand vous êtes prêt.",
-    pricingCopy: "Le plan gratuit sert à essayer. Les plans payants déverrouillent la sauvegarde cloud, plus de dettes et les limites de membres selon le plan.",
+    pricingTitle: "Commencez avec le plan Free, passez au cloud quand vous êtes prêt.",
+    pricingCopy: "Le plan Free coûte 0 $ par mois, comprend 1 membre et jusqu’à 10 dettes, avec des données enregistrées localement dans le navigateur. Il est parfait pour essayer BudgetHub Family.",
     securityEyebrow: "Sécurité et confidentialité",
     securityTitle: "Des comptes protégés, des paiements confiés à Stripe.",
-    securityCopy: "L'authentification et la base de données utilisent Supabase. Les paiements, abonnements, factures et reçus sont traités par Stripe Checkout. La démo gratuite garde ses données dans le navigateur.",
+    securityCopy: "Les paiements, abonnements, factures et reçus sont traités par Stripe Checkout. Les forfaits compatibles utilisent une sauvegarde cloud, tandis que l’expérience Free conserve ses données dans le navigateur.",
     securityAuth: "Auth Supabase",
     securityStripe: "Paiements Stripe",
-    securityLocal: "Démo locale",
+    securityLocal: "Données Free locales",
     faqEyebrow: "FAQ",
     faqTitle: "Questions fréquentes",
     faqOneQ: "Est-ce une application bancaire connectée?",
     faqOneA: "Non. Le code actuel fonctionne avec des données que vous saisissez dans l'application: dettes, budgets, transactions, objectifs et membres.",
-    faqTwoQ: "Quelle est la différence entre la démo et un compte?",
-    faqTwoA: "La démo gratuite garde les données dans le navigateur et limite les dettes et membres. Un compte utilise Supabase pour sauvegarder les données selon votre plan.",
+    faqTwoQ: "Quelle est la différence entre le plan Free et les plans payants?",
+    faqTwoA: "Le plan Free permet d’essayer BudgetHub Family avec 1 membre et jusqu’à 10 dettes enregistrées dans le navigateur. Les plans payants ajoutent la sauvegarde cloud et les limites prévues par chaque forfait.",
     faqThreeQ: "Comment fonctionnent les paiements?",
     faqThreeA: "Les abonnements payants passent par Stripe Checkout. Les prix et taxes applicables sont confirmés dans Stripe avant le paiement.",
     faqFourQ: "Puis-je inviter ma famille?",
@@ -89,7 +92,7 @@ const translations = {
     backLanding: "Retour accueil",
     createAccount: "Créer un compte",
     upgrade: "Passer Pro",
-    demoNotice: "Démo gratuite: 10 dettes maximum et 1 membre famille maximum. Les données restent dans le navigateur.",
+    demoNotice: "Plan Free : 10 dettes maximum et 1 membre. Les données restent dans le navigateur.",
     email: "Courriel",
     password: "Mot de passe",
     continue: "Continuer",
@@ -113,8 +116,8 @@ const translations = {
     savingsRate: "Taux d’épargne",
     addDebt: "Ajouter une dette",
     addMember: "Ajouter un membre",
-    demoLimitDebt: "Vous avez atteint la limite de 10 dettes incluse dans la version gratuite. Passez à un abonnement pour ajouter un nombre illimité de dettes.",
-    demoLimitMember: "Limite démo atteinte: 1 membre maximum.",
+    demoLimitDebt: "Vous avez atteint la limite de 10 dettes incluse dans le plan Free. Passez à un abonnement pour ajouter un nombre illimité de dettes.",
+    demoLimitMember: "Limite du plan Free atteinte : 1 membre maximum.",
     name: "Nom",
     balance: "Solde",
     rate: "Taux",
@@ -162,14 +165,17 @@ const translations = {
     navPricing: "Pricing",
     navSecurity: "Security",
     login: "Login",
-    freeDemo: "Free demo",
+    freeDemo: "Try for free",
     heroEyebrow: "Modern family budgeting",
     heroTitle: "One clear view for household finances.",
-    heroCopy: "BudgetHub Family brings debts, monthly budget, transactions, goals, and family members into a simple bilingual workspace connected to Supabase and Stripe.",
-    tryDemo: "Try the demo",
+    heroCopy: "BudgetHub Family brings your debts, budget, transactions, and goals into one simple, easy-to-use space, on your own or with your family.",
+    tryDemo: "Try for free",
+    dashboardCta: "Dashboard",
+    tryFree: "Try for free",
+    freeCtaNote: "No card required • Up to 10 debts",
     seePricing: "See pricing",
-    trustNoCard: "No card for demo",
-    trustTrial: "Local demo data",
+    trustNoCard: "No card required",
+    trustTrial: "Up to 10 debts",
     trustFamily: "Solo and family plans",
     heroDebtFree: "Total debt",
     heroMonthlyBudget: "Monthly budget",
@@ -212,20 +218,20 @@ const translations = {
     roleEditorCopy: "Adds and edits data.",
     roleViewerCopy: "Views without editing.",
     pricingEyebrow: "Plans and pricing",
-    pricingTitle: "Start free, move to cloud backup when ready.",
-    pricingCopy: "The free plan is for trying the app. Paid plans unlock cloud backup, more debts, and member limits according to the plan.",
+    pricingTitle: "Start with the Free plan, move to cloud backup when ready.",
+    pricingCopy: "The Free plan costs $0 per month, includes 1 member and up to 10 debts, and stores data locally in your browser. It is perfect for trying BudgetHub Family.",
     securityEyebrow: "Security and privacy",
     securityTitle: "Protected accounts, payments handled by Stripe.",
-    securityCopy: "Authentication and database services use Supabase. Payments, subscriptions, invoices, and receipts are handled by Stripe Checkout. Free demo data stays in the browser.",
+    securityCopy: "Payments, subscriptions, invoices, and receipts are handled by Stripe Checkout. Compatible plans use secure cloud storage, while the Free experience keeps its data in the browser.",
     securityAuth: "Supabase auth",
     securityStripe: "Stripe payments",
-    securityLocal: "Local demo",
+    securityLocal: "Local Free data",
     faqEyebrow: "FAQ",
     faqTitle: "Frequently asked questions",
     faqOneQ: "Is this a connected banking app?",
     faqOneA: "No. The current code works with data you enter in the app: debts, budgets, transactions, goals, and members.",
-    faqTwoQ: "What is the difference between demo and account?",
-    faqTwoA: "The free demo keeps data in the browser and limits debts and members. An account uses Supabase to save data according to your plan.",
+    faqTwoQ: "What is the difference between the Free plan and paid plans?",
+    faqTwoA: "The Free plan lets you try BudgetHub Family with 1 member and up to 10 debts stored in your browser. Paid plans add cloud backup and the limits included with each plan.",
     faqThreeQ: "How do payments work?",
     faqThreeA: "Paid subscriptions go through Stripe Checkout. Prices and applicable taxes are confirmed in Stripe before payment.",
     faqFourQ: "Can I invite my family?",
@@ -245,7 +251,7 @@ const translations = {
     backLanding: "Back home",
     createAccount: "Create account",
     upgrade: "Upgrade",
-    demoNotice: "Free demo: 10 debts maximum and 1 family member maximum. Data stays in the browser.",
+    demoNotice: "Free plan: 10 debts maximum and 1 member. Data stays in the browser.",
     email: "Email",
     password: "Password",
     continue: "Continue",
@@ -269,8 +275,8 @@ const translations = {
     savingsRate: "Savings rate",
     addDebt: "Add debt",
     addMember: "Add member",
-    demoLimitDebt: "You have reached the 10-debt limit included in the free version. Upgrade to a subscription to add unlimited debts.",
-    demoLimitMember: "Demo limit reached: 1 family member maximum.",
+    demoLimitDebt: "You have reached the 10-debt limit included in the Free plan. Upgrade to a subscription to add unlimited debts.",
+    demoLimitMember: "Free plan limit reached: 1 member maximum.",
     name: "Name",
     balance: "Balance",
     rate: "Rate",
@@ -348,7 +354,7 @@ const legalPages = {
         ["Donnees collectees", "Nous traitons les donnees de compte, courriel, langue, preferences, plan, donnees financieres saisies par l'utilisateur, budgets, dettes, transactions, objectifs et membres de famille."],
         ["Fournisseurs", "Supabase est utilise pour l'authentification et la base de donnees. Stripe est utilise pour les paiements, abonnements, factures et recus. Ces fournisseurs peuvent traiter des donnees selon leurs propres politiques."],
         ["Utilisation", "Les donnees servent a fournir le service, securiser les comptes, synchroniser les abonnements, envoyer des emails transactionnels et repondre au support."],
-        ["Stockage local", "Le site peut utiliser localStorage pour la langue, la devise, le theme, les donnees de demo et certaines preferences. Des cookies techniques peuvent etre utilises par les services tiers."],
+        ["Stockage local", "Le site peut utiliser localStorage pour la langue, la devise, le theme, les donnees du plan Free et certaines preferences. Des cookies techniques peuvent etre utilises par les services tiers."],
         ["Droits", "Vous pouvez demander l'acces, la correction ou la suppression de vos donnees, sous reserve des obligations legales ou comptables applicables."],
         ["Utilisateurs internationaux", "Les donnees peuvent etre traitees hors de votre province, etat ou pays. En utilisant le service, vous acceptez ces transferts raisonnables pour fournir l'application."]
       ]
@@ -360,7 +366,7 @@ const legalPages = {
         ["Data collected", "We process account data, email, language, preferences, plan, user-entered financial data, budgets, debts, transactions, goals and family members."],
         ["Providers", "Supabase is used for authentication and database services. Stripe is used for payments, subscriptions, invoices and receipts. These providers may process data under their own policies."],
         ["Use", "Data is used to provide the service, secure accounts, sync subscriptions, send transactional emails and respond to support."],
-        ["Local storage", "The site may use localStorage for language, currency, theme, demo data and certain preferences. Technical cookies may be used by third-party services."],
+        ["Local storage", "The site may use localStorage for language, currency, theme, Free plan data and certain preferences. Technical cookies may be used by third-party services."],
         ["Rights", "You may request access, correction or deletion of your data, subject to applicable legal or accounting obligations."],
         ["International users", "Data may be processed outside your province, state or country. By using the service, you accept reasonable transfers needed to provide the app."]
       ]
@@ -397,20 +403,20 @@ const legalPages = {
       title: "Politique des cookies",
       intro: "BudgetHub Family utilise des technologies limitees pour faire fonctionner le site et memoriser vos preferences.",
       sections: [
-        ["localStorage", "Nous utilisons localStorage pour la langue, la devise, le theme, le mois selectionne, les donnees de demo et le cache temporaire de taux de change."],
+        ["localStorage", "Nous utilisons localStorage pour la langue, la devise, le theme, le mois selectionne, les donnees du plan Free et le cache temporaire de taux de change."],
         ["Cookies essentiels", "Supabase, Stripe ou le navigateur peuvent utiliser des cookies ou stockages essentiels pour l'authentification, la securite, Checkout et la prevention de fraude."],
         ["Analyse", "Aucun outil d'analyse marketing n'est requis par le code actuel. Si un outil est ajoute plus tard, cette politique devra etre mise a jour."],
-        ["Controle", "Vous pouvez effacer les donnees du navigateur dans les reglages de votre navigateur. Cela peut deconnecter votre session ou supprimer les donnees de demo locales."]
+        ["Controle", "Vous pouvez effacer les donnees du navigateur dans les reglages de votre navigateur. Cela peut deconnecter votre session ou supprimer les donnees locales du plan Free."]
       ]
     },
     en: {
       title: "Cookie Policy",
       intro: "BudgetHub Family uses limited technologies to operate the site and remember preferences.",
       sections: [
-        ["localStorage", "We use localStorage for language, currency, theme, selected month, demo data and temporary exchange-rate cache."],
+        ["localStorage", "We use localStorage for language, currency, theme, selected month, Free plan data and temporary exchange-rate cache."],
         ["Essential cookies", "Supabase, Stripe or the browser may use essential cookies or storage for authentication, security, Checkout and fraud prevention."],
         ["Analytics", "No marketing analytics tool is required by the current code. If one is added later, this policy should be updated."],
-        ["Control", "You can clear browser data in your browser settings. This may sign you out or remove local demo data."]
+        ["Control", "You can clear browser data in your browser settings. This may sign you out or remove local Free plan data."]
       ]
     }
   },
@@ -466,11 +472,11 @@ const planDefinitions = [
 ];
 const planRank = { free: 0, solo: 1, family: 2, familyPlus: 3 };
 
-translations.fr.demoNotice = `DÃ©mo gratuite: ${FREE_DEBT_LIMIT} dettes maximum et 1 membre famille maximum. Les donnÃ©es restent dans le navigateur.`;
-translations.en.demoNotice = `Free demo: ${FREE_DEBT_LIMIT} debts maximum and 1 family member maximum. Data stays in the browser.`;
-translations.fr.demoLimitDebt = `Vous avez atteint la limite de ${FREE_DEBT_LIMIT} dettes incluse dans la version gratuite. Passez Ã  un abonnement pour ajouter un nombre illimitÃ© de dettes.`;
-translations.en.demoLimitDebt = `You have reached the ${FREE_DEBT_LIMIT}-debt limit included in the free version. Upgrade to a subscription to add unlimited debts.`;
-translations.fr.debtUsage = "Dettes utilisÃ©es";
+translations.fr.demoNotice = `Plan Free : ${FREE_DEBT_LIMIT} dettes maximum et 1 membre. Les données restent dans le navigateur.`;
+translations.en.demoNotice = `Free plan: ${FREE_DEBT_LIMIT} debts maximum and 1 member. Data stays in the browser.`;
+translations.fr.demoLimitDebt = `Vous avez atteint la limite de ${FREE_DEBT_LIMIT} dettes incluse dans le plan Free. Passez à un abonnement pour ajouter un nombre illimité de dettes.`;
+translations.en.demoLimitDebt = `You have reached the ${FREE_DEBT_LIMIT}-debt limit included in the Free plan. Upgrade to a subscription to add unlimited debts.`;
+translations.fr.debtUsage = "Dettes utilisées";
 translations.en.debtUsage = "Debts used";
 
 // Taux de secours si l'API de taux de change est injoignable
@@ -860,7 +866,7 @@ function applyTranslations() {
   const appMonthLabel = $("#appMonthLabel");
   if (appMonthLabel) appMonthLabel.textContent = monthLabel(state.selectedMonth);
   $("#workspaceTitle").textContent = getViewTitle(state.currentView);
-  $("#workspaceEyebrow").textContent = state.plan === "free" ? "Demo" : state.plan;
+  $("#workspaceEyebrow").textContent = state.plan === "free" ? "Free" : state.plan;
   const planName = planDefinitions.find((plan) => plan.id === state.plan).name;
   $("#activePlanLabel").textContent = planName;
   const mobilePlanLabel = $("#mobileActivePlanLabel");
@@ -868,6 +874,8 @@ function applyTranslations() {
   renderPricing();
   renderMoneyTags();
   renderLegalPage();
+  updateLandingAuthCtas();
+  syncAdminNavigation();
   updateUserMenu();
   renderView();
 }
@@ -961,7 +969,7 @@ function renderPricing() {
     const discountLine = hasDiscount
       ? `<p class="price-discount">${durationLabel(state.billingDuration)} — ${discount}% ${fr ? "de rabais" : "off"}</p>`
       : "";
-    const isCurrentPlan = plan.id === state.plan && !manualAccess;
+    const isCurrentPlan = Boolean(state.user) && plan.id === state.plan && !manualAccess;
     return `
       <article class="price-card ${plan.featured ? "featured" : ""}">
         ${plan.featured ? `<span class="chip">${t("recommended")}</span>` : ""}
@@ -981,8 +989,9 @@ function renderPricing() {
           <a class="secondary-link" href="/refund-policy" data-legal-link="refund-policy">${state.lang === "fr" ? "Politique" : "Policy"}</a>
         </p>` : ""}
         <button class="${isCurrentPlan ? "secondary-button" : "primary-button"}" data-plan="${plan.id}">
-          ${isCurrentPlan ? t("current") : t("choosePlan")}
+          ${isCurrentPlan ? t("current") : (plan.id === "free" ? t("tryFree") : t("choosePlan"))}
         </button>
+        ${plan.id === "free" ? `<p class="form-note">${t("freeCtaNote")}</p>` : ""}
       </article>
     `;
   }).join("");
@@ -1259,7 +1268,7 @@ function hideFamilyUpgradeModal() {
 
 function openFamilyPricing() {
   hideFamilyUpgradeModal();
-  history.replaceState(null, "", "#pricing");
+  history.pushState(null, "", "/pricing");
   showLandingPage("pricing");
 }
 
@@ -1286,17 +1295,25 @@ function resolveProtectedRoute(pathname = window.location.pathname) {
 }
 
 async function initializeAuthenticatedWorkspace(user, options = {}) {
-  const { targetView = null, targetFamilySection = null } = options;
+  const { targetView = null, targetFamilySection = null, publicPage = null } = options;
   setSessionUser(user);
   if (targetFamilySection) state.familySection = targetFamilySection;
   if (targetView) state.currentView = targetView;
   await loadProfilePlan();
   await syncBillingPlan();
   await loadUserData();
+  await checkSuperAdminAccess();
   if (state.currentView === "family" && !hasFamilyPlanAccess()) {
     // Accès direct à /family sans plan famille -> tableau de bord.
     state.currentView = "dashboard";
     state.familySection = "members";
+  }
+  if (state.currentView === "admin" && !state.isSuperAdmin) {
+    state.currentView = "dashboard";
+  }
+  if (publicPage) {
+    showLandingPage(publicPage);
+    return;
   }
   openApp();
 }
@@ -1573,9 +1590,8 @@ function setSessionUser(user) {
     $("#topRegister").hidden = true;
     $("#startDemo").hidden = true;
     const workspaceButton = $("#openWorkspace");
-    workspaceButton.textContent = state.lang === "fr" ? "Mon espace" : "My workspace";
+    workspaceButton.textContent = t("dashboardCta");
     workspaceButton.hidden = false;
-    checkSuperAdminAccess();
   } else {
     if (registerButton) registerButton.hidden = false;
     $("#demoNotice").hidden = false;
@@ -1584,9 +1600,10 @@ function setSessionUser(user) {
     $("#startDemo").hidden = false;
     $("#openWorkspace").hidden = true;
   }
+  updateLandingAuthCtas();
   updateUserMenu();
   updateFamilyNavigation();
-  $$('#appView [data-view="admin"]').forEach((button) => { button.hidden = !state.isSuperAdmin; });
+  syncAdminNavigation();
   updateUpgradeButton();
   updateSupportBadges();
 }
@@ -1639,6 +1656,23 @@ function updateUserMenu() {
   }
 }
 
+function syncAdminNavigation() {
+  $$("#appView .admin-nav").forEach((button) => button.remove());
+  if (!state.isSuperAdmin) return;
+  [$("#appNav"), document.querySelector("#appMobileMenu .app-nav")].forEach((nav, index) => {
+    if (!nav) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "admin-nav";
+    button.dataset.view = "admin";
+    if (index === 0) button.id = "adminNavButton";
+    button.textContent = t("appAdmin") || "Super Admin";
+    button.classList.toggle("active", state.currentView === "admin");
+    button.addEventListener("click", () => navigateAppView("admin"));
+    nav.appendChild(button);
+  });
+}
+
 async function checkSuperAdminAccess() {
   if (!state.user) return;
   try {
@@ -1647,10 +1681,7 @@ async function checkSuperAdminAccess() {
   } catch (_error) {
     state.isSuperAdmin = false;
   }
-  $$('#appView [data-view="admin"]').forEach((button) => {
-    button.hidden = !state.isSuperAdmin;
-    button.textContent = t("appAdmin") || "Super Admin";
-  });
+  syncAdminNavigation();
   if (state.currentView === "admin" && !$("#appView").hidden) renderView();
   if (state.isSuperAdmin && !state.admin.loaded) {
     try {
@@ -2231,6 +2262,93 @@ function showView(name) {
 
 const marketingSections = ["home", "problem", "features", "strategy", "family", "security", "pricing", "faq"];
 const landingPages = [...marketingSections, "terms", "privacy", "refund-policy", "cookies", "legal"];
+const PUBLIC_PATH_TO_PAGE = {
+  "/": "home",
+  "/pricing": "pricing",
+  "/terms": "terms",
+  "/privacy": "privacy",
+  "/cookies": "cookies",
+  "/legal": "legal",
+  "/refund-policy": "refund-policy"
+};
+const AUTH_PATH_TO_MODE = {
+  "/login": "login",
+  "/register": "register",
+  "/signup": "register"
+};
+const seoPages = {
+  home: {
+    fr: ["BudgetHub Family | Budget familial moderne", "BudgetHub Family rassemble vos dettes, votre budget, vos transactions et vos objectifs dans un espace simple, seul ou en famille."],
+    en: ["BudgetHub Family | Modern family budgeting", "BudgetHub Family brings your debts, budget, transactions, and goals into one simple space, on your own or with your family."],
+    path: "/"
+  },
+  pricing: {
+    fr: ["Tarifs | BudgetHub Family", "Comparez les plans Free, Solo, Family et Family Plus de BudgetHub Family, à partir de 0 $ par mois."],
+    en: ["Pricing | BudgetHub Family", "Compare BudgetHub Family Free, Solo, Family, and Family Plus plans, starting at $0 per month."],
+    path: "/pricing"
+  },
+  terms: {
+    fr: ["Conditions d’utilisation | BudgetHub Family", "Consultez les conditions d’utilisation de BudgetHub Family, notamment les règles relatives aux comptes et aux abonnements."],
+    en: ["Terms of Service | BudgetHub Family", "Read the BudgetHub Family terms covering accounts, subscriptions, and use of the service."],
+    path: "/terms"
+  },
+  privacy: {
+    fr: ["Politique de confidentialité | BudgetHub Family", "Découvrez comment BudgetHub Family traite et protège les données nécessaires au fonctionnement du service."],
+    en: ["Privacy Policy | BudgetHub Family", "Learn how BudgetHub Family handles and protects the data needed to provide the service."],
+    path: "/privacy"
+  },
+  cookies: {
+    fr: ["Politique relative aux cookies | BudgetHub Family", "Consultez la politique de BudgetHub Family concernant les cookies, le stockage local et les technologies essentielles."],
+    en: ["Cookie Policy | BudgetHub Family", "Read the BudgetHub Family policy on cookies, local storage, and essential technologies."],
+    path: "/cookies"
+  },
+  legal: {
+    fr: ["Mentions légales | BudgetHub Family", "Consultez les mentions légales, les coordonnées de l’exploitant et les fournisseurs techniques de BudgetHub Family."],
+    en: ["Legal Notice | BudgetHub Family", "Read the BudgetHub Family legal notice, operator details, and technical providers."],
+    path: "/legal"
+  },
+  "refund-policy": {
+    fr: ["Politique de remboursement | BudgetHub Family", "Consultez les conditions d’annulation et de remboursement des abonnements BudgetHub Family."],
+    en: ["Refund Policy | BudgetHub Family", "Read the cancellation and refund conditions for BudgetHub Family subscriptions."],
+    path: "/refund-policy"
+  }
+};
+
+function resolvePublicPage(pathname = window.location.pathname) {
+  const path = normalizePathname(pathname);
+  if (path === "/") {
+    const hashPage = window.location.hash.replace("#", "");
+    return landingPages.includes(hashPage) ? hashPage : "home";
+  }
+  return PUBLIC_PATH_TO_PAGE[path] || null;
+}
+
+function resolveAuthMode(pathname = window.location.pathname) {
+  return AUTH_PATH_TO_MODE[normalizePathname(pathname)] || null;
+}
+
+function updatePageMetadata(page) {
+  const meta = seoPages[page] || seoPages.home;
+  const localized = meta[state.lang] || meta.fr;
+  document.title = localized[0];
+  const description = document.querySelector('meta[name="description"]');
+  if (description) description.setAttribute("content", localized[1]);
+  const canonical = document.querySelector('link[rel="canonical"]');
+  if (canonical) canonical.setAttribute("href", `${PRODUCTION_URL}${meta.path === "/" ? "/" : meta.path}`);
+}
+
+function updateLandingAuthCtas() {
+  const connected = Boolean(state.user);
+  const heroButton = $("#heroDemo");
+  const heroRegister = $("#heroRegister");
+  const workspaceButton = $("#openWorkspace");
+  if (heroButton) {
+    heroButton.dataset.i18n = connected ? "dashboardCta" : "tryDemo";
+    heroButton.textContent = t(heroButton.dataset.i18n);
+  }
+  if (heroRegister) heroRegister.hidden = connected;
+  if (workspaceButton && connected) workspaceButton.textContent = t("dashboardCta");
+}
 
 function renderLegalPage(page = state.legalPage || "legal") {
   const target = legalPages[page] ? page : "legal";
@@ -2277,6 +2395,8 @@ function showLandingPage(page) {
   $$(".landing-nav a").forEach((link) => {
     link.classList.toggle("active", link.getAttribute("href") === `#${target}` || link.dataset.legalLink === target);
   });
+  updatePageMetadata(target);
+  updateLandingAuthCtas();
   bindLegalLinks();
   if (!state.legalPage && target !== "home") {
     requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: "start" }));
@@ -2368,6 +2488,10 @@ function setCurrentAppView(nextView) {
 }
 
 function navigateAppView(nextView) {
+  if (nextView === "admin" && !state.isSuperAdmin) {
+    if (state.currentView === "admin") setCurrentAppView("dashboard");
+    return;
+  }
   if (nextView === "family" && !hasFamilyPlanAccess()) {
     showFamilyUpgradeModal();
     return;
@@ -2380,9 +2504,15 @@ function navigateAppView(nextView) {
 // (chargement initial, popstate back/forward, redirections).
 function routeFromLocation() {
   const path = normalizePathname();
-  const legalKey = path.replace(/^\//, "");
-  if (legalPages[legalKey]) {
-    showLandingPage(legalKey);
+  const publicPage = resolvePublicPage(path);
+  if (publicPage) {
+    showLandingPage(publicPage);
+    return;
+  }
+  const authMode = resolveAuthMode(path);
+  if (authMode) {
+    if (state.user) navigateAppView("dashboard");
+    else openAuth(authMode, { syncUrl: false });
     return;
   }
   const route = resolveAppRoute(path);
@@ -2397,12 +2527,16 @@ function routeFromLocation() {
       navigateAppView("dashboard");
       return;
     }
+    if (route.view === "admin" && !state.isSuperAdmin) {
+      navigateAppView("dashboard");
+      return;
+    }
     if (route.section) state.familySection = route.section;
     showView("app");
     setCurrentAppView(route.view);
     return;
   }
-  // "/" ou inconnu: connecté -> dashboard, sinon landing (selon le hash marketing).
+  // Route inconnue: connecté -> dashboard, sinon landing (selon le hash marketing).
   if (state.user) {
     navigateAppView("dashboard");
     return;
@@ -2416,7 +2550,7 @@ function handleUpgradeAction() {
     navigateAppView("account");
     return;
   }
-  history.replaceState(null, "", "#pricing");
+  history.pushState(null, "", "/pricing");
   showLandingPage("pricing");
 }
 
@@ -2425,7 +2559,7 @@ function renderView() {
   updateFamilyNavigation();
   hideDebtChartTooltip();
   $("#workspaceTitle").textContent = getViewTitle(state.currentView);
-  $("#workspaceEyebrow").textContent = state.plan === "free" ? "Demo" : planDefinitions.find((plan) => plan.id === state.plan).name;
+  $("#workspaceEyebrow").textContent = state.plan === "free" ? "Free" : planDefinitions.find((plan) => plan.id === state.plan).name;
   $$('#appView [data-view]').forEach((button) => button.classList.toggle("active", button.dataset.view === state.currentView));
   const renderers = {
     dashboard: renderDashboard,
@@ -5547,7 +5681,7 @@ function bindViewActions() {
   const changePlanButton = $("#changePlanButton");
   if (changePlanButton) {
     changePlanButton.addEventListener("click", () => {
-      history.replaceState(null, "", "#pricing");
+      history.pushState(null, "", "/pricing");
       showLandingPage("pricing");
     });
   }
@@ -5799,10 +5933,26 @@ async function changeSelectedMonth(value) {
   applyTranslations();
 }
 
-function openAuth(mode) {
+function openAuth(mode, options = {}) {
   state.authMode = mode;
   const fr = state.lang === "fr";
   const isSetPassword = mode === "setPassword";
+  if (!isSetPassword && options.syncUrl !== false) {
+    const path = mode === "register" ? "/register" : "/login";
+    if (normalizePathname() !== path) history.pushState(null, "", path);
+  }
+  if (!isSetPassword) {
+    const registering = mode === "register";
+    document.title = registering
+      ? (fr ? "Créer un compte | BudgetHub Family" : "Create an account | BudgetHub Family")
+      : (fr ? "Connexion | BudgetHub Family" : "Sign in | BudgetHub Family");
+    const description = document.querySelector('meta[name="description"]');
+    if (description) description.setAttribute("content", registering
+      ? (fr ? "Créez votre compte BudgetHub Family pour accéder à votre espace." : "Create your BudgetHub Family account to access your workspace.")
+      : (fr ? "Connectez-vous à votre espace BudgetHub Family." : "Sign in to your BudgetHub Family workspace."));
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) canonical.setAttribute("href", `${PRODUCTION_URL}${registering ? "/register" : "/login"}`);
+  }
   const message = $("#authMessage");
   message.hidden = true;
   message.textContent = "";
@@ -6031,6 +6181,8 @@ function boot() {
   // Route demandée au chargement (refresh/deep-link): détermine la vue cible.
   // resolveAppRoute couvre aussi /admin et /family/* (anciennement resolveProtectedRoute).
   const initialRoute = resolveAppRoute();
+  const initialPublicPage = resolvePublicPage();
+  const initialAuthMode = resolveAuthMode();
   applyTheme();
   renderPricing();
   applyTranslations();
@@ -6113,7 +6265,10 @@ function boot() {
     $("#emailModal").hidden = true;
     openAuth("login");
   });
-  $("#authBack").addEventListener("click", () => showLandingPage("home"));
+  $("#authBack").addEventListener("click", () => {
+    history.pushState(null, "", "/");
+    showLandingPage("home");
+  });
 
   // Navigation multi-pages: Fonctions / Tarifs / Sécurité sont des pages distinctes
   $$(".landing-nav a").forEach((link) => {
@@ -6121,21 +6276,22 @@ function boot() {
       if (link.dataset.legalLink) return;
       event.preventDefault();
       const page = link.getAttribute("href").replace("#", "");
-      history.replaceState(null, "", `#${page}`);
+      const targetPath = page === "pricing" ? "/pricing" : (page === "home" ? "/" : `/#${page}`);
+      history.pushState(null, "", targetPath);
       showLandingPage(page);
     });
   });
   bindLegalLinks();
   document.querySelector(".brand").addEventListener("click", (event) => {
     event.preventDefault();
-    history.replaceState(null, "", "#home");
+    history.replaceState(null, "", "/");
     showLandingPage("home");
   });
   const pricingLink = document.querySelector('a[href="#pricing"].secondary-link, .hero a[href="#pricing"]');
   if (pricingLink) {
     pricingLink.addEventListener("click", (event) => {
       event.preventDefault();
-      history.replaceState(null, "", "#pricing");
+      history.pushState(null, "", "/pricing");
       showLandingPage("pricing");
     });
   }
@@ -6186,7 +6342,8 @@ function boot() {
         if (data.session) {
           await initializeAuthenticatedWorkspace(data.session.user, {
             targetView: initialRoute ? initialRoute.view : null,
-            targetFamilySection: initialRoute && initialRoute.view === "family" ? initialRoute.section : null
+            targetFamilySection: initialRoute && initialRoute.view === "family" ? initialRoute.section : null,
+            publicPage: initialPublicPage
           });
           handleCheckoutReturn();
         } else if (initialRoute) {
@@ -6218,14 +6375,14 @@ function boot() {
   const mobileUpgradeButton = $("#mobileUpgradeButton");
   if (mobileUpgradeButton) mobileUpgradeButton.addEventListener("click", handleUpgradeAction);
   $("#openWorkspace").addEventListener("click", () => {
-    showView("app");
-    renderView();
+    openApp();
   });
-  // Logo de l'app: utilisateur connecté -> tableau de bord (jamais la landing)
+  // Le logo de l'app ramène toujours à l'accueil sans déconnecter la session.
   const appBrand = $("#appBrand");
   if (appBrand) appBrand.addEventListener("click", (event) => {
     event.preventDefault();
-    navigateAppView("dashboard");
+    history.pushState(null, "", "/");
+    showLandingPage("home");
   });
   // Menu avatar (espace utilisateur centralisé)
   const avatarButton = $("#avatarButton");
@@ -6384,14 +6541,12 @@ function boot() {
     if (state.user) routeFromLocation();
     return;
   }
-  const pathPage = normalizePathname().replace("/", "");
-  if (legalPages[pathPage]) {
-    showLandingPage(pathPage);
+  if (initialAuthMode) {
+    openAuth(initialAuthMode, { syncUrl: false });
     return;
   }
-  const initialHash = window.location.hash.replace("#", "");
-  if (landingPages.includes(initialHash) && initialHash !== "home") {
-    showLandingPage(initialHash);
+  if (initialPublicPage) {
+    showLandingPage(initialPublicPage);
   }
 }
 
