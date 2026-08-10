@@ -7,7 +7,7 @@ BudgetHub Family est une interface SaaS moderne pour organiser les finances du f
 - Landing page publique bilingue
 - Tarifs Free, Solo, Family et Family Plus
 - Connexion et inscription
-- Démo gratuite
+- Plan Free à 0 $ / mois pour essayer gratuitement
 - Tableau de bord financier
 - Gestion des dettes
 - Comparaison Snowball et Avalanche
@@ -93,7 +93,7 @@ Voir `STRIPE_CHECKOUT_SETUP.md` pour les réglages manuels à activer dans Strip
 
 ## Données utilisateur
 
-Les visiteurs sans compte voient des données de démonstration locales. Les utilisateurs connectés démarrent avec un espace vide; leurs dettes, budget, transactions, objectifs et membres de famille sont enregistrés dans Supabase (tables `debts`, `budget_categories`, `transactions`, `goals`, `family_members`) protégés par Row Level Security: chaque utilisateur ne voit que ses propres données.
+Les visiteurs sans compte utilisent le plan Free avec des données locales dans leur navigateur. Les utilisateurs connectés démarrent avec un espace vide; leurs dettes, budget, transactions, objectifs et membres de famille sont enregistrés dans Supabase (tables `debts`, `budget_categories`, `transactions`, `goals`, `family_members`) protégés par Row Level Security: chaque utilisateur ne voit que ses propres données.
 
 ## Structure
 
