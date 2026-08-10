@@ -28,6 +28,12 @@ test("non-admin markup does not pre-render Super Admin navigation", () => {
   assert.doesNotMatch(html, />Super Admin</);
 });
 
+test("Hostinger entry point listens when the module is imported", () => {
+  const serverSource = readFileSync(path.join(root, "server.js"), "utf8");
+  assert.doesNotMatch(serverSource, /require\.main\s*===\s*module/);
+  assert.match(serverSource, /process\.env\.NODE_ENV\s*!==\s*"test"[\s\S]*app\.listen\(port/);
+});
+
 test("database migration enforces Free debt limits and service-only audit logs", () => {
   const migration = readFileSync(
     path.join(root, "supabase", "migrations", "20260810171214_enforce_free_debt_limit_and_admin_privileges.sql"),

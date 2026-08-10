@@ -127,7 +127,9 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-if (require.main === module) {
+// Hostinger charge le fichier d'entree avec require(), donc require.main !== module
+// meme en production. On desactive l'ecoute uniquement pendant les tests.
+if (process.env.NODE_ENV !== "test") {
   app.listen(port, () => {
     console.log(`BudgetHub Family backend listening on port ${port}`);
   });

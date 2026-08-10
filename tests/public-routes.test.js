@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const { after, before, test } = require("node:test");
 
+process.env.NODE_ENV = "test";
 const { app, PUBLIC_PAGE_META } = require("../server");
 
 let server;
