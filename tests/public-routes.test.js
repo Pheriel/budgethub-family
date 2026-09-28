@@ -50,6 +50,7 @@ test("web API client is served before the application script", async () => {
   assert.match(await response.text(), /BudgetHubWebApi/);
   const html = await (await fetch(`${baseUrl}/dashboard`)).text();
   assert.ok(html.indexOf('/web/api-client.js') < html.indexOf('/app.js'));
+  assert.ok(html.indexOf('/web/demo-preview.js') < html.indexOf('/app.js'));
 });
 
 test("anonymous callers cannot access administration APIs", async () => {
