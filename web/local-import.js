@@ -46,6 +46,7 @@
       const goalNames = new Map();
       for (const row of data.goals || []) {
         if (!text(row.name)) continue;
+        if (money(row.target) <= 0) throw new Error(`Objectif sans cible valide : ${month}.`);
         const name = text(row.name).toLowerCase();
         const position = goalNames.get(name) || 0;
         goalNames.set(name, position + 1);

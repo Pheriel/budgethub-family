@@ -14,12 +14,12 @@ test("imports all months, latest debt/goal balances, and a single recurring expe
   const snapshot = preview(storage({
     bh_month_demo_2026_08: "ignored",
     "bh_month_demo_2026-08": JSON.stringify({
-      income: 2000, debts: [{ name: "Visa", balance: 900 }], goals: [{ name: "Voyage", saved: 100 }],
+      income: 2000, debts: [{ name: "Visa", balance: 900 }], goals: [{ name: "Voyage", target: 1000, saved: 100 }],
       budget: [{ name: "Loyer", category: "housing", planned: 850, isRecurring: true }],
       transactions: [{ date: "2026-08-12", name: "Pain", amount: -4 }]
     }),
     "bh_month_demo_2026-09": JSON.stringify({
-      income: 2200, debts: [{ name: "Visa", balance: 800 }], goals: [{ name: "Voyage", saved: 150 }],
+      income: 2200, debts: [{ name: "Visa", balance: 800 }], goals: [{ name: "Voyage", target: 1000, saved: 150 }],
       budget: [{ name: "Loyer", category: "housing", planned: 850, isRecurring: true }],
       transactions: [{ date: "2026-09-03", name: "Lait", amount: -5 }]
     })
@@ -36,4 +36,9 @@ test("an unreadable month blocks import without changing the local copy", () => 
   const local = storage({ "bh_month_demo_2026-09": "{" });
   assert.throws(() => preview(local), /Mois illisible/);
   assert.equal(local.getItem("bh_month_demo_2026-09"), "{");
+});
+
+test("an invalid goal is rejected before the cloud import starts", () => {
+  const local = storage({ "bh_month_demo_2026-09": JSON.stringify({ goals: [{ name: "Voyage", target: 0 }] }) });
+  assert.throws(() => preview(local), /Objectif sans cible valide/);
 });

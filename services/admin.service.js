@@ -278,7 +278,9 @@ async function setSuspended({ actor, userId, suspended }) {
   const profile = await getProfileOrNull(supabase, userId);
   if (!profile) return { status: 404, body: { error: "user_not_found" } };
   if (actor.id === userId && suspended) return { status: 400, body: { error: "cannot_suspend_self" } };
-  if (isSuperAdminEmail(profile.email) && suspended) return { status: 400, body: { error: "cannot_suspend_super_admin" } };
+  const { data: authUser, error: lookupError } = await supabase.auth.admin.getUserById(userId);
+  if (lookupError || !authUser?.user) return { status: 502, body: { error: "auth_user_lookup_failed" } };
+  if (isSuperAdminEmail(authUser.user.email) && suspended) return { status: 400, body: { error: "cannot_suspend_super_admin" } };
   if (Boolean(profile.is_suspended) === Boolean(suspended)) return getUserDetails(userId);
 
   const update = {
