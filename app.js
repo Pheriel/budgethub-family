@@ -4050,6 +4050,13 @@ function renderAccount() {
   const fr = state.lang === "fr";
   const isAdminGranted = state.subscription && state.subscription.status === "admin_granted";
   const targets = state.subscription && !isAdminGranted ? upgradeTargets() : [];
+  let localImport = null;
+  let localImportError = "";
+  if (state.user && state.plan === "free" && !localStorage.getItem(`bh_local_imported_${state.user.id}`)) {
+    try { localImport = globalThis.BudgetHubLocalImport.preview(localStorage); }
+    catch (error) { localImportError = error.message; }
+  }
+  const importCount = localImport && (localImport.debts.length + localImport.goals.length + localImport.budget.length + localImport.transactions.length + (localImport.income ? 1 : 0));
   return `
     <section class="panel">
       <h3>${fr ? "Informations personnelles" : "Personal information"}</h3>
@@ -4060,6 +4067,15 @@ function renderAccount() {
       </form>
       <p class="form-note" id="profileNote" hidden></p>
     </section>
+    ${state.user && localStorage.getItem(`bh_local_imported_${state.user.id}`) ? `<section class="panel"><p class="form-note success">${fr ? "Import Free terminé. La copie locale est conservée dans ce navigateur." : "Free import complete. The local copy remains in this browser."}</p></section>` : ""}
+    ${importCount || localImportError ? `<section class="panel" id="localImportPanel">
+      <h3>${fr ? "Reprendre mes données Free" : "Bring my Free data to this account"}</h3>
+      ${localImportError ? `<p class="form-note role-note">${escapeHtml(localImportError)}</p>` : `
+        <p>${fr ? `${localImport.months.length} mois trouvés dans ce navigateur : ${localImport.debts.length} dettes, ${localImport.budget.length} dépenses, ${localImport.transactions.length} transactions, ${localImport.goals.length} objectifs${localImport.income ? " et un revenu" : ""}.` : `${localImport.months.length} months in this browser: ${localImport.debts.length} debts, ${localImport.budget.length} expenses, ${localImport.transactions.length} transactions, ${localImport.goals.length} goals${localImport.income ? ", and income" : ""}.`}</p>
+        <p class="form-note">${fr ? "Vérifiez ces chiffres. Le revenu le plus récent est utilisé. L’import ne fonctionne que dans un compte cloud vide et la copie locale reste disponible dans ce navigateur." : "Check these counts. The latest income is used. Import works only into an empty cloud account, and the local copy stays in this browser."}</p>
+        <button class="primary-button" type="button" id="localImportButton">${fr ? "Importer dans mon compte" : "Import into my account"}</button>`}
+      <p id="localImportMessage" class="form-note" role="status"></p>
+    </section>` : ""}
     <section class="panel">
       <h3>${fr ? "Abonnement" : "Subscription"}</h3>
       ${renderSubscriptionDetails(plan)}
@@ -4122,11 +4138,11 @@ function adminUserSummary(user) {
     <div class="admin-summary">
       <div><span>${fr ? "Abonnement actuel" : "Current subscription"}</span><strong>${planName(user.plan)}</strong></div>
       <div><span>${fr ? "Expiration" : "Expiration"}</span><strong>${fmtDate(user.currentPeriodEnd)}</strong></div>
-      <div><span>Stripe customer</span><strong>${user.stripeCustomerId || "—"}</strong></div>
-      <div><span>Stripe subscription</span><strong>${user.stripeSubscriptionId || "—"}</strong></div>
-      <div><span>${fr ? "Famille" : "Family"}</span><strong>${user.family || "—"}</strong></div>
+      <div><span>Stripe customer</span><strong>${escapeHtml(user.stripeCustomerId || "—")}</strong></div>
+      <div><span>Stripe subscription</span><strong>${escapeHtml(user.stripeSubscriptionId || "—")}</strong></div>
+      <div><span>${fr ? "Famille" : "Family"}</span><strong>${escapeHtml(user.family || "—")}</strong></div>
       <div><span>${fr ? "Membres" : "Members"}</span><strong>${user.memberCount}</strong></div>
-      <div><span>${fr ? "Statut" : "Status"}</span><strong>${user.isSuspended ? (fr ? "Suspendu" : "Suspended") : (user.subscriptionStatus || "—")}</strong></div>
+      <div><span>${fr ? "Statut" : "Status"}</span><strong>${user.isSuspended ? (fr ? "Suspendu" : "Suspended") : escapeHtml(user.subscriptionStatus || "—")}</strong></div>
       <div><span>${fr ? "Durée" : "Duration"}</span><strong>${user.billingDuration ? durationLabel(user.billingDuration) : "—"}</strong></div>
     </div>
   `;
@@ -4430,23 +4446,20 @@ function renderAdmin() {
   return `
     <section class="panel admin-hero">
       <div>
-        <p class="eyebrow">Owner tools</p>
-        <h3>${fr ? "Centre d’administration BudgetHub Family" : "BudgetHub Family Administration Center"}</h3>
+        <p class="eyebrow">Super Admin</p>
+        <h3>${fr ? "Gérer BudgetHub Family" : "Manage BudgetHub Family"}</h3>
         <p class="form-note">${fr
-          ? "Cette section permet la gestion des utilisateurs, des abonnements et des accès de la plateforme."
-          : "This section allows management of users, subscriptions and platform access."}</p>
+          ? "Recherchez un compte pour gérer son accès, son mot de passe ou son abonnement."
+          : "Find an account to manage its access, password, or subscription."}</p>
       </div>
-      <span class="chip">${state.user ? state.user.email : ""}</span>
+      <span class="chip">${state.user ? escapeHtml(state.user.email) : ""}</span>
     </section>
 
     <nav class="admin-tabs" aria-label="Super Admin">
       ${[
         ["overview", fr ? "Vue d’ensemble" : "Overview"],
         ["tickets", fr ? "Tickets support" : "Support tickets"],
-        ["users", fr ? "Utilisateurs" : "Users"],
-        ["subscriptions", fr ? "Abonnements" : "Subscriptions"],
-        ["access", fr ? "Accès admin / accès manuels" : "Admin / manual access"],
-        ["settings", fr ? "Paramètres admin" : "Admin settings"]
+        ["users", fr ? "Comptes et accès" : "Accounts and access"]
       ].map(([key, label]) => `<button class="${(state.support.adminSection || "overview") === key ? "active" : ""}" data-admin-section="${key}" type="button">${label}${key === "tickets" && state.support.adminUnreadCount ? ` <span class="notification-badge">${state.support.adminUnreadCount}</span>` : ""}</button>`).join("")}
     </nav>
 
@@ -4457,26 +4470,18 @@ function renderAdmin() {
         <div><span>${fr ? "Tickets support" : "Support tickets"}</span><strong>${(state.support.adminTickets || []).length}</strong></div>
         <div><span>${fr ? "Tickets ouverts non lus" : "Unread open tickets"}</span><strong>${state.support.adminUnreadCount || 0}</strong></div>
       </div>
+      <p class="form-note">${fr ? "Pour aider un utilisateur, ouvrez « Comptes et accès », recherchez son courriel et sélectionnez son compte." : "To help someone, open Accounts and access, search their email, then select their account."}</p>
     </section>
 
     ${renderAdminSupport()}
 
-    <section class="panel admin-settings-panel">
-      <h3>${fr ? "Paramètres admin" : "Admin settings"}</h3>
-      <div class="admin-summary">
-        <div><span>SUPPORT_FROM_EMAIL</span><strong>${fr ? "Config serveur" : "Server config"}</strong></div>
-        <div><span>SUPPORT_ADMIN_EMAIL</span><strong>${fr ? "Config serveur" : "Server config"}</strong></div>
-        <div><span>SMTP</span><strong>${fr ? "Voir .env" : "See .env"}</strong></div>
-      </div>
-    </section>
-
     <section class="panel">
-      <h3>${fr ? "Recherche utilisateur" : "User search"}</h3>
+      <h3>${fr ? "1. Trouver un compte" : "1. Find an account"}</h3>
       <form class="admin-search" id="adminSearchForm">
-        <input name="query" type="search" value="${state.admin.query}" placeholder="${fr ? "Courriel, nom ou plan" : "Email, name, or plan"}" autocomplete="off" />
+        <input name="query" type="search" value="${escapeHtml(state.admin.query)}" placeholder="${fr ? "Courriel, nom ou plan" : "Email, name, or plan"}" autocomplete="off" />
         <button class="primary-button" type="submit">${fr ? "Rechercher" : "Search"}</button>
       </form>
-      ${state.admin.message ? `<p class="form-note">${state.admin.message}</p>` : ""}
+      ${state.admin.message ? `<p class="form-note" role="status">${escapeHtml(state.admin.message)}</p>` : ""}
       <div class="admin-table-wrap">
         <table class="admin-table">
           <thead>
@@ -4492,9 +4497,9 @@ function renderAdmin() {
           <tbody>
         ${state.admin.users.map((user) => `
             <tr class="${selected && selected.id === user.id ? "active" : ""}">
-              <td><strong>${user.email || user.id}</strong><small>${user.name || "—"}</small></td>
+              <td><strong>${escapeHtml(user.email || user.id)}</strong><small>${escapeHtml(user.name || "—")}</small></td>
               <td>${planName(user.plan)}</td>
-              <td><span class="status-pill ${user.isSuspended ? "inactive" : "active"}">${subscriptionStatusLabel(user)}</span></td>
+              <td><span class="status-pill ${user.isSuspended ? "inactive" : "active"}">${escapeHtml(subscriptionStatusLabel(user))}</span></td>
               <td>${fmtDate(user.currentPeriodEnd)}</td>
               <td>${fmtDate(user.createdAt)}</td>
               <td><button class="secondary-button" data-admin-user="${user.id}" type="button">${fr ? "Voir" : "View"}</button></td>
@@ -4516,16 +4521,29 @@ function renderAdmin() {
     <section class="panel">
       <div class="admin-user-head">
         <div>
-          <h3>${selected.email || selected.id}</h3>
-          <p class="form-note">${selected.name || "—"} · ${selected.id}</p>
+          <h3>${escapeHtml(selected.email || selected.id)}</h3>
+          <p class="form-note">${escapeHtml(selected.name || "—")} · ${selected.id}</p>
         </div>
         <button class="secondary-button" id="adminRefreshUser" type="button">${fr ? "Rafraîchir" : "Refresh"}</button>
       </div>
       ${adminUserSummary(selected)}
+      <div class="admin-account-actions">
+        <div>
+          <h4>${fr ? "2. Accès et mot de passe" : "2. Access and password"}</h4>
+          <p class="form-note">${selected.isSuspended
+            ? (fr ? "Compte désactivé. Réactivez-le pour autoriser la connexion." : "Account disabled. Reactivate it to allow sign-in.")
+            : (fr ? "Compte actif. La désactivation bloque les nouvelles connexions." : "Account active. Disabling blocks new sign-ins.")}</p>
+        </div>
+        <div class="admin-button-row">
+          <button class="secondary-button ${selected.isSuspended ? "" : "danger-action"}" data-admin-suspend="${!selected.isSuspended}" type="button" ${selected.id === state.user.id ? "disabled" : ""}>${selected.isSuspended ? (fr ? "Réactiver le compte" : "Reactivate account") : (fr ? "Désactiver le compte" : "Disable account")}</button>
+          <button class="secondary-button" id="adminPasswordReset" type="button" ${selected.email && !selected.isSuspended ? "" : "disabled"}>${fr ? "Envoyer un lien de réinitialisation" : "Send a password reset link"}</button>
+        </div>
+        <p class="form-note">${fr ? "Le lien est envoyé au courriel du compte. L’administrateur ne voit jamais le nouveau mot de passe." : "The link goes to the account email. The administrator never sees the new password."}</p>
+      </div>
     </section>
 
     <section class="panel">
-      <h3>${fr ? "Modifier abonnement" : "Change subscription"}</h3>
+      <h3>${fr ? "3. Abonnement" : "3. Subscription"}</h3>
       <form class="form-grid admin-action-grid" id="adminPlanForm">
         <label><span>Plan</span><select name="plan">
           <option value="free">Free</option>
@@ -4554,21 +4572,13 @@ function renderAdmin() {
     </section>
 
     <section class="panel">
-      <h3>${fr ? "Suspension" : "Suspension"}</h3>
-      <div class="admin-button-row">
-        <button class="secondary-button danger-action" data-admin-suspend="true" type="button">${fr ? "Suspendre utilisateur" : "Suspend user"}</button>
-        <button class="secondary-button" data-admin-suspend="false" type="button">${fr ? "Réactiver utilisateur" : "Reactivate user"}</button>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h3>${fr ? "Journal" : "Audit log"}</h3>
+      <h3>${fr ? "Historique des actions" : "Action history"}</h3>
       <div class="admin-log">
         ${(state.admin.logs || []).map((log) => `
           <article>
-            <strong>${log.action}</strong>
-            <span>${fmtDate(log.created_at)} · ${log.actor_email}</span>
-            <code>${JSON.stringify(log.after_state || {})}</code>
+            <strong>${escapeHtml(log.action)}</strong>
+            <span>${fmtDate(log.created_at)} · ${escapeHtml(log.actor_email)}</span>
+            <code>${escapeHtml(JSON.stringify(log.after_state || {}))}</code>
           </article>
         `).join("") || `<p class="form-note">${fr ? "Aucun changement enregistré." : "No changes recorded."}</p>`}
       </div>
@@ -4819,25 +4829,48 @@ function applyAdminSectionVisibility() {
   panels.forEach((panel) => {
     const isHero = panel.classList.contains("admin-hero");
     const isOverview = panel.classList.contains("admin-overview-panel");
-    const isSettings = panel.classList.contains("admin-settings-panel");
     const isTickets = panel.querySelector("#adminSupportFilters, #adminTicketReplyForm, #adminTicketStatusForm");
     const hasSelectedUser = panel.querySelector("#adminRefreshUser");
-    const isUsers = panel.querySelector("#adminSearchForm") || (hasSelectedUser && section === "users");
-    const isSubscriptions = panel.querySelector("#adminPlanForm") || (hasSelectedUser && section === "subscriptions");
-    const isAccess = panel.querySelector("[data-admin-extend], [data-admin-suspend], .admin-log") || (hasSelectedUser && section === "access");
+    const isUsers = panel.querySelector("#adminSearchForm, #adminPlanForm, [data-admin-extend], .admin-log") || hasSelectedUser;
     const show = isHero
       || (section === "overview" && isOverview)
       || (section === "tickets" && isTickets)
-      || (section === "users" && isUsers)
-      || (section === "subscriptions" && isSubscriptions)
-      || (section === "access" && isAccess)
-      || (section === "settings" && isSettings);
+      || (section === "users" && isUsers);
     panel.hidden = !show;
   });
 }
 
 function bindViewActions() {
   applyAdminSectionVisibility();
+  $("#localImportButton")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const message = $("#localImportMessage");
+    if (!window.confirm(state.lang === "fr"
+      ? "Importer les données Free dans ce compte ? La copie locale restera dans ce navigateur."
+      : "Import Free data into this account? The local copy will remain in this browser.")) return;
+    button.disabled = true;
+    try {
+      const payload = globalThis.BudgetHubLocalImport.preview(localStorage);
+      const encoded = new TextEncoder().encode(JSON.stringify(payload));
+      const digest = await crypto.subtle.digest("SHA-256", encoded);
+      const fingerprint = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const { data, error } = await supabaseClient.rpc("import_local_free", { p_data: payload, p_fingerprint: fingerprint });
+      if (error) throw error;
+      if (!data || data.months !== payload.months.length || data.transactions !== payload.transactions.length) throw new Error("import_verification_failed");
+      localStorage.setItem(`bh_local_imported_${state.user.id}`, fingerprint);
+      await loadUserData(false);
+      renderView();
+    } catch (error) {
+      const errors = {
+        cloud_data_present: state.lang === "fr" ? "Ce compte contient déjà des données cloud. Aucun import n’a été effectué." : "This account already has cloud data. Nothing was imported.",
+        already_imported: state.lang === "fr" ? "Un import différent a déjà été effectué sur ce compte." : "A different import already exists on this account."
+      };
+      message.textContent = Object.keys(errors).find((key) => error.message?.includes(key))
+        ? errors[Object.keys(errors).find((key) => error.message?.includes(key))]
+        : error.message;
+      button.disabled = false;
+    }
+  });
   $("#useSampleData")?.addEventListener("click", () => {
     state.previewSample = false;
     localStorage.setItem("bh_free_started", "1");
@@ -5178,14 +5211,38 @@ function bindViewActions() {
 
   $$("[data-admin-suspend]").forEach((button) => {
     button.addEventListener("click", async () => {
+      const suspended = button.dataset.adminSuspend === "true";
+      const email = state.admin.selected.email || state.admin.selected.id;
+      if (!window.confirm(state.lang === "fr"
+        ? `${suspended ? "Désactiver" : "Réactiver"} le compte ${email} ?`
+        : `${suspended ? "Disable" : "Reactivate"} account ${email}?`)) return;
       try {
-        await adminPost(`/api/admin/users/${state.admin.selected.id}/suspension`, { suspended: button.dataset.adminSuspend === "true" });
-        state.admin.message = state.lang === "fr" ? "Statut mis à jour." : "Status updated.";
+        await adminPost(`/api/admin/users/${state.admin.selected.id}/suspension`, { suspended });
+        state.admin.message = state.lang === "fr" ? "Accès du compte mis à jour." : "Account access updated.";
       } catch (error) {
         state.admin.message = error.message;
       }
       renderView();
     });
+  });
+
+  $("#adminPasswordReset")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const email = state.admin.selected.email;
+    if (!window.confirm(state.lang === "fr"
+      ? `Envoyer un lien de réinitialisation à ${email} ?`
+      : `Send a password reset link to ${email}?`)) return;
+    button.disabled = true;
+    try {
+      const response = await authFetch(`/api/admin/users/${state.admin.selected.id}/password-reset`, { method: "POST", body: "{}" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "password_reset_failed");
+      state.admin.message = state.lang === "fr" ? `Lien envoyé à ${result.email}.` : `Link sent to ${result.email}.`;
+      await adminLoadUser(state.admin.selected.id);
+    } catch (error) {
+      state.admin.message = error.message;
+    }
+    renderView();
   });
 
   $$("[data-view-target]").forEach((button) => {

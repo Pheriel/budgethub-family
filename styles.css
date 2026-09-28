@@ -520,6 +520,28 @@
   flex-wrap: wrap;
 }
 
+.admin-account-actions {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+}
+
+.admin-account-actions h4 {
+  margin: 0 0 0.35rem;
+}
+
+.admin-account-actions .admin-button-row {
+  margin: 0.85rem 0;
+}
+
+@media (max-width: 640px) {
+  .admin-search { grid-template-columns: 1fr; }
+  .admin-account-actions .admin-button-row > button { width: 100%; }
+  .admin-tabs { margin-inline: -0.25rem; padding-inline: 0.25rem; }
+}
+
 .admin-ticket-head-actions {
   display: flex;
   gap: 0.6rem;

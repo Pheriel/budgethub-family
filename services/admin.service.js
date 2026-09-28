@@ -1,4 +1,4 @@
-const { createSupabaseAdminClient } = require("../config/supabase");
+const { createSupabaseAdminClient, createSupabaseClient } = require("../config/supabase");
 
 const VALID_PLANS = ["free", "solo", "family", "familyPlus"];
 const VALID_DURATIONS = ["1m", "3m", "6m", "12m"];
@@ -277,11 +277,15 @@ async function setSuspended({ actor, userId, suspended }) {
 
   const profile = await getProfileOrNull(supabase, userId);
   if (!profile) return { status: 404, body: { error: "user_not_found" } };
+  if (actor.id === userId && suspended) return { status: 400, body: { error: "cannot_suspend_self" } };
+  const { data: authUser, error: lookupError } = await supabase.auth.admin.getUserById(userId);
+  if (lookupError || !authUser?.user) return { status: 502, body: { error: "auth_user_lookup_failed" } };
+  if (isSuperAdminEmail(authUser.user.email) && suspended) return { status: 400, body: { error: "cannot_suspend_super_admin" } };
+  if (Boolean(profile.is_suspended) === Boolean(suspended)) return getUserDetails(userId);
 
   const update = {
     is_suspended: Boolean(suspended),
     suspended_at: suspended ? new Date().toISOString() : null,
-    subscription_status: suspended ? "suspended" : (profile.plan === "free" ? "admin_free" : "admin_granted"),
     updated_at: new Date().toISOString()
   };
 
@@ -289,9 +293,39 @@ async function setSuspended({ actor, userId, suspended }) {
   if (error && error.code === "42703") return { status: 500, body: { error: "admin_migration_required" } };
   if (error) return { status: 500, body: { error: "suspension_failed" } };
 
+  const { error: banError } = await supabase.auth.admin.updateUserById(userId, {
+    ban_duration: suspended ? "876000h" : "none"
+  });
+  if (banError) {
+    await supabase.from("profiles").update({
+      is_suspended: Boolean(profile.is_suspended), suspended_at: profile.suspended_at, updated_at: new Date().toISOString()
+    }).eq("id", userId);
+    return { status: 502, body: { error: "auth_suspension_failed" } };
+  }
+
   const after = await getProfileOrNull(supabase, userId);
   await audit(supabase, actor, userId, suspended ? "suspend_user" : "reactivate_user", normalizeProfile(profile), normalizeProfile(after));
   return getUserDetails(userId);
+}
+
+async function sendPasswordReset({ actor, userId }) {
+  const supabase = createSupabaseAdminClient();
+  const publicClient = createSupabaseClient();
+  if (!supabase || !publicClient) return { status: 503, body: { error: "supabase_not_configured" } };
+
+  const profile = await getProfileOrNull(supabase, userId);
+  if (!profile) return { status: 404, body: { error: "user_not_found" } };
+  const { data, error: lookupError } = await supabase.auth.admin.getUserById(userId);
+  if (lookupError || !data?.user?.email) return { status: 502, body: { error: "auth_user_lookup_failed" } };
+
+  const email = data.user.email;
+  const { error } = await publicClient.auth.resetPasswordForEmail(email, {
+    redirectTo: "https://budgethubfamily.com/auth/confirm"
+  });
+  if (error) return { status: 502, body: { error: "password_reset_failed" } };
+
+  await audit(supabase, actor, userId, "send_password_reset", null, { email });
+  return { status: 200, body: { sent: true, email } };
 }
 
 module.exports = {
@@ -300,5 +334,6 @@ module.exports = {
   getUserDetails,
   setPlan,
   extendUser,
-  setSuspended
+  setSuspended,
+  sendPasswordReset
 };
