@@ -673,6 +673,7 @@ const state = {
   displayName: "",
   // Session démo active (app ouverte sans compte): autorise les routes app sans redirection.
   demoActive: false,
+  previewSample: false,
   viewToken: 0,
   incomeInput: 0,
   incomeFrequency: "monthly",
@@ -709,7 +710,7 @@ function applyMonthData(data) {
 }
 
 function saveMonthData() {
-  if (state.user) return;
+  if (state.user || state.previewSample) return;
   localStorage.setItem(monthlyStorageKey(), JSON.stringify({
     income: state.income,
     incomeInput: state.incomeInput,
@@ -722,6 +723,7 @@ function saveMonthData() {
 }
 
 function loadMonthData(seedData = null) {
+  state.previewSample = false;
   if (state.user) {
     applyMonthData(seedData);
     return;
@@ -738,10 +740,16 @@ function loadMonthData(seedData = null) {
     }
   }
   applyMonthData(seedData);
-  saveMonthData();
 }
 
 loadMonthData();
+
+function maybeShowSamplePreview() {
+  if (state.user || state.previewSample || localStorage.getItem("bh_free_started") ||
+      globalThis.BudgetHubDemoPreview.hasFinancialData(localStorage)) return;
+  applyMonthData(globalThis.BudgetHubDemoPreview.exampleForMonth(state.selectedMonth));
+  state.previewSample = true;
+}
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -1001,6 +1009,7 @@ function normalizeRole(role) {
 }
 
 function can(action) {
+  if (!state.user && state.previewSample && action === "editData") return false;
   if (!state.user) return true; // mode démo: tout est local
   return Boolean(rolePermissions[normalizeRole(state.role)][action]);
 }
@@ -1481,6 +1490,9 @@ function forbiddenMessage() {
 }
 
 function readOnlyNote() {
+  if (state.previewSample) return `<p class="form-note role-note">${state.lang === "fr"
+    ? "Aperçu d’exemple : choisissez « Utiliser ces exemples » pour les modifier."
+    : "Sample preview: choose “Use these examples” to edit them."}</p>`;
   return `<p class="form-note role-note">${state.lang === "fr"
     ? "Mode lecture seule: votre rôle ne permet pas de modifier ces données."
     : "Read-only mode: your role does not allow editing this data."}</p>`;
@@ -1520,6 +1532,7 @@ async function loadUserRole(profile) {
 
 function setSessionUser(user) {
   state.user = user;
+  if (user) state.previewSample = false;
   if (!user) {
     state.role = "Owner";
     state.isSuperAdmin = false;
@@ -2349,6 +2362,7 @@ function showLandingPage(page) {
 
 function openApp() {
   closeAppMenu();
+  maybeShowSamplePreview();
   updateFamilyNavigation();
   // Une session démo (sans compte) reste valide pour la navigation par route.
   state.demoActive = !state.user;
@@ -2516,7 +2530,13 @@ function renderView() {
     settings: renderSettings,
     account: renderAccount
   };
-  $("#viewContainer").innerHTML = renderers[state.currentView]();
+  const previewNotice = state.previewSample ? `<section class="panel sample-preview" aria-label="${state.lang === "fr" ? "Données d’exemple" : "Sample data"}">
+    <div><strong>${state.lang === "fr" ? "Aperçu avec des données fictives" : "Preview with fictional data"}</strong>
+    <p class="form-note">${state.lang === "fr" ? "Ces montants ne sont pas vos données. Rien n’est enregistré tant que vous ne choisissez pas une option." : "These amounts are not your data. Nothing is saved until you choose an option."}</p></div>
+    <div class="account-actions"><button class="primary-button" type="button" id="useSampleData">${state.lang === "fr" ? "Utiliser ces exemples" : "Use these examples"}</button>
+    <button class="secondary-button" type="button" id="startFreeEmpty">${state.lang === "fr" ? "Commencer avec mes données" : "Start with my data"}</button></div>
+  </section>` : "";
+  $("#viewContainer").innerHTML = previewNotice + renderers[state.currentView]();
   syncFamilyRoute();
   bindDecimalInputs($("#viewContainer"));
   bindSharingToggles($("#viewContainer"));
@@ -4818,6 +4838,21 @@ function applyAdminSectionVisibility() {
 
 function bindViewActions() {
   applyAdminSectionVisibility();
+  $("#useSampleData")?.addEventListener("click", () => {
+    state.previewSample = false;
+    localStorage.setItem("bh_free_started", "1");
+    saveMonthData();
+    renderView();
+  });
+  $("#startFreeEmpty")?.addEventListener("click", () => {
+    state.previewSample = false;
+    localStorage.setItem("bh_free_started", "1");
+    applyMonthData(emptyMonthData());
+    saveMonthData();
+    state.currentView = "dashboard";
+    syncAppUrl("dashboard");
+    renderView();
+  });
   $$("#viewContainer [data-go-view]").forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.goView === state.currentView) {
@@ -5911,6 +5946,7 @@ async function changeSelectedMonth(value) {
     await loadUserData();
   } else {
     loadMonthData();
+    maybeShowSamplePreview();
     renderView();
   }
   applyTranslations();

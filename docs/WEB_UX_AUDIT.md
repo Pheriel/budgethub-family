@@ -11,7 +11,7 @@
 
 ## Changes in this branch
 
-- Free now starts with an empty workspace; previously stored `bh_month_demo_*` records still load. Automatic legacy-key deletion was removed.
+- Free starts with an empty workspace in the first Web increment; a follow-up preview correction displays fictional examples only when there is no saved financial data, without persisting them until explicitly chosen. Previously stored `bh_month_demo_*` records still load. Automatic legacy-key deletion was removed.
 - A monthly overview surfaces income, recorded spending, available after planned bills and minimum debt payments, remaining debt, and a next action. An in-context checklist guides the first setup. Detailed metrics stay available on demand.
 - The top navigation highlights Home, Expenses, Transactions and Debts. More contains Goals, strategy, Family (when available) and account; the drawer mirrors the grouping.
 - Free storage limitations and the lack of automatic cloud import are stated in FR/EN.
