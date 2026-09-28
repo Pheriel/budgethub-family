@@ -44,6 +44,14 @@ test("application deep links still return the SPA", async () => {
   }
 });
 
+test("web API client is served before the application script", async () => {
+  const response = await fetch(`${baseUrl}/web/api-client.js`);
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /BudgetHubWebApi/);
+  const html = await (await fetch(`${baseUrl}/dashboard`)).text();
+  assert.ok(html.indexOf('/web/api-client.js') < html.indexOf('/app.js'));
+});
+
 test("anonymous callers cannot access administration APIs", async () => {
   const response = await fetch(`${baseUrl}/api/admin/me`);
   assert.equal(response.status, 401);

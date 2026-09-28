@@ -95,6 +95,8 @@ Voir `STRIPE_CHECKOUT_SETUP.md` pour les réglages manuels à activer dans Strip
 
 Les visiteurs sans compte utilisent le plan Free avec des données locales dans leur navigateur. Les utilisateurs connectés démarrent avec un espace vide; leurs dettes, budget, transactions, objectifs et membres de famille sont enregistrés dans Supabase (tables `debts`, `budget_categories`, `transactions`, `goals`, `family_members`) protégés par Row Level Security: chaque utilisateur ne voit que ses propres données.
 
+La création d'un compte et la connexion **n'importent pas automatiquement** les données Free locales. Ne videz pas les données du navigateur avant de les avoir conservées. Le chantier Web et les vérifications de prépublication sont décrits dans `docs/WEB_UX_AUDIT.md` et `docs/WEB_REFACTOR_PLAN.md`.
+
 ## Structure
 
 ```text

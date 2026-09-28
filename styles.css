@@ -2081,6 +2081,29 @@ h3 {
   display: none;
 }
 
+.nav-more { position: relative; flex: 0 0 auto; }
+.nav-more summary { list-style: none; cursor: pointer; padding: 0.45rem 0.7rem; border-radius: var(--radius); font-weight: 700; color: var(--muted); }
+.nav-more summary::-webkit-details-marker { display: none; }
+.nav-more summary:hover, .nav-more[open] summary { background: var(--surface-strong); color: var(--text); }
+.nav-more-menu { position: fixed; z-index: 50; top: 4.2rem; right: 12rem; width: min(18rem, 90vw); display: grid; padding: 0.5rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.nav-more-menu button { text-align: left; }
+.nav-more-menu button[hidden] { display: none; }
+.nav-section-label { padding: 0.8rem 0.85rem 0.2rem; color: var(--muted); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.dashboard-overview { border-color: var(--primary); }
+.dashboard-overview-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.2rem; }
+.dashboard-overview-head h3 { margin: 0; }
+.dashboard-key-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; }
+.dashboard-key-figures > div { min-width: 0; padding: 1rem; border-radius: var(--radius); background: var(--surface-strong); }
+.dashboard-key-figures small, .dashboard-key-figures strong { display: block; }
+.dashboard-key-figures strong { margin-top: 0.4rem; font-size: clamp(1.1rem, 2vw, 1.6rem); overflow-wrap: anywhere; }
+.onboarding-steps { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.onboarding-steps button, .onboarding-steps span { padding: 0.6rem 0.8rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-strong); color: var(--text); font: inherit; cursor: pointer; }
+.dashboard-details { margin: 1rem 0; }
+.dashboard-details > summary { cursor: pointer; color: var(--primary); font-weight: 750; margin-bottom: 0.8rem; }
+@media (max-width: 820px) { .dashboard-key-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dashboard-overview-head { align-items: stretch; flex-direction: column; } }
+@media (max-width: 380px) { .dashboard-key-figures { grid-template-columns: 1fr; } }
+
 .app-topnav button {
   border: 0;
   background: transparent;
