@@ -77,7 +77,8 @@ const translations = {
     faqThreeA: "Les abonnements payants passent par Stripe Checkout. Les prix et taxes applicables sont confirmés dans Stripe avant le paiement.",
     faqFourQ: "Puis-je inviter ma famille?",
     faqFourA: "Oui, avec les plans Family et Family Plus. Les limites de membres dépendent du plan actif.",
-    appDashboard: "Tableau",
+    appDashboard: "Accueil",
+    appMore: "Plus",
     appDebts: "Dettes",
     appStrategy: "Snowball/Avalanche",
     appBudget: "Dépenses",
@@ -92,7 +93,7 @@ const translations = {
     backLanding: "Retour accueil",
     createAccount: "Créer un compte",
     upgrade: "Passer Pro",
-    demoNotice: "Plan Free : 10 dettes maximum et 1 membre. Les données restent dans le navigateur.",
+    demoNotice: "Plan Free : données enregistrées uniquement dans ce navigateur, sans synchronisation. Vider ses données peut les supprimer. La création d’un compte ne les importe pas automatiquement.",
     email: "Courriel",
     password: "Mot de passe",
     continue: "Continuer",
@@ -236,7 +237,8 @@ const translations = {
     faqThreeA: "Paid subscriptions go through Stripe Checkout. Prices and applicable taxes are confirmed in Stripe before payment.",
     faqFourQ: "Can I invite my family?",
     faqFourA: "Yes, with Family and Family Plus plans. Member limits depend on the active plan.",
-    appDashboard: "Dashboard",
+    appDashboard: "Home",
+    appMore: "More",
     appDebts: "Debts",
     appStrategy: "Snowball/Avalanche",
     appBudget: "Expenses",
@@ -251,7 +253,7 @@ const translations = {
     backLanding: "Back home",
     createAccount: "Create account",
     upgrade: "Upgrade",
-    demoNotice: "Free plan: 10 debts maximum and 1 member. Data stays in the browser.",
+    demoNotice: "Free plan: data is saved only in this browser, without sync. Clearing browser data can erase it. Creating an account does not automatically import it.",
     email: "Email",
     password: "Password",
     continue: "Continue",
@@ -472,8 +474,8 @@ const planDefinitions = [
 ];
 const planRank = { free: 0, solo: 1, family: 2, familyPlus: 3 };
 
-translations.fr.demoNotice = `Plan Free : ${FREE_DEBT_LIMIT} dettes maximum et 1 membre. Les données restent dans le navigateur.`;
-translations.en.demoNotice = `Free plan: ${FREE_DEBT_LIMIT} debts maximum and 1 member. Data stays in the browser.`;
+translations.fr.demoNotice = `Plan Free : ${FREE_DEBT_LIMIT} dettes maximum, stockées uniquement dans ce navigateur. Vider ses données peut les effacer. Créer un compte ne les importe pas automatiquement.`;
+translations.en.demoNotice = `Free plan: ${FREE_DEBT_LIMIT} debts maximum, saved only in this browser. Clearing its data can erase them. Creating an account does not automatically import them.`;
 translations.fr.demoLimitDebt = `Vous avez atteint la limite de ${FREE_DEBT_LIMIT} dettes incluse dans le plan Free. Passez à un abonnement pour ajouter un nombre illimité de dettes.`;
 translations.en.demoLimitDebt = `You have reached the ${FREE_DEBT_LIMIT}-debt limit included in the Free plan. Upgrade to a subscription to add unlimited debts.`;
 translations.fr.debtUsage = "Dettes utilisées";
@@ -595,8 +597,6 @@ const supabaseClient = window.supabase
   : null;
 
 // En production, l'API est servie par le même domaine que le frontend
-const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const BACKEND_URL = isLocalHost ? "http://localhost:3000" : window.location.origin;
 const PRODUCTION_URL = "https://budgethubfamily.com";
 const authRedirectUrl = `${PRODUCTION_URL}/auth/confirm`;
 const FAMILY_PLAN_IDS = ["family", "familyPlus"];
@@ -689,64 +689,6 @@ const state = {
   }
 };
 
-// Données fictives affichées uniquement en mode démo (sans compte)
-const demoData = {
-  debts: [
-    { name: "Carte Visa", balance: 4850, rate: 19.99, minPayment: 145, paymentDay: 28 },
-    { name: "Prêt auto", balance: 12800, rate: 7.49, minPayment: 410, paymentDay: 1 }
-  ],
-  budget: [
-    { name: "Appartement", category: "housing", planned: 1300, dueDay: 1, isRecurring: true, notes: "" },
-    { name: "Épicerie", category: "groceries", planned: 800, dueDay: "", isRecurring: true, notes: "" },
-    { name: "Internet", category: "telecom", planned: 70, dueDay: 15, isRecurring: true, notes: "" },
-    { name: "Assurance auto", category: "insurance", planned: 110, dueDay: 20, isRecurring: true, notes: "" }
-  ],
-  transactions: [
-    { date: "2026-06-09", name: "Épicerie Marché Central", category: "Épicerie", amount: -126.42 },
-    { date: "2026-06-08", name: "Salaire", category: "Revenu", amount: 3150 },
-    { date: "2026-06-07", name: "Hydro", category: "Services", amount: -94.3 },
-    { date: "2026-06-06", name: "Paiement Visa", category: "Dette", amount: -250 }
-  ],
-  goals: [
-    { name: "Fonds urgence", target: 12000, saved: 7250 },
-    { name: "Vacances famille", target: 4500, saved: 1800 },
-    { name: "Rénovation cuisine", target: 9000, saved: 2750 }
-  ],
-  members: [{ name: "Alex", role: "Admin" }]
-};
-
-const LEGACY_FINANCIAL_STORAGE_KEYS = new Set([
-  "debts",
-  "expenses",
-  "budgets",
-  "transactions",
-  "goals",
-  "monthData",
-  "dashboardData",
-  "snowballData",
-  "bh_income_frequency"
-]);
-
-function isLegacyFinancialStorageKey(key) {
-  return LEGACY_FINANCIAL_STORAGE_KEYS.has(key) || /^bh_month_(?!demo_).+/.test(key);
-}
-
-function cleanupLegacyFinancialStorage() {
-  const keysToRemove = [];
-  for (let index = 0; index < localStorage.length; index += 1) {
-    const key = localStorage.key(index);
-    if (key && isLegacyFinancialStorageKey(key)) {
-      keysToRemove.push(key);
-    }
-  }
-  keysToRemove.forEach((key) => {
-    console.warn(`[Storage] Removing legacy financial key: ${key}`);
-    localStorage.removeItem(key);
-  });
-}
-
-cleanupLegacyFinancialStorage();
-
 function emptyMonthData() {
   return { income: 0, debts: [], budget: [], transactions: [], goals: [] };
 }
@@ -790,14 +732,16 @@ function loadMonthData(seedData = null) {
       applyMonthData(JSON.parse(cached));
       return;
     } catch (_error) {
-      localStorage.removeItem(monthlyStorageKey());
+      console.warn("[Storage] Month data could not be read; original value was kept for recovery.");
+      applyMonthData(emptyMonthData());
+      return;
     }
   }
   applyMonthData(seedData);
   saveMonthData();
 }
 
-loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
+loadMonthData();
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -1553,7 +1497,7 @@ async function authFetch(path, options = {}) {
   const token = await getAccessToken();
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
-  return fetch(`${BACKEND_URL}${path}`, { ...options, headers });
+  return globalThis.BudgetHubWebApi.request(path, { ...options, headers });
 }
 
 // Détermine le rôle de l'utilisateur connecté dans sa famille
@@ -2405,9 +2349,6 @@ function showLandingPage(page) {
 
 function openApp() {
   closeAppMenu();
-  if (!state.user && !state.debts.length) {
-    applyMonthData(demoData);
-  }
   updateFamilyNavigation();
   // Une session démo (sans compte) reste valide pour la navigation par route.
   state.demoActive = !state.user;
@@ -2485,6 +2426,7 @@ function setCurrentAppView(nextView) {
   refreshViewData(nextView, token);
   closeAppMenu();
   closeUserMenu();
+  document.querySelectorAll(".nav-more[open]").forEach((menu) => { menu.open = false; });
 }
 
 function navigateAppView(nextView) {
@@ -2634,6 +2576,13 @@ function totals() {
 function renderDashboard() {
   const fr = state.lang === "fr";
   const tot = totals();
+  const nextView = !state.income ? "dashboard" : !state.budget.length ? "budget" : !state.transactions.length ? "transactions" : state.debts.length ? "debts" : "goals";
+  const nextAction = !state.income
+    ? (fr ? "Ajoutez votre revenu ci-dessous" : "Add your income below")
+    : !state.budget.length ? (fr ? "Créez votre premier poste de dépenses" : "Create your first expense")
+      : !state.transactions.length ? (fr ? "Saisissez une transaction" : "Add a transaction")
+        : state.debts.length ? (fr ? "Vérifiez vos dettes" : "Review your debts")
+          : (fr ? "Définissez un objectif" : "Set a goal");
 
   const debtBadge = tot.debt === 0
     ? { cls: "pill-good", txt: fr ? "Aucune" : "None" }
@@ -2651,6 +2600,31 @@ function renderDashboard() {
     : { cls: "pill-warn", txt: fr ? "À remplir" : "To set" };
 
   return `
+    <section class="panel dashboard-overview" aria-label="${fr ? "Résumé du mois" : "Monthly overview"}">
+      <div class="dashboard-overview-head">
+        <div><p class="eyebrow">${monthLabel(state.selectedMonth)}</p><h3>${fr ? "Votre mois en bref" : "Your month at a glance"}</h3></div>
+        <button class="secondary-button" type="button" data-go-view="${nextView}">${nextAction} →</button>
+      </div>
+      <div class="dashboard-key-figures">
+        <div><small>${fr ? "Revenus" : "Income"}</small><strong>${money(tot.income)}</strong></div>
+        <div><small>${fr ? "Dépensé ce mois" : "Spent this month"}</small><strong>${money(tot.trackedSpending)}</strong></div>
+        <div class="${tot.availableAfterBills < 0 ? "cash-negative" : "cash-positive"}"><small>${fr ? "Disponible après charges" : "Available after bills"}</small><strong>${money(tot.availableAfterBills)}</strong></div>
+        <div><small>${fr ? "Dette restante" : "Debt remaining"}</small><strong>${money(tot.debt)}</strong></div>
+      </div>
+      <p class="form-note">${fr ? "Dépensé = transactions enregistrées. Disponible = revenus moins dépenses prévues et paiements minimums des dettes." : "Spent = recorded transactions. Available = income minus planned expenses and minimum debt payments."}</p>
+    </section>
+    ${!state.income || !state.budget.length || !state.transactions.length ? `
+    <section class="panel onboarding-panel">
+      <h3>${fr ? "Bien démarrer" : "Get started"}</h3>
+      <p class="form-note">${fr ? "Choisissez la langue et la devise dans les paramètres, puis complétez ces étapes à votre rythme." : "Choose your language and currency in settings, then complete these steps at your pace."}</p>
+      <div class="onboarding-steps">
+        <span>${state.income ? "✓" : "1"} ${fr ? "Revenu" : "Income"}</span>
+        <button type="button" data-go-view="budget">${state.budget.length ? "✓" : "2"} ${fr ? "Dépenses" : "Expenses"}</button>
+        <button type="button" data-go-view="transactions">${state.transactions.length ? "✓" : "3"} ${fr ? "Transactions" : "Transactions"}</button>
+        <button type="button" data-go-view="debts">${fr ? "Dettes (facultatif)" : "Debts (optional)"}</button>
+        <button type="button" data-go-view="goals">${fr ? "Objectifs (facultatif)" : "Goals (optional)"}</button>
+      </div>
+    </section>` : ""}
     <section class="panel month-panel">
       <strong>${fr ? "Mois sélectionné" : "Selected month"}: ${monthLabel(state.selectedMonth)}</strong>
       <p class="form-note">${fr
@@ -2672,13 +2646,13 @@ function renderDashboard() {
       <p><strong>${fr ? "Revenu mensuel du foyer" : "Household monthly income"}:</strong> ${money(state.income)}</p>
       ${readOnlyNote()}`}
     </section>
-    <div class="stats-grid">
+    <details class="dashboard-details"><summary>${fr ? "Voir les indicateurs détaillés" : "See detailed metrics"}</summary><div class="stats-grid">
       ${stat(fr ? "Revenus" : "Income", money(tot.income), incomeBadge.cls, incomeBadge.txt)}
       ${stat(fr ? "Dépenses mensuelles" : "Monthly expenses", money(tot.monthlyExpenses), tot.monthlyExpenses ? "pill-warn" : "pill-good", tot.monthlyExpenses ? (fr ? "Prévues" : "Planned") : (fr ? "Aucune" : "None"))}
       ${stat(fr ? "Paiements de dettes" : "Debt payments", money(tot.debtPayments), tot.debtPayments ? "pill-warn" : "pill-good", tot.debtPayments ? (fr ? "Minimums" : "Minimums") : (fr ? "Aucun" : "None"))}
       ${stat(fr ? "Disponible" : "Available", money(tot.availableAfterBills), availableBadge.cls, availableBadge.txt)}
       ${stat(fr ? "Objectifs / épargne" : "Goals / savings", money(tot.goalContributions), savingsBadge.cls, `${tot.savingsRate}%`)}
-    </div>
+    </div></details>
     <section class="panel cashflow-panel">
       <h3>${fr ? "Calcul du disponible" : "Available cash calculation"}</h3>
       <div class="cashflow-equation">
@@ -4844,6 +4818,15 @@ function applyAdminSectionVisibility() {
 
 function bindViewActions() {
   applyAdminSectionVisibility();
+  $$("#viewContainer [data-go-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.goView === state.currentView) {
+        document.querySelector("#incomeForm input[name=income]")?.focus();
+      } else {
+        navigateAppView(button.dataset.goView);
+      }
+    });
+  });
 
   const familyUpgradeCta = $("#familyUpgradeCta");
   if (familyUpgradeCta) {
@@ -5927,7 +5910,7 @@ async function changeSelectedMonth(value) {
   if (state.user) {
     await loadUserData();
   } else {
-    loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
+    loadMonthData();
     renderView();
   }
   applyTranslations();
@@ -6307,7 +6290,7 @@ function boot() {
     state.plan = "free";
     state.currentView = "dashboard";
     state.demoActive = false;
-    loadMonthData(state.selectedMonth === currentMonthKey() ? demoData : emptyMonthData());
+    loadMonthData();
     history.replaceState(null, "", "/");
     showLandingPage("home");
   };

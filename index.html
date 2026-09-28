@@ -341,12 +341,15 @@
 
           <nav class="app-topnav" id="appNav" aria-label="Navigation principale">
             <button class="active" data-view="dashboard" data-i18n="appDashboard">Tableau</button>
-            <button data-view="debts" data-i18n="appDebts">Dettes</button>
-            <button data-view="strategy" data-i18n="appStrategy">Snowball/Avalanche</button>
             <button data-view="budget" data-i18n="appBudget">Dépenses</button>
             <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
-            <button data-view="goals" data-i18n="appGoals">Objectifs</button>
-            <button data-view="family" id="familyNavButton" class="family-nav" data-i18n="appFamily" hidden>Famille</button>
+            <button data-view="debts" data-i18n="appDebts">Dettes</button>
+            <details class="nav-more"><summary data-i18n="appMore">Plus</summary><div class="nav-more-menu">
+              <button data-view="goals" data-i18n="appGoals">Objectifs</button>
+              <button data-view="strategy" data-i18n="appStrategy">Snowball/Avalanche</button>
+              <button data-view="family" id="familyNavButton" class="family-nav" data-i18n="appFamily" hidden>Famille</button>
+              <button data-view="account" data-i18n="menuWorkspace">Mon espace</button>
+            </div></details>
           </nav>
 
           <div class="app-topbar-actions">
@@ -384,11 +387,12 @@
           </div>
           <nav class="app-nav" aria-label="Application (mobile)">
             <button data-view="dashboard" data-i18n="appDashboard">Tableau</button>
-            <button data-view="debts" data-i18n="appDebts">Dettes</button>
-            <button data-view="strategy" data-i18n="appStrategy">Snowball/Avalanche</button>
             <button data-view="budget" data-i18n="appBudget">Dépenses</button>
             <button data-view="transactions" data-i18n="appTransactions">Transactions</button>
+            <button data-view="debts" data-i18n="appDebts">Dettes</button>
+            <span class="nav-section-label" data-i18n="appMore">Plus</span>
             <button data-view="goals" data-i18n="appGoals">Objectifs</button>
+            <button data-view="strategy" data-i18n="appStrategy">Snowball/Avalanche</button>
             <button data-view="family" class="family-nav" data-i18n="appFamily" hidden>Famille</button>
             <button data-view="account" data-i18n="menuWorkspace">Mon espace</button>
           </nav>
@@ -410,7 +414,7 @@
             </div>
           </div>
           <div class="notice" id="demoNotice" data-i18n="demoNotice">
-            Plan Free : 10 dettes maximum et 1 membre. Les données restent dans le navigateur.
+            Plan Free : données enregistrées uniquement dans ce navigateur. Aucun transfert automatique vers un compte. Effacer les données du navigateur peut les supprimer définitivement.
           </div>
           <div id="viewContainer"></div>
         </section>
@@ -447,6 +451,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="/shared/plan-limits.js"></script>
-    <script src="/app.js?v=38"></script>
+    <script src="/web/api-client.js"></script>
+    <script src="/app.js?v=39"></script>
   </body>
 </html>
