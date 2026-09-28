@@ -7,7 +7,8 @@ const {
   getUserDetails,
   setPlan,
   extendUser,
-  setSuspended
+  setSuspended,
+  sendPasswordReset
 } = require("../services/admin.service");
 
 const router = express.Router();
@@ -64,11 +65,18 @@ router.post("/users/:userId/extend", async (req, res) => {
 
 router.post("/users/:userId/suspension", async (req, res) => {
   if (!isUuid(req.params.userId)) return res.status(400).json({ error: "invalid_user_id" });
+  if (typeof req.body.suspended !== "boolean") return res.status(400).json({ error: "invalid_suspension" });
   const result = await setSuspended({
     actor: req.user,
     userId: req.params.userId,
     suspended: req.body.suspended
   });
+  res.status(result.status).json(result.body);
+});
+
+router.post("/users/:userId/password-reset", async (req, res) => {
+  if (!isUuid(req.params.userId)) return res.status(400).json({ error: "invalid_user_id" });
+  const result = await sendPasswordReset({ actor: req.user, userId: req.params.userId });
   res.status(result.status).json(result.body);
 });
 
